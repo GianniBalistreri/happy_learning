@@ -73,7 +73,7 @@ class MissingDataAnalysis:
         :return: pd.DataFrame
             Data set containing valid values only
         """
-        return self.df.loc[~self.df.isnull().compute(), self.features]
+        return self.df.loc[~self.df.isnull().any(axis=1), self.features]
 
     def freq_nan_by_cases(self) -> dict:
         """
