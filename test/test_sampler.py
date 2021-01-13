@@ -3,7 +3,7 @@ import unittest
 
 from happy_learning.sampler import MLSampler, Sampler
 
-DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='gun-violence-data_01-2013_03-2018.csv')
+DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/gun-violence-data_01-2013_03-2018.csv')
 
 
 class MLSamplerTest(unittest.TestCase):
