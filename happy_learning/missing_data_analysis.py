@@ -55,7 +55,7 @@ class MissingDataAnalysis:
             self.df: dd.DataFrame = df
         else:
             raise MissingDataAnalysisException('Format of data set ({}) not supported. Use Pandas or dask DataFrame instead'.format(type(df)))
-        self.features: str = self.df.columns if features is None else features
+        self.features: str = self.df.columns.to_list() if features is None else features
         if len(self.features) == 0:
             raise MissingDataAnalysisException('No features found. Please check your parameter config')
         if other_mis is not None:
@@ -65,12 +65,40 @@ class MissingDataAnalysis:
             self.df = self.df.replace(to_replace=INVALID_VALUES, value=np.nan, regex=False)
         self.percentages: bool = percentages
         self.round: float = 2 if digits < 0 else digits
+        self.missing_matrix: dd.DataFrame = dd.from_pandas(data=pd.DataFrame(data=np.zeros(shape=(len(df), len(self.features)), dtype=float),
+                                                                             columns=self.features
+                                                                             ),
+                                                           npartitions=self.partitions)
+        self._fill_missing_matrix()
+
+    def _fill_missing_matrix(self):
+        """
+        Fill missing data matrix
+        """
+        for feature in self.features:
+            _cases: List[int] = self.df[feature].loc[self.df[feature].isnull()].compute().index.values.tolist()
+            if len(_cases) > 0:
+                self.missing_matrix[feature] = self.df[feature].apply(func=lambda x: self._is_missing(x=x),
+                                                                      meta=pd.Series(name=feature, dtype=float)
+                                                                      )
+
+    @staticmethod
+    def _is_missing(x) -> int:
+        """
+        Check if value is missing value
+        :return: int
+            0 for valid value 1 for missing value
+        """
+        if x == x:
+            return 0
+        else:
+            return 1
 
     def clean_nan(self) -> dd.DataFrame:
         """
         Clean all missing values from data set
 
-        :return: pd.DataFrame
+        :return: dd.DataFrame
             Data set containing valid values only
         """
         return self.df.loc[~self.df.isnull().any(axis=1), self.features]
@@ -83,9 +111,9 @@ class MissingDataAnalysis:
             Frequency distribution of missing or invalid data value case-wise
         """
         if self.percentages:
-            return self.df[self.features].isnull().astype(dtype=int).compute().apply(func=lambda x: sum(x) / len(self.features), axis=1).to_dict()
+            return self.missing_matrix.apply(func=lambda x: sum(x) / len(self.features), axis=1).compute().to_dict()
         else:
-            return self.df[self.features].isnull().astype(dtype=int).compute().apply(func=lambda x: sum(x), axis=1).to_dict()
+            return self.missing_matrix.apply(func=lambda x: sum(x), axis=1).compute().to_dict()
 
     def freq_nan_by_features(self) -> dict:
         """
@@ -95,9 +123,9 @@ class MissingDataAnalysis:
             Frequency distribution of missing or invalid data value feature-wise
         """
         if self.percentages:
-            return (self.df[self.features].isnull().sum().compute() / len(self.df)).to_dict()
+            return (self.missing_matrix[self.features].sum().compute() / len(self.missing_matrix)).to_dict()
         else:
-            return self.df[self.features].isnull().sum().compute().to_dict()
+            return self.missing_matrix[self.features].sum().compute().to_dict()
 
     def get_nan_idx_by_cases(self) -> dict:
         """
@@ -126,7 +154,8 @@ class MissingDataAnalysis:
             if len(self.df.shape) == 1:
                 _nan_idx_by_features.update({feature: np.where(pd.isnull(self.df[feature].compute()))[0].tolist()})
             else:
-                _nan_idx_by_features.update({feature: np.where(self.df[feature].isnull().compute())[0].tolist()})
+                #_nan_idx_by_features.update({feature: np.where(self.df[self.features].isnull().compute())[0].tolist()})
+                _nan_idx_by_features.update({feature: np.where(pd.isnull(self.df[feature].compute()))[0].tolist()})
         return _nan_idx_by_features
 
     def has_nan(self) -> bool:

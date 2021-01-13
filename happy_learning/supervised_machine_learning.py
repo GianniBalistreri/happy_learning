@@ -9,6 +9,7 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 #from dask_lightgbm import LGBMClassifier, LGBMRegressor
 #from dask_xgboost import XGBClassifier, XGBRegressor
 from datetime import datetime
+from lightgbm import LGBMClassifier, LGBMRegressor
 from pygam import GAM
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor, GradientBoostingClassifier, GradientBoostingRegressor, RandomForestClassifier, RandomForestRegressor
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor, kneighbors_graph
@@ -559,8 +560,8 @@ class Classification:
         :return: dict
             Parameter config
         """
-        return dict(loss=np.random.choice(a=['deviance', 'exponential']),
-                    learning_rate=np.random.uniform(low=0.0001, high=0.4),
+        return dict(learning_rate=np.random.uniform(low=0.0001, high=0.4),
+                    loss=np.random.choice(a=['deviance', 'exponential']),
                     n_estimators=np.random.randint(low=5, high=100),
                     subsample=np.random.uniform(low=0.0, high=1.0),
                     criterion=np.random.choice(a=['friedman_mse', 'mse', 'mae']),
@@ -628,8 +629,8 @@ class Classification:
         :return: dict
             Parameter config
         """
-        return dict(solver=np.random.choice(a=['svd', 'eigen']),
-                    shrinkage=np.random.uniform(low=0.0001, high=0.9999)
+        return dict(shrinkage=np.random.uniform(low=0.0001, high=0.9999),
+                    solver=np.random.choice(a=['svd', 'eigen'])
                     )
 
     def logistic_regression(self) -> LogisticRegression:
@@ -665,8 +666,8 @@ class Classification:
         :return: dict
             Parameter config
         """
-        return dict(penalty=np.random.choice(a=['l1', 'l2', 'elasticnet', 'none']),
-                    C=np.random.uniform(low=0.0001, high=1.0),
+        return dict(C=np.random.uniform(low=0.0001, high=1.0),
+                    penalty=np.random.choice(a=['l1', 'l2', 'elasticnet', 'none']),
                     #solver=np.random.choice(a=['liblinear', 'lbfgs', 'sag', 'saga', 'newton-cg']),
                     max_iter=np.random.randint(low=5, high=500)
                     )
@@ -1149,7 +1150,8 @@ class Regression:
                    link='identity',
                    callbacks=['deviance', 'diffs', 'accuracy', 'coef'],
                    fit_intercept=True,
-                   verbose=False)
+                   verbose=False
+                   )
 
     @staticmethod
     def generalized_additive_models_param() -> dict:
@@ -1204,8 +1206,8 @@ class Regression:
         :return: dict
             Parameter config
         """
-        return dict(loss=np.random.choice(a=['ls', 'lad', 'huber', 'quantile']),
-                    learning_rate=np.random.uniform(low=0.01, high=0.4),
+        return dict(learning_rate=np.random.uniform(low=0.01, high=0.4),
+                    loss=np.random.choice(a=['ls', 'lad', 'huber', 'quantile']),
                     n_estimators=np.random.randint(low=5, high=100),
                     subsample=np.random.uniform(low=0.0, high=1.0),
                     criterion=np.random.choice(a=['friedman_mse', 'mse', 'mae']),
@@ -1485,6 +1487,7 @@ class ModelGeneratorClf(Classification):
         super().__init__(clf_params=clf_params, cpu_cores=cpu_cores, seed=seed)
         self.id: int = 0
         self.fitness: dict = {}
+        self.fitness_score: float = 0.0
         self.models: List[str] = models
         self.model_name: str = model_name
         if self.model_name is None:
@@ -1563,7 +1566,7 @@ class ModelGeneratorClf(Classification):
         if _gen_n_params == 0:
             _gen_n_params = 1
         self.model_param_mutated.update({len(self.model_param_mutated.keys()) + 1: {copy.deepcopy(self.model_name): {}}})
-        _new_model_params: dict = copy.deepcopy(_params)
+        _new_model_params: dict = copy.deepcopy(self.model_param)
         for param in _force_param.keys():
             _new_model_params.update({param: _force_param.get(param)})
         for _ in range(0, _gen_n_params, 1):
@@ -1640,9 +1643,9 @@ class ModelGeneratorClf(Classification):
                 else:
                     _eval_metric: List[str] = [SML_SCORE['ml_metric'].get('clf_binary')]
         for metric in _eval_metric:
-            self.fitness[_error_kind].update({metric: copy.deepcopy(getattr(EvalClf(obs=obs, pred=pred, probability=True), metric)())})
+            self.fitness[_error_kind].update({metric: copy.deepcopy(getattr(EvalClf(obs=obs, pred=pred, probability=False), metric)())})
 
-    def predict(self, x: np.ndarray, probability: bool = True) -> np.array:
+    def predict(self, x: np.ndarray, probability: bool = False) -> np.array:
         """
         Get prediction from trained supervised machine learning model
 
@@ -1656,12 +1659,12 @@ class ModelGeneratorClf(Classification):
         """
         if probability:
             if hasattr(self.model, 'predict_proba'):
-                return self.model.predict_proba(x)
+                return self.model.predict_proba(x).flatten()
             else:
                 raise SupervisedMLException('Model ({}) has no function called "predict_proba"'.format(self.model_name))
         else:
             if hasattr(self.model, 'predict'):
-                return self.model.predict(x)
+                return self.model.predict(x).flatten()
             else:
                 raise SupervisedMLException('Model ({}) has no function called "predict"'.format(self.model_name))
 
@@ -1679,7 +1682,7 @@ class ModelGeneratorClf(Classification):
         """
         _t0: datetime = datetime.now()
         if hasattr(self.model, 'fit'):
-            if 'eval_set' in self.model.fit.__code__.co_varnames:
+            if 'eval_set' in self.model.fit.__code__.co_varnames and validation is not None:
                 #with joblib.parallel_backend(backend='dask'):
                 if hasattr(self.model, 'fit_transform'):
                     self.model.fit_transform(x, y)
@@ -1707,11 +1710,11 @@ class ModelGeneratorClf(Classification):
             raise SupervisedMLException('Training (fitting) method not supported by given model object')
         self.train_time = (datetime.now() - _t0).seconds
         self.multi = True if len(pd.unique(values=y)) > 2 else False
-        if hasattr(self.model, 'predict_proba'):
-            self.eval(obs=y, pred=self.model.predict_proba(x), eval_metric=None, train_error=True)
-        else:
-            if hasattr(self.model, 'predict'):
-                self.eval(obs=y, pred=self.model.predict(x).flatten(), eval_metric=None, train_error=True)
+        #if hasattr(self.model, 'predict_proba'):
+        #    self.eval(obs=y, pred=self.model.predict_proba(x), eval_metric=None, train_error=True)
+        #else:
+        #    if hasattr(self.model, 'predict'):
+        self.eval(obs=y, pred=self.model.predict(x).flatten(), eval_metric=None, train_error=True)
 
 
 class ModelGeneratorReg(Regression):
@@ -1739,7 +1742,9 @@ class ModelGeneratorReg(Regression):
             Seed
         """
         super().__init__(reg_params=reg_params, cpu_cores=cpu_cores, seed=seed)
+        self.id: int = 0
         self.fitness: dict = {}
+        self.fitness_score: float = 0.0
         self.models: List[str] = models
         self.model_name: str = model_name
         if self.model_name is not None:
@@ -1812,7 +1817,7 @@ class ModelGeneratorReg(Regression):
             _gen_n_params = 1
         self.model_param_mutated.update(
             {len(self.model_param_mutated.keys()) + 1: {copy.deepcopy(self.model_name): {}}})
-        _new_model_params: dict = copy.deepcopy(_params)
+        _new_model_params: dict = copy.deepcopy(self.model_param)
         for param in _force_param.keys():
             _new_model_params.update({param: _force_param.get(param)})
         for _ in range(0, _gen_n_params, 1):
@@ -1820,8 +1825,8 @@ class ModelGeneratorReg(Regression):
             _new_model_params.update({_param: _params.get(_param)})
             self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update(
                 {_param: _params.get(_param)})
-        # print('old', self.model_param)
-        # print('new', _new_model_params)
+        #print('old', self.model_param)
+        #print('new', _new_model_params)
         self.model_param_mutation = 'new_model'
         self.model_param = copy.deepcopy(_new_model_params)
         self.reg_params = self.model_param
@@ -1893,7 +1898,7 @@ class ModelGeneratorReg(Regression):
             Predictions
         """
         if hasattr(self.model, 'predict'):
-            return self.model.predict(x).flatten()
+            return self.model.predict(x)
         else:
             raise SupervisedMLException('Model ({}) has no function called "predict"'.format(self.model_name))
 
@@ -1912,7 +1917,7 @@ class ModelGeneratorReg(Regression):
         _t0: datetime = datetime.now()
         if hasattr(self.model, 'fit'):
             #with joblib.parallel_backend(backend='dask'):
-            if 'eval_set' in self.model.fit.__code__.co_varnames:
+            if 'eval_set' in self.model.fit.__code__.co_varnames and validation is not None:
                 self.model.fit(x,
                                y,
                                eval_set=[(validation.get('x_val'), validation.get('y_val'))],
@@ -1930,4 +1935,4 @@ class ModelGeneratorReg(Regression):
         else:
             raise SupervisedMLException('Training (fitting) method not supported by given model object')
         self.train_time = (datetime.now() - _t0).seconds
-        self.eval(obs=y, pred=self.model.predict(x).flatten(), eval_metric=None, train_error=True)
+        self.eval(obs=y, pred=self.model.predict(x), eval_metric=None, train_error=True)

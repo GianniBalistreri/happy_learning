@@ -198,7 +198,7 @@ class FeatureSelector:
                                    }
         elif meth == 'pca':
             raise NotImplementedError('Feature selection using Principle Component Analysis (PCA) not implemented')
-        elif meth in ['lasso', 'rf', 'gbo', 'xgb']:
+        elif meth in ['lasso', 'cat', 'rf', 'gbo', 'xgb']:
             if self.ml_type == 'reg':
                 _ml = ModelGeneratorReg(model_name=meth).generate_model()
             else:

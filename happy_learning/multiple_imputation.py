@@ -10,7 +10,6 @@ from typing import List
 # TODO:
 #  1) Parallelize
 #  2) Multi model support
-#  3) Adjust algorithm to handle big data sets by proper sampling strategies to save memory resources
 
 
 class MultipleImputationException(Exception):
@@ -38,14 +37,27 @@ class MultipleImputation:
                  soft_missing_values: list = None
                  ):
         """
-        :param df:
-        :param n_chains:
-        :param n_iter:
-        :param n_burn_in_iter:
-        :param ml_meth:
-        :param predictors:
+        :param df: Pandas or dask DataFrame
+            Data set
+
+        :param n_chains: int
+            Number of markov chains
+
+        :param n_iter: int
+            Number of iterations
+
+        :param n_burn_in_iter: int
+            Number of burn-in iterations (warm start)
+
+        :param ml_meth: str
+            Name of the supervised machine learning algorithm
+
+        :param predictors: dict
+            Pre-defined predictors for each feature imputation
+
         :param imp_sequence:
-        :param cor_threshold_for_predictors:
+
+        :param cor_threshold_for_predictors: float
         :param pool_eval_meth:
         :param impute_hard_missing:
         :param soft_missing_values:
@@ -55,7 +67,7 @@ class MultipleImputation:
         elif isinstance(df, dd.DataFrame):
             self.df: dd.DataFrame = df
         self.feature_types: dict = EasyExploreUtils().get_feature_types(df=self.df,
-                                                                        features=list(self.df.keys()),
+                                                                        features=list(self.df.columns),
                                                                         dtypes=self.df.dtypes.tolist()
                                                                         )
         self.n_chains: int = 3 if n_chains <= 1 else n_chains
@@ -64,10 +76,11 @@ class MultipleImputation:
         self.n_iter: int = (15 if n_iter <= 1 else n_iter) + self.n_burn_in_iter
         self.data_types: List[str] = ['cat', 'cont', 'date']
         _encoder = LabelEncoder()
-        for ft in self.df.keys():
+        for ft in self.df.columns:
             if str(self.df[ft].dtype).find('object') >= 0:
-                self.df.loc[self.df[ft].isnull(), ft] = 'NaN'
-                self.df[ft] = _encoder.fit_transform(y=self.df[ft].values)
+                self.df[ft] = self.df[ft].fillna('NaN')
+                #self.df.loc[self.df[ft].isnull().compute(), ft] = 'NaN'
+                self.df[ft] = dd.from_array(x=_encoder.fit_transform(y=self.df[ft].values))
         self.ml_meth: dict = ml_meth
         if self.ml_meth is not None:
             for meth in self.ml_meth:
@@ -89,17 +102,17 @@ class MultipleImputation:
             self.predictors = {}
             if cor_threshold_for_predictors is None:
                 for ft in self.mis_freq.keys():
-                    self.predictors.update({ft: list(set(list(self.df.keys())).difference([ft]))})
+                    self.predictors.update({ft: list(set(list(self.df.columns)).difference([ft]))})
             else:
                 if (cor_threshold_for_predictors > 0.0) and (cor_threshold_for_predictors < 1.0):
-                    _cor: pd.DataFrame = StatsUtils(data=self.df, features=list(self.df.keys())).correlation()
-                    for ft in self.df.keys():
+                    _cor: pd.DataFrame = StatsUtils(data=self.df, features=list(self.df.columns)).correlation()
+                    for ft in self.df.columns:
                         self.predictors.update({ft: _cor.loc[_cor[ft] >= cor_threshold_for_predictors, ft].index.values.tolist()})
                         if len(self.predictors[ft]) == 0:
                             raise MultipleImputationException('No predictors found to impute feature "{}" based on given correlation threshold (>={})'.format(ft, cor_threshold_for_predictors))
                 else:
-                    for ft in self.df.keys():
-                        self.predictors.update({ft: list(set(list(self.df.keys())).difference([ft]))})
+                    for ft in self.df.columns:
+                        self.predictors.update({ft: list(set(list(self.df.columns)).difference([ft]))})
         if pool_eval_meth not in ['std', 'var', 'aic', 'bic']:
             raise MultipleImputationException('Method for pooling chain evaluation ({}) not supported'.format(pool_eval_meth))
         self.pool_eval_meth: str = pool_eval_meth
@@ -122,7 +135,7 @@ class MultipleImputation:
         """
         raise NotImplementedError("Rubin-Gelman's Convergence-Test not implemented")
 
-    def emb(self) -> pd.DataFrame:
+    def emb(self):
         """
         Run expectation maximation bootstrap
 
@@ -131,14 +144,14 @@ class MultipleImputation:
         """
         raise NotImplementedError('Expectation Maximation Bootstrap not implemented')
 
-    def mice(self, rubin_gelman_convergence: bool = False) -> pd.DataFrame:
+    def mice(self, rubin_gelman_convergence: bool = False) -> dd.DataFrame:
         """
         Run multiple imputation by chained equation (mice)
 
         :param rubin_gelman_convergence: bool
             Run process until rubin-gelman convergence test passes
 
-        :return pd.DataFrame:
+        :return dask DataFrame:
             Fully imputed data set
         """
         # Step 1: Initial imputation
@@ -176,17 +189,17 @@ class MultipleImputation:
                 else:
                     # Step 3: Train machine learning algorithm und run prediction for each chain
                     if imp in self.feature_types.get('categorical'):
-                        _pred = Classification().extreme_gradient_boosting_tree().fit(X=self.df[self.predictors[imp]],
-                                                                                      y=self.df[imp]
-                                                                                      ).predict(data=self.df[self.predictors[imp]])
+                        _pred = Classification().extreme_gradient_boosting_tree().fit(X=self.df[self.predictors[imp]].compute(),
+                                                                                      y=self.df[imp].compute()
+                                                                                      ).predict(data=self.df[self.predictors[imp]].compute())
                     elif imp in self.feature_types.get('continuous'):
-                        _pred = Regression().extreme_gradient_boosting_tree().fit(X=self.df[self.predictors[imp]],
-                                                                                  y=self.df[imp]
-                                                                                  ).predict(data=self.df[self.predictors[imp]])
+                        _pred = Regression().extreme_gradient_boosting_tree().fit(X=self.df[self.predictors[imp]].compute(),
+                                                                                  y=self.df[imp].compute()
+                                                                                  ).predict(data=self.df[self.predictors[imp]].compute())
                     elif imp in self.feature_types.get('date'):
-                        _pred = Regression().extreme_gradient_boosting_tree().fit(X=self.df[self.predictors[imp]],
-                                                                                  y=self.df[imp]
-                                                                                  ).predict(data=self.df[self.predictors[imp]])
+                        _pred = Regression().extreme_gradient_boosting_tree().fit(X=self.df[self.predictors[imp]].compute(),
+                                                                                  y=self.df[imp].compute()
+                                                                                  ).predict(data=self.df[self.predictors[imp]].compute())
                     else:
                         raise MultipleImputationException('Data type of feature "{}" not supported for imputation'.format(imp))
                     # Step 4: Impute missing values with predictions

@@ -5,7 +5,7 @@ import pandas as pd
 from .evaluate_machine_learning import EvalClf
 from .feature_learning import FeatureEngineer, FeatureLearning
 from .feature_selector import FeatureSelector
-from .genetic_algorithm import Genetic
+from .genetic_algorithm import GeneticAlgorithm
 from .sampler import MLSampler
 from .supervised_machine_learning import ModelGeneratorClf, ModelGeneratorReg
 from .utils import HappyLearningUtils
@@ -127,14 +127,14 @@ class DataMiner:
                 self.cpu_cores: int = os.cpu_count() - 1 if os.cpu_count() > 1 else os.cpu_count()
         self.seed: int = 1234
         self.plot: bool = plot
-        self.path: str = output_path
-        if self.path is not None:
-            self.path = self.path.replace('\\', '/')
-            if os.path.isfile(self.path):
-                self.path = self.path.replace(self.path.split('/')[-1], '')
+        self.output_path: str = output_path
+        if self.output_path is not None:
+            self.output_path = self.output_path.replace('\\', '/')
+            if os.path.isfile(self.output_path):
+                self.output_path = self.output_path.replace(self.output_path.split('/')[-1], '')
             else:
-                if self.path.split('/')[-1] != '':
-                    self.path = '{}/'.format(self.path)
+                if self.output_path.split('/')[-1] != '':
+                    self.output_path = '{}/'.format(self.output_path)
         self.kwargs: dict = kwargs
 
     def supervised(self,
@@ -215,13 +215,17 @@ class DataMiner:
                                                         train_continuous_critic=False if kwargs.get('train_continuous_critic') is None else kwargs.get('train_continuous_critic'),
                                                         train_categorical_critic=False if kwargs.get('train_categorical_critic') is None else kwargs.get('train_categorical_critic'),
                                                         engineer_time_disparity=True if kwargs.get('engineer_time_disparity') is None else kwargs.get('engineer_time_disparity'),
-                                                        engineer_categorical=True if kwargs.get('engineer_categorical') is None else kwargs.get('engineer_categorical'),
-                                                        **kwargs
+                                                        engineer_categorical=False if kwargs.get('engineer_categorical') is None else kwargs.get('engineer_categorical'),
+                                                        output_path=self.output_path,
+                                                        **self.kwargs
                                                         ).ga()
             else:
                 self.feature_engineer.set_predictors(exclude_original_data=False)
             if feature_selector is not None:
-                _imp_features: dict = FeatureSelector(df=self.feature_engineer.subset_features_for_modeling(),
+                print('Target', self.feature_engineer.get_target())
+                print('Predictors', self.feature_engineer.get_predictors())
+                print('Training Data', self.feature_engineer.get_training_data().columns)
+                _imp_features: dict = FeatureSelector(df=self.feature_engineer.get_training_data(output='df_dask'),
                                                       target=self.feature_engineer.get_target(),
                                                       features=self.feature_engineer.get_predictors(),
                                                       force_target_type=force_target_type,
@@ -229,7 +233,7 @@ class DataMiner:
                                                       visualize_all_scores=self.plot if kwargs.get('visualize_all_scores') is None else kwargs.get('visualize_all_scores'),
                                                       visualize_variant_scores=self.plot if kwargs.get('visualize_variant_scores') is None else kwargs.get('visualize_variant_scores'),
                                                       visualize_core_feature_scores=self.plot if kwargs.get('visualize_core_feature_scores') is None else kwargs.get('visualize_core_feature_scores'),
-                                                      path=self.path
+                                                      path=self.output_path
                                                       ).get_imp_features(meth=feature_selector,
                                                                          imp_threshold=0.001 if kwargs.get('imp_threshold') is None else kwargs.get('imp_threshold')
                                                                          )
@@ -238,38 +242,38 @@ class DataMiner:
                 self.feature_engineer.set_predictors(features=_imp_features.get('imp_features')[0:_top_n_features],
                                                      exclude_original_data=False
                                                      )
-                if self.path is not None or kwargs.get('file_path') is not None:
+                if self.output_path is not None or kwargs.get('file_path') is not None:
                     DataExporter(obj=_imp_features,
-                                 file_path='{}feature_importance.pkl'.format(self.path) if kwargs.get('file_path') is None else kwargs.get('file_path'),
+                                 file_path='{}feature_importance.pkl'.format(self.output_path) if kwargs.get('file_path') is None else kwargs.get('file_path'),
                                  create_dir=True if kwargs.get('create_dir') is None else kwargs.get('create_dir'),
                                  overwrite=False if kwargs.get('overwrite') is None else kwargs.get('overwrite')
                                  ).file()
             if optimizer == 'ga':
-                _ga = Genetic(mode='model',
-                              df=self.feature_engineer.get_training_data(),
-                              target=self.feature_engineer.get_target(),
-                              force_target_type=force_target_type,
-                              features=self.feature_engineer.get_predictors(),
-                              stratify=stratification,
-                              labels=None if kwargs.get('labels') is None else kwargs.get('labels'),
-                              models=models,
-                              burn_in_generations=10 if kwargs.get('burn_in_generations') is None else kwargs.get('burn_in_generations'),
-                              max_generations=25 if kwargs.get('max_generations') is None else kwargs.get('max_generations'),
-                              pop_size=64 if kwargs.get('pop_size') is None else kwargs.get('pop_size'),
-                              mutation_rate=0.1 if kwargs.get('mutation_rate') is None else kwargs.get('mutation_rate'),
-                              mutation_prob=0.15 if kwargs.get('mutation_prob') is None else kwargs.get('mutation_prob'),
-                              parents_ratio=0.5 if kwargs.get('parents_ratio') is None else kwargs.get('parents_ratio'),
-                              early_stopping=0 if kwargs.get('early_stopping') is None else kwargs.get('early_stopping'),
-                              convergence=False if kwargs.get('convergence') is None else kwargs.get('convergence'),
-                              convergence_measure='median' if kwargs.get('convergence_measure') is None else kwargs.get('convergence_measure'),
-                              timer_in_seconds=43200 if kwargs.get('timer_in_seconds') is None else kwargs.get('timer_in_seconds'),
-                              plot=self.plot,
-                              output_file_path=self.path
-                              )
+                _ga = GeneticAlgorithm(mode='model',
+                                       df=self.feature_engineer.get_training_data(),
+                                       target=self.feature_engineer.get_target(),
+                                       force_target_type=force_target_type,
+                                       features=self.feature_engineer.get_predictors(),
+                                       stratify=stratification,
+                                       labels=None if kwargs.get('labels') is None else kwargs.get('labels'),
+                                       models=models,
+                                       burn_in_generations=10 if kwargs.get('burn_in_generations') is None else kwargs.get('burn_in_generations'),
+                                       max_generations=25 if kwargs.get('max_generations') is None else kwargs.get('max_generations'),
+                                       pop_size=64 if kwargs.get('pop_size') is None else kwargs.get('pop_size'),
+                                       mutation_rate=0.1 if kwargs.get('mutation_rate') is None else kwargs.get('mutation_rate'),
+                                       mutation_prob=0.15 if kwargs.get('mutation_prob') is None else kwargs.get('mutation_prob'),
+                                       parents_ratio=0.5 if kwargs.get('parents_ratio') is None else kwargs.get('parents_ratio'),
+                                       early_stopping=0 if kwargs.get('early_stopping') is None else kwargs.get('early_stopping'),
+                                       convergence=False if kwargs.get('convergence') is None else kwargs.get('convergence'),
+                                       convergence_measure='median' if kwargs.get('convergence_measure') is None else kwargs.get('convergence_measure'),
+                                       timer_in_seconds=43200 if kwargs.get('timer_in_seconds') is None else kwargs.get('timer_in_seconds'),
+                                       plot=self.plot,
+                                       output_file_path=self.output_path
+                                       )
                 _ga.optimize()
                 if save_train_test_data:
                     DataExporter(obj=_ga.data_set,
-                                 file_path='{}train_test_data.pkl'.format(self.path),
+                                 file_path='{}train_test_data.pkl'.format(self.output_path),
                                  create_dir=True if kwargs.get('create_dir') is None else kwargs.get('create_dir'),
                                  overwrite=False if kwargs.get('overwrite') is None else kwargs.get('overwrite')
                                  ).file()
@@ -286,7 +290,7 @@ class DataMiner:
                                             ).train_test_sampling(validation_split=0.1 if kwargs.get('validation_split') is None else kwargs.get('validation_split'))
                 if save_train_test_data:
                     DataExporter(obj=_data_set,
-                                 file_path='{}train_test_data.pkl'.format(self.path),
+                                 file_path='{}train_test_data.pkl'.format(self.output_path),
                                  create_dir=True if kwargs.get('create_dir') is None else kwargs.get('create_dir'),
                                  overwrite=False if kwargs.get('overwrite') is None else kwargs.get('overwrite')
                                  ).file()
@@ -337,18 +341,18 @@ class DataMiner:
                                                                                                   features=['obs', 'preds'],
                                                                                                   plot_type='joint',
                                                                                                   render=True,
-                                                                                                  file_path='{}prediction_scatter_{}.html'.format(self.path, model)
+                                                                                                  file_path='{}prediction_scatter_{}.html'.format(self.output_path, model)
                                                                                                   ),
                                                  'Prediction vs. Observation (Range Based)': dict(data=_model_eval_df,
                                                                                                   features=['obs', 'preds', 'abs_diff', 'rel_diff'],
                                                                                                   plot_type='parcoords',
                                                                                                   render=True,
-                                                                                                  file_path='{}prediction_coords_{}.html'.format(self.path, model)
+                                                                                                  file_path='{}prediction_coords_{}.html'.format(self.output_path, model)
                                                                                                   ),
                                                  'Prediction vs. Observation (Percentile Based)': dict(data=_perc_table,
                                                                                                        plot_type='multi',
                                                                                                        render=True,
-                                                                                                       file_path='{}prediction_percentiles_{}.html'.format(self.path, model),
+                                                                                                       file_path='{}prediction_percentiles_{}.html'.format(self.output_path, model),
                                                                                                        kwargs=dict(layout=dict(barmode='group',
                                                                                                                                xaxis=dict(tickmode='array',
                                                                                                                                           tickvals=[p for p in range(0, 10, 1)],
@@ -382,9 +386,9 @@ class DataMiner:
                                                                                   }
                                                                           )
                                                  })
-                    if self.path is not None:
+                    if self.output_path is not None:
                         DataExporter(obj=_model.model,
-                                     file_path='{}model_{}'.format(self.path, model),
+                                     file_path='{}model_{}'.format(self.output_path, model),
                                      create_dir=True,
                                      overwrite=False
                                      ).file()

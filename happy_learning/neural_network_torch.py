@@ -202,6 +202,7 @@ class RCNN(torch.nn.Module):
         self.hidden_size: int = self.params.get('hidden_states')
         self.vocab_size: int = self.params.get('vocab_size')
         self.embedding_length: int = self.params.get('embedding_len')
+        print(self.params)
         self.word_embeddings: torch.nn.Embedding = torch.nn.Embedding(self.vocab_size, self.embedding_length)  # Initializing the look-up table.
         self.word_embeddings.weight = torch.nn.Parameter(self.params.get('weights'), requires_grad=False) # Assigning the look-up table to the pre-trained GloVe word embedding.
         self.dropout: float = self.params.get('dropout')

@@ -4,11 +4,11 @@ import pandas as pd
 import random
 
 from .evaluate_machine_learning import sml_fitness_score
-from .genetic_algorithm import Genetic
+from .genetic_algorithm import GeneticAlgorithm
 from .sampler import MLSampler
 from .supervised_machine_learning import ModelGeneratorClf, ModelGeneratorReg
 from .utils import HappyLearningUtils
-from easyexplore.utils import EasyExploreUtils, Log
+from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
 from typing import List
 
@@ -73,10 +73,10 @@ class FeatureTournament:
         :param kwargs: dict
             Key-word arguments
         """
-        self.dask_client = EasyExploreUtils().dask_setup(client_name='feature_tournament',
-                                                         client_address=kwargs.get('client_address'),
-                                                         mode='threads' if kwargs.get('client_mode') is None else kwargs.get('client_mode')
-                                                         )
+        self.dask_client = HappyLearningUtils().dask_setup(client_name='feature_tournament',
+                                                           client_address=kwargs.get('client_address'),
+                                                           mode='threads' if kwargs.get('client_mode') is None else kwargs.get('client_mode')
+                                                           )
         self.feature_tournament_ai: dict = {}
         if isinstance(df, pd.DataFrame):
             self.df: dd.DataFrame = dd.from_pandas(data=df, npartitions=4 if kwargs.get('partitions') is None else kwargs.get('partitions'))
@@ -132,36 +132,36 @@ class FeatureTournament:
         Evolve ai for feature tournament using genetic algorithm
         """
         Log(write=False, level='info').log(msg='Evolve feature tournament ai ...')
-        _feature_tournament_ai_learning: Genetic = Genetic(mode='model',
-                                                           df=self.df,
-                                                           target=self.target,
-                                                           features=self.features,
-                                                           re_split_data=False if self.kwargs.get('re_split_data') is None else self.kwargs.get('re_split_data'),
-                                                           re_sample_cases=False if self.kwargs.get('re_sample_cases') is None else self.kwargs.get('re_sample_cases'),
-                                                           re_sample_features=True,
-                                                           max_features=self.n_features,
-                                                           labels=self.kwargs.get('labels'),
-                                                           models=['cat'] if self.models is None else self.models,
-                                                           model_params=None,
-                                                           burn_in_generations=-1 if self.kwargs.get('burn_in_generations') is None else self.kwargs.get('burn_in_generations'),
-                                                           warm_start=True if self.kwargs.get('warm_start') is None else self.kwargs.get('warm_start'),
-                                                           max_generations=2 if self.kwargs.get('max_generations_ai') is None else self.kwargs.get('max_generations_ai'),
-                                                           pop_size=64 if self.kwargs.get('pop_size') is None else self.kwargs.get('pop_size'),
-                                                           mutation_rate=0.1 if self.kwargs.get('mutation_rate') is None else self.kwargs.get('mutation_rate'),
-                                                           mutation_prob=0.5 if self.kwargs.get('mutation_prob') is None else self.kwargs.get('mutation_prob'),
-                                                           parents_ratio=0.5 if self.kwargs.get('parents_ratio') is None else self.kwargs.get('parents_ratio'),
-                                                           early_stopping=0 if self.kwargs.get('early_stopping') is None else self.kwargs.get('early_stopping'),
-                                                           convergence=False if self.kwargs.get('convergence') is None else self.kwargs.get('convergence'),
-                                                           timer_in_seconds=10000 if self.kwargs.get('timer_in_secondes') is None else self.kwargs.get('timer_in_secondes'),
-                                                           force_target_type=self.force_target_type,
-                                                           plot=False if self.kwargs.get('plot') is None else self.kwargs.get('plot'),
-                                                           output_file_path=self.kwargs.get('output_file_path'),
-                                                           multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
-                                                           multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
-                                                           log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
-                                                           verbose=0 if self.kwargs.get('verbose') is None else self.kwargs.get('verbose'),
-                                                           **self.kwargs
-                                                           )
+        _feature_tournament_ai_learning: GeneticAlgorithm = GeneticAlgorithm(mode='model',
+                                                                             df=self.df,
+                                                                             target=self.target,
+                                                                             features=self.features,
+                                                                             re_split_data=False if self.kwargs.get('re_split_data') is None else self.kwargs.get('re_split_data'),
+                                                                             re_sample_cases=False if self.kwargs.get('re_sample_cases') is None else self.kwargs.get('re_sample_cases'),
+                                                                             re_sample_features=True,
+                                                                             max_features=self.n_features,
+                                                                             labels=self.kwargs.get('labels'),
+                                                                             models=['cat'] if self.models is None else self.models,
+                                                                             model_params=None,
+                                                                             burn_in_generations=-1 if self.kwargs.get('burn_in_generations') is None else self.kwargs.get('burn_in_generations'),
+                                                                             warm_start=True if self.kwargs.get('warm_start') is None else self.kwargs.get('warm_start'),
+                                                                             max_generations=2 if self.kwargs.get('max_generations_ai') is None else self.kwargs.get('max_generations_ai'),
+                                                                             pop_size=64 if self.kwargs.get('pop_size') is None else self.kwargs.get('pop_size'),
+                                                                             mutation_rate=0.1 if self.kwargs.get('mutation_rate') is None else self.kwargs.get('mutation_rate'),
+                                                                             mutation_prob=0.5 if self.kwargs.get('mutation_prob') is None else self.kwargs.get('mutation_prob'),
+                                                                             parents_ratio=0.5 if self.kwargs.get('parents_ratio') is None else self.kwargs.get('parents_ratio'),
+                                                                             early_stopping=0 if self.kwargs.get('early_stopping') is None else self.kwargs.get('early_stopping'),
+                                                                             convergence=False if self.kwargs.get('convergence') is None else self.kwargs.get('convergence'),
+                                                                             timer_in_seconds=10000 if self.kwargs.get('timer_in_secondes') is None else self.kwargs.get('timer_in_secondes'),
+                                                                             force_target_type=self.force_target_type,
+                                                                             plot=False if self.kwargs.get('plot') is None else self.kwargs.get('plot'),
+                                                                             output_file_path=self.kwargs.get('output_file_path'),
+                                                                             multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
+                                                                             multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
+                                                                             log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
+                                                                             verbose=0 if self.kwargs.get('verbose') is None else self.kwargs.get('verbose'),
+                                                                             **self.kwargs
+                                                                             )
         _feature_tournament_ai_learning.optimize()
         self.feature_tournament_ai = _feature_tournament_ai_learning.evolution
         Log(write=False, level='error').log(msg='Feature tournament ai evolved -> {}'.format(self.feature_tournament_ai.get('model_name')))
@@ -188,9 +188,7 @@ class FeatureTournament:
                 _game.eval(obs=self.train_test.get('y_test').values, pred=_pred, train_error=False)
                 _game_score: float = sml_fitness_score(ml_metric=tuple([0, _game.fitness['test'].get(self.ml_metric)]),
                                                        train_test_metric=tuple([_game.fitness['train'].get(self.ml_metric), _game.fitness['test'].get(self.ml_metric)]),
-                                                       train_time_in_seconds=_game.train_time,
-                                                       cpu_usage_in_percent=_game.cpu_usage,
-                                                       ram_usage_in_percent=_game.ram_usage
+                                                       train_time_in_seconds=_game.train_time
                                                        )
             else:
                 _game = ModelGeneratorClf(model_name=self.feature_tournament_ai.get('model_name'),
@@ -206,9 +204,7 @@ class FeatureTournament:
                 _game.eval(obs=self.train_test.get('y_test').values, pred=_pred, train_error=False)
                 _game_score: float = sml_fitness_score(ml_metric=tuple([1, _game.fitness['test'].get(self.ml_metric)]),
                                                        train_test_metric=tuple([_game.fitness['train'].get(self.ml_metric), _game.fitness['test'].get(self.ml_metric)]),
-                                                       train_time_in_seconds=_game.train_time,
-                                                       cpu_usage_in_percent=_game.cpu_usage,
-                                                       ram_usage_in_percent=_game.ram_usage
+                                                       train_time_in_seconds=_game.train_time
                                                        )
             for j, imp in enumerate(_game.model.feature_importances_):
                 _shapley_value: float = imp * _game_score
@@ -253,7 +249,7 @@ class FeatureTournament:
         _game_scores: List[float] = []
         _permutation_space: int = self.init_pairs
         _pair_size_factor: float = self.max_iter * self.pair_size_factor
-        for i in range(0, self.max_iter, 1):
+        for i in range(0, self.max_iter + self.init_games, 1):
             if i == self.init_games:
                 Log(write=False, level='info').log(msg='Start feature tournament with {} players ...'.format(self.n_features))
                 self.tournament = True
@@ -295,7 +291,7 @@ class FeatureTournament:
                 self.features = _sorted_shapley_matrix.index.values.tolist()[0:(_n_features - _exclude_features)]
                 self.n_features = len(self.features)
                 Log(write=False, level='info').log(msg='Excluded {} lowest scored features from tournament'.format(_exclude_features))
-            if i + 1 == self.max_iter:
+            if i + 1 == self.max_iter + self.init_games:
                 _shapley_values: dict = {}
                 for sv in self.shapley_additive_explanation['game'].keys():
                     _shapley_values.update({sv: self.shapley_additive_explanation['sum'][sv] / len(self.shapley_additive_explanation['game'][sv])})
