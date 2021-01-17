@@ -1,0 +1,27 @@
+# Git Stuff:
+.DS_Store
+
+# Python:
+venv
+.idea
+*__pycache__
+.pytest_cache
+/build
+/dist
+*.egg-info
+
+# Jupyter Notebook:
+.ipynb_checkpoints
+
+# File types:
+#*.csv
+*.db
+#*.html
+*.jpeg
+*.json
+*.p
+*.pickle
+*.pkl
+*.png
+*.xls
+*.xlsx
