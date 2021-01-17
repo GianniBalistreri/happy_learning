@@ -37,6 +37,12 @@ TRAIN_TEST_TEXT_CLF: dict = MLSampler(df=DATA_SET_TEXT_CLF,
                                       stratification=False,
                                       seed=1234
                                       ).train_test_sampling(validation_split=0.1)
+TRAIN_DATA_PATH_TEXT: str = 'data/text_train.csv'
+TEST_DATA_PATH_TEXT: str = 'data/text_test.csv'
+VALIDATION_DATA_PATH_TEXT: str = 'data/text_val.csv'
+pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_train')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_train'))]).to_csv(path_or_buf=TRAIN_DATA_PATH_TEXT)
+pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_test')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_test'))]).to_csv(path_or_buf=TEST_DATA_PATH_TEXT)
+pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_val')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_val'))]).to_csv(path_or_buf=VALIDATION_DATA_PATH_TEXT)
 
 
 class NeuralNetworkTest(unittest.TestCase):
@@ -79,20 +85,6 @@ class NeuralNetworkTest(unittest.TestCase):
                                                                                          y_val=TRAIN_TEST_CLF.get('y_val')
                                                                                          ).multi_layer_perceptron_param().get(list(_mlp_param.keys())[0]))
 
-    def test_recurrent_convolutional_network(self):
-        self.assertTrue(expr=isinstance(NeuralNetwork(target=TARGET_TEXT,
-                                                      predictors=PREDICTORS_TEXT,
-                                                      x_train=TRAIN_TEST_TEXT_CLF.get('x_train'),
-                                                      y_train=TRAIN_TEST_TEXT_CLF.get('y_train'),
-                                                      x_test=TRAIN_TEST_TEXT_CLF.get('x_test'),
-                                                      y_test=TRAIN_TEST_TEXT_CLF.get('y_test'),
-                                                      x_val=TRAIN_TEST_TEXT_CLF.get('x_val'),
-                                                      y_val=TRAIN_TEST_TEXT_CLF.get('y_val')
-                                                      ).recurrent_convolutional_neural_network(),
-                                        RCNN
-                                        )
-                        )
-
     def test_recurrent_convolutional_network_param(self):
         _rcnn_param: dict = NeuralNetwork(target=TARGET_TEXT,
                                           predictors=PREDICTORS_TEXT,
@@ -119,10 +111,29 @@ class NetworkGeneratorTest(unittest.TestCase):
     Class for testing class NetworkGenerator
     """
     def test_generate_model(self):
-        pass
+        _net_gen: object = NetworkGenerator(target=TARGET_TEXT,
+                                            predictors=PREDICTORS_TEXT,
+                                            output_layer_size=2,
+                                            train_data_path=TRAIN_DATA_PATH_TEXT,
+                                            test_data_path=TEST_DATA_PATH_TEXT,
+                                            validation_data_path=VALIDATION_DATA_PATH_TEXT,
+                                            models=['rcnn']
+                                            ).generate_model()
+        self.assertTrue(expr=isinstance(_net_gen.model, RCNN))
 
     def test_generate_params(self):
-        pass
+        _net_gen: object = NetworkGenerator(target=TARGET_TEXT,
+                                            predictors=PREDICTORS_TEXT,
+                                            output_layer_size=2,
+                                            train_data_path=TRAIN_DATA_PATH_TEXT,
+                                            test_data_path=TEST_DATA_PATH_TEXT,
+                                            validation_data_path=VALIDATION_DATA_PATH_TEXT,
+                                            models=['rcnn']
+                                            ).generate_model()
+        print('model param', _net_gen.model_param)
+        _net_gen.generate_params()
+        print('mutated', _net_gen.model_param_mutated)
+        print('new param', _net_gen.model_param)
 
     def test_get_vanilla_network(self):
         pass

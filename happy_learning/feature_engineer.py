@@ -400,14 +400,14 @@ def _process_handler(action: str,
                     DATA_PROCESSING[_process[0]][_process[1]].update({feature: new_feature})
                 _renamed_history: dict = {}
                 for level in DATA_PROCESSING['processing']['features'].keys():
-                    print(level)
+                    #print(level)
                     _renamed_history.update({level: {}})
                     for tracked_feature in DATA_PROCESSING['processing']['features'][level].keys():
-                        print(tracked_feature)
+                        #print(tracked_feature)
                         if feature != tracked_feature:
                             _renamed_history[level].update({tracked_feature: []})
                             for relation in DATA_PROCESSING['processing']['features'][level][tracked_feature]:
-                                print(relation)
+                                #print(relation)
                                 if feature != relation:
                                     _renamed_history[level][tracked_feature].append(relation)
                 DATA_PROCESSING['processing']['features'] = _renamed_history
@@ -1094,8 +1094,8 @@ class FeatureEngineer:
         try:
             _actor_meta_data: pd.DataFrame = pd.DataFrame(data=DATA_PROCESSING['actor_memory']['action_config'])
         except ValueError:
-            for val in DATA_PROCESSING['actor_memory']['action_config'].keys():
-                print(val, len(DATA_PROCESSING['actor_memory']['action_config'][val]), DATA_PROCESSING['actor_memory']['action_config'][val])
+            #for val in DATA_PROCESSING['actor_memory']['action_config'].keys():
+            #    print(val, len(DATA_PROCESSING['actor_memory']['action_config'][val]), DATA_PROCESSING['actor_memory']['action_config'][val])
             return _critic
         if action == 'one_hot_merger':
             for one_hot_feature in actor.split('__m__'):
@@ -1929,8 +1929,8 @@ class FeatureEngineer:
                                 del _predictors[_predictors.index(feature)]
                         else:
                             _predictors: List[str] = predictors
-                        print(DATA_PROCESSING['df'][_predictors].values.compute())
-                        print(DATA_PROCESSING['df'][feature].values.compute())
+                        #print(DATA_PROCESSING['df'][_predictors].values.compute())
+                        #print(DATA_PROCESSING['df'][feature].values.compute())
                         _chaid.train(x=DATA_PROCESSING['df'][_predictors].values.compute(), y=np.reshape(DATA_PROCESSING['df'][feature].values.compute(), (-1, 1)))
                         _chaid_pred: np.array = _chaid.predict()
                         _process_handler(action='add',
@@ -1960,26 +1960,26 @@ class FeatureEngineer:
                                          )
                         Log(write=not DATA_PROCESSING.get('show_msg')).log('Binned feature "{}" using Bayesian Blocks'.format(feature))
                         del _bayesian_blocks
-                    elif optimal_meth == 'kbins':
-                        _kbins_discretizer = KBinsDiscretizer(n_bins=bins,
-                                                              encode=encode_meth,
-                                                              strategy=strategy
-                                                              )
-                        _kbins_discretizer.fit(X=np.reshape(DATA_PROCESSING['df'][feature].values.compute(), (-1, 1)))
-                        #print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values, (-1, 1))))
-                        print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))))
-                        _process_handler(action='add',
-                                         feature=feature,
-                                         new_feature='{}_kbins'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
-                                         process='categorizer|continuous',
-                                         meth='binning',
-                                         param=_param,
-                                         data=_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))),
-                                         force_type='categorical',
-                                         obj=_kbins_discretizer
-                                         )
-                        del _kbins_discretizer
-                        Log(write=not DATA_PROCESSING.get('show_msg')).log('Binned feature "{}" using K-Bins Discretizer'.format(feature))
+                    #elif optimal_meth == 'kbins':
+                    #    _kbins_discretizer = KBinsDiscretizer(n_bins=bins,
+                    #                                          encode=encode_meth,
+                    #                                          strategy=strategy
+                    #                                          )
+                    #    _kbins_discretizer.fit(X=np.reshape(DATA_PROCESSING['df'][feature].values.compute(), (-1, 1)))
+                    #    #print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values, (-1, 1))))
+                    #    print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))))
+                    #    _process_handler(action='add',
+                    #                     feature=feature,
+                    #                     new_feature='{}_kbins'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
+                    #                     process='categorizer|continuous',
+                    #                     meth='binning',
+                    #                     param=_param,
+                    #                     data=_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))),
+                    #                     force_type='categorical',
+                    #                     obj=_kbins_discretizer
+                    #                     )
+                    #    del _kbins_discretizer
+                    #    Log(write=not DATA_PROCESSING.get('show_msg')).log('Binned feature "{}" using K-Bins Discretizer'.format(feature))
                     else:
                         Log(write=not DATA_PROCESSING.get('show_msg')).log('Binning method ({}) not supported'.format(optimal_meth))
                 else:
@@ -4152,16 +4152,17 @@ class FeatureEngineer:
         """
         if not os.path.isfile(feature_engineer_file_path):
             raise FeatureEngineerException('No external FeatureEngineer class object found')
-        _external_engineer: dict = DataImporter(file_path=feature_engineer_file_path, as_data_frame=False).file()
-        if isinstance(_external_engineer, dict):
-            if _external_engineer.get('feature_types') is None:
+        _external_engineer = DataImporter(file_path=feature_engineer_file_path, as_data_frame=False).file()
+        if isinstance(_external_engineer, FeatureEngineer):
+            _external_engineer_data_processing: dict = _external_engineer.data_processing
+            if _external_engineer_data_processing.get('feature_types') is None:
                 raise FeatureEngineerException('External file object is not a FeatureEngineer class object')
-            _external_data_set: dd.DataFrame = DataImporter(file_path='{}_data.parquet'.format(feature_engineer_file_path.split(sep='.')),
+            _external_data_set: dd.DataFrame = DataImporter(file_path='{}_data.parquet'.format(feature_engineer_file_path.split(sep='.')[0]),
                                                             as_data_frame=True
                                                             ).file()
             _external_features: List[str] = []
-            for ft in _external_engineer.get('feature_types').keys():
-                for feature in _external_engineer.get('feature_types')[ft]:
+            for ft in _external_engineer_data_processing.get('feature_types').keys():
+                for feature in _external_engineer_data_processing.get('feature_types')[ft]:
                     _external_features.append(feature)
             global DATA_PROCESSING
             global FEATURE_TYPES
@@ -4174,12 +4175,13 @@ class FeatureEngineer:
             _current.sort(reverse=False)
             _external: List[str] = copy.deepcopy(MERGES.get(list(MERGES.keys())[-1]))
             _external.sort(reverse=False)
-            print('Current', _current)
-            print('External', _external)
             _new_features: List[str] = list(set(_external).difference(_current))
             _equal_features: List[str] = list(set(_external).intersection(_current))
-            print('new', _new_features)
-            print('equal', _equal_features)
+            for equal in _equal_features:
+                del _external_data_set[equal]
+            if DATA_PROCESSING.get('target') is not None:
+                if DATA_PROCESSING.get('target') in _external_data_set.columns:
+                    del _external_data_set[DATA_PROCESSING.get('target')]
             if merging:
                 if merge_by == 'id':
                     if id_var is None or id_var not in DATA_PROCESSING.get('df').columns:
@@ -4244,7 +4246,7 @@ class FeatureEngineer:
                             _update_feature_types(feature=new_feature)
                     for renamed in _rename.keys():
                         _update_feature_types(feature=_rename.get(renamed))
-            _new_features_types: dict = _external_engineer.get('feature')
+            _new_features_types: dict = _external_engineer_data_processing.get('feature_types')
             for feature_type in _new_features_types.keys():
                 for new_feature in _new_features_types.get(feature_type):
                     if new_feature not in FEATURE_TYPES.get(feature_type):
@@ -4654,7 +4656,6 @@ class FeatureEngineer:
                          create_dir=False,
                          overwrite=True
                          ).file()
-            print(os.path.isfile('{}_data.parquet'.format(_parquet_file_path)))
             DATA_PROCESSING['df'] = None
             if cls_obj:
                 DataExporter(obj=self,
