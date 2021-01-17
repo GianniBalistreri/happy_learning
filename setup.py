@@ -39,11 +39,13 @@ setuptools.setup(
                                      'requirements.txt',
                                      'setup.py',
                                      #'Happily Applied Learning -> Avocado.ipynb',
-                                     'Happy Learnings.ipynb'
+                                     'Happy Learnings.ipynb',
+                                     'Happy Learning - Methodology.pdf'
                                      ]
                   },
     data_file=[('test', ['test/test_chaid_decision_tree.py',
                          'test/test_data_miner.py',
+                         'test/test_evaluate_machine_learning.py',
                          'test/test_feature_engineer.py',
                          'test/test_feature_learning.py',
                          'test/test_feature_selector.py',
@@ -51,9 +53,11 @@ setuptools.setup(
                          'test/test_genetic_algorithm.py',
                          'test/test_missing_data_analysis.py',
                          'test/test_multiple_imputation.py',
-                         #'test/test_neural_network_torch.py',
+                         'test/test_neural_network_generator_torch.py',
+                         'test/test_neural_network_torch.py',
                          'test/test_sampler.py',
                          'test/test_supervised_machine_learning.py',
+                         'test/test_text_miner.py',
                          'test/test_utils.py'
                          ]
                 )],
