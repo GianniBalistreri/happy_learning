@@ -42,7 +42,7 @@ Whereas the (semi-) continuous features are systematically processed by using se
 
  - Feature Tournament:
  
-Feature tournament is a process to evaluate the importance of each feature regarding to a specific target feature. It uses the concept of Additive Shapley Values to calculate the importance score.
+Feature tournament is a process to evaluate the importance of each feature regarding to a specific target feature. It uses the concept of (Additive) Shapley Values to calculate the importance score.
 
     -- Data Typing:
 
@@ -78,6 +78,44 @@ Therefore it uses the ...
    -> Feature Learning module to smartly engineer tabular features
    -> Feature Selector module to select the most important features
    -> Genetic module to find a proper model all by its self.
+
+- TextMiner
+
+Use text data (natural language) by generating various numerical features describing the text
+
+    -- Segmentation:
+
+        Categorize potential text features into following segments ...
+            -> Web features
+                1) URL
+                2) EMail
+            -> Enumerated features
+            -> Natural language (original text features)
+            -> Identifier (original id features)
+            -> Unknown
+
+    -- Simple text processing:
+        Apply simple processing methods to text features
+            -> Merge two text features by given separator
+            -> Replace occurances
+            -> Subset data set or feature list by given string
+
+    -- Language methods:
+        Apply methods to ...
+            -> ... detect language in text
+            -> ... translate using Google Translate under the hood
+
+    -- Generate linguistic features:
+        Apply semantic text processing to generate numeric features
+            -> Clean text counter (text after removing stop words, punctuation and special character and lemmatizing)
+            -> Part-of-Speech Tagging counter & labels
+            -> Named Entity Recognition counter & labels
+            -> Dependencies counter & labels (Tree based / Noun Chunks)
+            -> Emoji counter & labels
+
+    -- Generate similarity / clustering features:
+        Apply similarity methods to generate continuous features using word embeddings
+            -> TF-IDF
 
 ## 4. Documentation & Examples:
 
