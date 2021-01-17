@@ -501,9 +501,7 @@ class FeatureEngineerTest(unittest.TestCase):
         self.assertEqual(first=FEATURE_ENGINEER.get_n_cases(), second=len(FEATURE_ENGINEER.get_indices()))
 
     def test_get_processing(self):
-        self.assertDictEqual(d1=FEATURE_ENGINEER.get_data_processing()['processing'],
-                             d2=FEATURE_ENGINEER.get_processing()
-                             )
+        self.assertDictEqual(d1=FEATURE_ENGINEER.get_data_processing()['processing'], d2=FEATURE_ENGINEER.get_processing())
 
     def test_get_processing_action_space(self):
         self.assertDictEqual(d1=PROCESSING_ACTION_SPACE, d2=FEATURE_ENGINEER.get_processing_action_space())
@@ -588,10 +586,21 @@ class FeatureEngineerTest(unittest.TestCase):
         _tracking_check: Dict[str, bool] = _check_tracking(meth='exp_transform', suffix='exp', feature_type='continuous')
         self.assertTrue(expr=_tracking_check.get('process') and _tracking_check.get('raw') and _tracking_check.get('level'))
 
-    def test_melt(self):
-        pass
+    def test_merge_engineer(self):
+        _all_features: List[str] = FEATURE_ENGINEER.get_features()
+        _all_features.sort(reverse=False)
+        _engineer: FeatureEngineer = FeatureEngineer(df=None, file_path=DATA_FILE_PATH, target_feature='AveragePrice')
+        _categorical_features: List[str] = _engineer.get_feature_types().get('categorical')
+        _engineer.save(file_path='data/feature_learning_cat.p', cls_obj=True, overwrite=True, create_dir=False)
+        del _engineer
+        _feature_engineer: FeatureEngineer = FeatureEngineer(feature_engineer_file_path='data/feature_learning_cat.p')
+        _feature_engineer.clean(markers=dict(features=_categorical_features))
+        _feature_engineer.merge_engineer(feature_engineer_file_path='data/feature_learning_cat.p')
+        _features: List[str] = _feature_engineer.get_features()
+        _features.sort(reverse=False)
+        self.assertListEqual(list1=_all_features, list2=_features)
 
-    def test_feature_engineer(self):
+    def test_melt(self):
         pass
 
     def test_merge_text(self):
