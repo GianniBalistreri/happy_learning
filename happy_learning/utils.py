@@ -88,20 +88,17 @@ class HappyLearningUtils:
     Class for applying general utility methods
     """
     @staticmethod
-    def bayesian_blocks(df: pd.DataFrame, feature: str) -> dict:
+    def bayesian_blocks(df: pd.Series) -> dict:
         """
         Optimal univariate binning using Bayesian Blocks
 
-        :param df: pd.DataFrame
+        :param df: pd.Series
             Data set
-
-        :param feature:
-            Continuous feature to calculate bayesian blocks from
 
         :return dict
             Edges and labels (Bayesian Blocks)
         """
-        _x: np.array = df[feature].sort_values(axis=0, ascending=True, inplace=False).values
+        _x: np.array = df.sort_values(axis=0, ascending=True, inplace=False).values
         _edges: np.ndarray = np.concatenate([_x[:1], 0.5 * (_x[1:] + _x[:-1]), _x[-1:]])
         _block_length = _x[-1] - _edges
         _ones_arr: np.array = np.ones(_x.size)

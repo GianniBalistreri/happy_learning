@@ -1,4 +1,17 @@
 import setuptools
+import subprocess
+import sys
+
+from happy_learning.text_miner import LANG_MODELS
+
+# Install spacy language models:
+subprocess.run('python{} -m pip install spacy'.format('3' if sys.platform.find('win') != 0 else ''), shell=True)
+for lang in LANG_MODELS.keys():
+    for model in LANG_MODELS[lang]['model']['spacy'].keys():
+        subprocess.run('python{} -m spacy download {}'.format('3' if sys.platform.find('win') != 0 else '',
+                                                              LANG_MODELS[lang]['model']['spacy'][model]
+                                                              ),
+                       shell=True)
 
 with open('README.md', 'r') as _read_me:
     long_description = _read_me.read()
@@ -26,11 +39,13 @@ setuptools.setup(
                                      'requirements.txt',
                                      'setup.py',
                                      #'Happily Applied Learning -> Avocado.ipynb',
-                                     'Happy Learnings.ipynb'
+                                     'Happy Learnings.ipynb',
+                                     'Happy Learning - Methodology.pdf'
                                      ]
                   },
     data_file=[('test', ['test/test_chaid_decision_tree.py',
                          'test/test_data_miner.py',
+                         'test/test_evaluate_machine_learning.py',
                          'test/test_feature_engineer.py',
                          'test/test_feature_learning.py',
                          'test/test_feature_selector.py',
@@ -38,9 +53,11 @@ setuptools.setup(
                          'test/test_genetic_algorithm.py',
                          'test/test_missing_data_analysis.py',
                          'test/test_multiple_imputation.py',
-                         #'test/test_neural_network.py',
+                         'test/test_neural_network_generator_torch.py',
+                         'test/test_neural_network_torch.py',
                          'test/test_sampler.py',
                          'test/test_supervised_machine_learning.py',
+                         'test/test_text_miner.py',
                          'test/test_utils.py'
                          ]
                 )],

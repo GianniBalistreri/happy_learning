@@ -24,7 +24,7 @@ class MLSampler:
                  features: List[str] = None,
                  train_size: float = 0.8,
                  random_sample: bool = True,
-                 stratification: bool = True,
+                 stratification: bool = False,
                  seed: int = 1234,
                  **kwargs
                  ):

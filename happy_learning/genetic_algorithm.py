@@ -26,14 +26,14 @@ warnings.filterwarnings('ignore')
 #   -> Parameter Configuration
 
 
-class GeneticException(Exception):
+class GeneticAlgorithmException(Exception):
     """
-    Class for managing exceptions for class Genetic
+    Class for managing exceptions for class GeneticAlgorithm
     """
     pass
 
 
-class Genetic:
+class GeneticAlgorithm:
     """
     Class for optimizing supervised machine learning algorithms using Genetic Algorithm
     """
@@ -73,6 +73,7 @@ class Genetic:
                  force_target_type: str = None,
                  plot: bool = False,
                  output_file_path: str = None,
+                 include_neural_networks: bool = False,
                  deep_learning_type: str = 'batch',
                  deep_learning_output_size: int = None,
                  multi_threading: bool = False,
@@ -81,12 +82,14 @@ class Genetic:
                  verbose: int = 0,
                  feature_engineer=None,
                  fitness_function=sml_score,
+                 sampling_function=None,
                  **kwargs
                  ):
         """
         :param mode: str
             Optimization specification
-                -> model: Optimize model or parameter set
+                -> model: Optimize model or hyper parameter set
+                -> model_sampler: Optimize model or hyper parameter set and resample data set each mutation
                 -> feature_engineer: Optimize feature engineering
                 -> feature_selector: Optimize feature selection
 
@@ -136,6 +139,9 @@ class Genetic:
 
         :param fitness_function: function
             User defined fitness function to evaluate machine learning models
+
+        :param sampling_function: function
+            User defined sampling function
 
         :param genes: dict
             Attributes of the individuals (genes)
@@ -199,6 +205,9 @@ class Genetic:
         :param output_file_path: str
             File path for exporting results (model, visualization, etc.)
 
+        :param include_neural_networks: bool
+            Include neural networks in random model sampling workaround for structured (tabular) data
+
         :param deep_learning_type: str
             Name of the learning type to use to train neural networks:
                 -> batch: use hole data set as batches in each epoch
@@ -227,16 +236,21 @@ class Genetic:
         self.mode = mode
         self.model = None
         self.model_params: dict = copy.deepcopy(model_params)
+        self.include_neural_networks: bool = include_neural_networks
         _neural_nets: List[str] = []
-        for model in models:
-            if model in NETWORK_TYPE.keys():
-                _neural_nets.append(model)
-        if len(_neural_nets) == 0:
+        if models is None:
             self.deep_learning: bool = False
-            self.models: List[str] = copy.deepcopy(models)
+            self.models: List[str] = models
         else:
-            self.deep_learning: bool = True
-            self.models = _neural_nets
+            for model in models:
+                if model in NETWORK_TYPE.keys():
+                    _neural_nets.append(model)
+            if len(_neural_nets) == 0:
+                self.deep_learning: bool = False
+                self.models: List[str] = copy.deepcopy(models)
+            else:
+                self.deep_learning: bool = True
+                self.models = _neural_nets
         self.parents_ratio: float = parents_ratio
         self.pop_size: int = pop_size if pop_size >= 3 else 64
         if (self.pop_size * self.parents_ratio) % 2 != 0:
@@ -277,6 +291,7 @@ class Genetic:
             self.output_file_path: str = output_file_path.replace('\\', '/')
             if self.output_file_path[len(self.output_file_path) - 1] != '/':
                 self.output_file_path = '{}/'.format(self.output_file_path)
+        self.sampling_function = sampling_function
         self.kwargs: dict = kwargs
         self._input_manager()
         self.target_labels: List[str] = labels
@@ -332,8 +347,6 @@ class Genetic:
                                             ml_metric=[],
                                             train_test_diff=[],
                                             train_time_in_seconds=[],
-                                            cpu_usage=[],
-                                            ram_usage=[],
                                             original_ml_train_metric=[],
                                             original_ml_test_metric=[]
                                             )
@@ -365,6 +378,7 @@ class Genetic:
                                                                                         )
                  })
         if current_gen:
+            setattr(self.population[idx], 'fitness_score', self.evolution_history.get('fitness_score')[self.population[idx].id])
             if not self.deep_learning:
                 setattr(self.population[idx], 'features', list(self.data_set.get('x_train').columns))
             if self.current_generation_meta_data['generation'] == 0:
@@ -375,34 +389,33 @@ class Genetic:
                 self.current_generation_meta_data.get('param_mutated').append(self.population[idx].model_param_mutated)
                 self.current_generation_meta_data.get('trained_model').append(self.population[idx].model)
                 self.current_generation_meta_data.get('fitness_metric').append(self.population[idx].fitness)
-                self.current_generation_meta_data.get('fitness_score').append(self.evolution_history.get('fitness_score')[-1])
+                self.current_generation_meta_data.get('fitness_score').append(self.population[idx].fitness_score)
             else:
-                self.current_generation_meta_data.get('id')[idx] = self.population[idx].id
-                self.current_generation_meta_data.get('features')[idx] = self.population[idx].features
-                self.current_generation_meta_data.get('model_name')[idx] = self.population[idx].model_name
-                self.current_generation_meta_data.get('param')[idx] = self.population[idx].model_param
-                self.current_generation_meta_data.get('param_mutated')[idx] = self.population[idx].model_param_mutated
-                self.current_generation_meta_data.get('trained_model')[idx] = self.population[idx].model
-                self.current_generation_meta_data.get('fitness_metric')[idx] = self.population[idx].fitness
-                self.current_generation_meta_data.get('fitness_score')[idx] = self.evolution_history.get('fitness_score')[-1]
+                self.current_generation_meta_data['id'][idx] = self.population[idx].id
+                self.current_generation_meta_data['features'][idx] = self.population[idx].features
+                self.current_generation_meta_data['model_name'][idx] = self.population[idx].model_name
+                self.current_generation_meta_data['param'][idx] = self.population[idx].model_param
+                self.current_generation_meta_data['param_mutated'][idx] = self.population[idx].model_param_mutated
+                self.current_generation_meta_data['trained_model'][idx] = self.population[idx].model
+                self.current_generation_meta_data['fitness_metric'][idx] = self.population[idx].fitness
+                self.current_generation_meta_data['fitness_score'][idx] = self.population[idx].fitness_score
         else:
             if idx is None:
+                print(self.current_generation_meta_data['fitness_metric'])
+                print(self.current_generation_meta_data['fitness_score'])
                 self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['fitness'] = self.current_generation_meta_data.get('fitness')
-                try:
-                    self.evolution_gradient.get('min').append(min(self.current_generation_meta_data.get('fitness_score')))
-                    self.evolution_gradient.get('median').append(np.median(self.current_generation_meta_data.get('fitness_score')))
-                    self.evolution_gradient.get('mean').append(np.mean(self.current_generation_meta_data.get('fitness_score')))
-                    self.evolution_gradient.get('max').append(max(self.current_generation_meta_data.get('fitness_score')))
-                    Log(write=self.log, logger_file_path=self.output_file_path).log(
-                        'Fitness: Max -> {}'.format(self.evolution_gradient.get('max')[-1]))
-                    Log(write=self.log, logger_file_path=self.output_file_path).log(
-                        'Fitness: Median -> {}'.format(self.evolution_gradient.get('median')[-1]))
-                    Log(write=self.log, logger_file_path=self.output_file_path).log(
-                        'Fitness: Mean -> {}'.format(self.evolution_gradient.get('mean')[-1]))
-                    Log(write=self.log, logger_file_path=self.output_file_path).log(
-                        'Fitness: Min -> {}'.format(self.evolution_gradient.get('min')[-1]))
-                except (IndexError, ValueError):
-                    pass
+                self.evolution_gradient.get('min').append(min(self.current_generation_meta_data.get('fitness_score')))
+                self.evolution_gradient.get('median').append(np.median(self.current_generation_meta_data.get('fitness_score')))
+                self.evolution_gradient.get('mean').append(np.mean(self.current_generation_meta_data.get('fitness_score')))
+                self.evolution_gradient.get('max').append(max(self.current_generation_meta_data.get('fitness_score')))
+                Log(write=self.log, logger_file_path=self.output_file_path).log(
+                    'Fitness: Max -> {}'.format(self.evolution_gradient.get('max')[-1]))
+                Log(write=self.log, logger_file_path=self.output_file_path).log(
+                    'Fitness: Median -> {}'.format(self.evolution_gradient.get('median')[-1]))
+                Log(write=self.log, logger_file_path=self.output_file_path).log(
+                    'Fitness: Mean -> {}'.format(self.evolution_gradient.get('mean')[-1]))
+                Log(write=self.log, logger_file_path=self.output_file_path).log(
+                    'Fitness: Min -> {}'.format(self.evolution_gradient.get('min')[-1]))
             else:
                 if self.current_generation_meta_data['generation'] == 0:
                     self.evolution_history.get('parent').append(-1)
@@ -418,8 +431,7 @@ class Genetic:
                 self.evolution_history.get('model').append(self.population[idx].model_name)
                 self.evolution_history.get('mutation_type').append(self.population[idx].model_param_mutation)
                 self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['id'].append(self.population[idx].id)
-                self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])][
-                    'model'].append(self.population[idx].model_name)
+                self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['model'].append(self.population[idx].model_name)
 
     def _crossover(self, parent: int, child: int):
         """
@@ -468,8 +480,8 @@ class Genetic:
         if self.fitness_function.__name__ == 'sml_score':
             _scores: dict = sml_score(ml_metric=tuple([_best_score, individual.fitness['test'].get(_ml_metric)]),
                                       train_test_metric=tuple([individual.fitness['train'].get(_ml_metric),
-                                                               individual.fitness['test'].get(_ml_metric)
-                                                               ]),
+                                                               individual.fitness['test'].get(_ml_metric)]
+                                                              ),
                                       train_time_in_seconds=individual.train_time
                                       )
         else:
@@ -488,12 +500,13 @@ class Genetic:
         Gather information about each individual of final generation
         """
         for i, individual in enumerate(self.population):
-            self.final_generation.update({str(i): dict(id=copy.deepcopy(individual.id),
-                                                       model_name=copy.deepcopy(individual.model_name),
-                                                       param=copy.deepcopy(individual.model_param),
-                                                       fitness=copy.deepcopy(individual.fitness),
-                                                       hidden_layer_size=copy.deepcopy(individual.hidden_layer_size) if self.deep_learning else None
-                                                       )
+            self.final_generation.update({i: dict(id=copy.deepcopy(individual.id),
+                                                  model_name=copy.deepcopy(individual.model_name),
+                                                  param=copy.deepcopy(individual.model_param),
+                                                  fitness=copy.deepcopy(individual.fitness),
+                                                  fitness_score=copy.deepcopy(individual.fitness_score),
+                                                  hidden_layer_size=copy.deepcopy(individual.hidden_layer_size) if self.deep_learning else None
+                                                  )
                                           })
 
     def _input_manager(self):
@@ -504,11 +517,11 @@ class Genetic:
         if self.mode in ['feature_engineer', 'feature_selector', 'model']:
             if self.mode.find('feature') >= 0:
                 if self.target not in self.feature_engineer.get_features():
-                    raise GeneticException('Target feature ({}) not found in data set'.format(self.target))
+                    raise GeneticAlgorithmException('Target feature ({}) not found in data set'.format(self.target))
                 self.target_values: np.array = self.feature_engineer.get_feature_values(feature=self.target, unique=True)
                 if self.mode == 'feature_engineer':
                     if self.feature_engineer is None:
-                        raise GeneticException('FeatureEngineer object not found')
+                        raise GeneticAlgorithmException('FeatureEngineer object not found')
                     else:
                         self.feature_engineer.activate_actor()
                         self.n_cases = self.feature_engineer.get_n_cases()
@@ -522,16 +535,16 @@ class Genetic:
                     if self.feature_engineer is None:
                         if self.data_set is None:
                             if self.train_data_file_path is None or self.test_data_file_path is None or self.valid_data_file_path is None:
-                                raise GeneticException('No data set found')
+                                raise GeneticAlgorithmException('No data set found')
                         else:
                             if 'x_train' not in self.data_set.keys():
-                                raise GeneticException('x_train not found in data dictionary')
+                                raise GeneticAlgorithmException('x_train not found in data dictionary')
                             if 'y_train' not in self.data_set.keys():
-                                raise GeneticException('y_train not found in data dictionary')
+                                raise GeneticAlgorithmException('y_train not found in data dictionary')
                             if 'x_test' not in self.data_set.keys():
-                                raise GeneticException('x_test not found in data dictionary')
+                                raise GeneticAlgorithmException('x_test not found in data dictionary')
                             if 'y_test' not in self.data_set.keys():
-                                raise GeneticException('y_test not found in data dictionary')
+                                raise GeneticAlgorithmException('y_test not found in data dictionary')
                             if isinstance(self.data_set.get('x_train'), str):
                                 pass
                                 #TODO: Handle train & test inpute files --> numeric / text / images / audio / video
@@ -547,7 +560,7 @@ class Genetic:
                         self.n_train_cases: int = round(self.n_cases * _train_size)
                 else:
                     if self.target not in self.df.columns:
-                        raise GeneticException('Target feature ({}) not found in data set'.format(self.target))
+                        raise GeneticAlgorithmException('Target feature ({}) not found in data set'.format(self.target))
                     if self.features is None:
                         self.features = list(self.df.columns)
                         del self.features[self.features.index(self.target)]
@@ -567,25 +580,20 @@ class Genetic:
                         self.n_test_cases = 0
                         self.n_train_cases = 0
                     else:
-                        self.data_set: dict = MLSampler(df=self.df,
-                                                        target=self.target,
-                                                        features=_features,
-                                                        train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
-                                                        stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
-                                                        ).train_test_sampling()
+                        self._sampling(features=_features)
                         self.n_cases = len(self.df)
                         self.n_test_cases: int = len(self.data_set['x_test'])
                         self.n_train_cases: int = len(self.data_set['x_train'])
         else:
-            raise GeneticException('Optimization mode ({}) not supported. Use "model", "feature_engineer" or "feature_selector" instead.'.format(self.mode))
+            raise GeneticAlgorithmException('Optimization mode ({}) not supported. Use "model", "feature_engineer" or "feature_selector" instead.'.format(self.mode))
         if self.deep_learning:
             if self.target_values is None:
                 self.target_classes = self.deep_learning_output_size
                 if self.deep_learning_output_size is None:
-                    raise GeneticException('Size of the output layer of the neural network is missing')
+                    raise GeneticAlgorithmException('Size of the output layer of the neural network is missing')
                 else:
                     if self.deep_learning_output_size < 0:
-                        raise GeneticException('Size of the output layer of the neural network is missing')
+                        raise GeneticAlgorithmException('Size of the output layer of the neural network is missing')
                     elif self.deep_learning_output_size == 1:
                         self.target_type: str = 'reg'
                     elif self.deep_learning_output_size == 2:
@@ -739,13 +747,7 @@ class Genetic:
                 __i = 0
                 while True:
                     __i += 1
-                    self.data_set = MLSampler(df=self.df[_features + [self.target]],
-                                              target=self.target,
-                                              features=_features,
-                                              train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
-                                              random_sample=True if self.kwargs.get('random') is None else self.kwargs.get('random'),
-                                              stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
-                                              ).train_test_sampling(validation_split=0.1 if self.kwargs.get('validation_split') is None else self.kwargs.get('validation_split'))
+                    self._sampling(features=_features)
                     _s: int = copy.deepcopy(_sample_trials)
                     for s in self.data_set.keys():
                         if s.find('x_') >= 0 and len(self.data_set[s].shape) != 2:
@@ -773,7 +775,7 @@ class Genetic:
                 if self.re_populate:
                     if _trials == 1: #self.max_trials:
                         break
-                    if self.evolution_gradient.get('min') == self.evolution_gradient.get('max'):
+                    if self.evolution_gradient.get('min')[0] == self.evolution_gradient.get('max')[0] and self.evolution_gradient.get('max')[0] < 1:
                         _trials += 1
                         self._re_populate()
                     else:
@@ -800,26 +802,20 @@ class Genetic:
             if self.mode == 'model':
                 if _re_generate:
                     if np.random.uniform(low=0, high=1) <= self.mutation_prob:
-                        self.population[pop_idx] = self.population[pop_idx].generate_model()
+                        self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_model())
                     else:
-                        self.population[pop_idx] = self.population[pop_idx].generate_params(param_rate=self.mutation_rate)
+                        self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_params(param_rate=self.mutation_rate))
             elif self.mode == 'feature_engineer':
-                if self.current_generation_meta_data['generation'] > 0:
-                    self.data_set = MLSampler(df=self.feature_engineer.get_data(),
-                                              target=self.target,
-                                              features=self.feature_pairs[pop_idx],
-                                              train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
-                                              random_sample=True if self.kwargs.get('random') is None else self.kwargs.get('random'),
-                                              stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
-                                              ).train_test_sampling(validation_split=0.1 if self.kwargs.get('validation_split') is None else self.kwargs.get('validation_split'))
-                    if self.deep_learning:
-                        self.population[pop_idx].update_data(x_train=self.data_set.get('x_train'),
-                                                             y_train=self.data_set.get('y_train'),
-                                                             x_test=self.data_set.get('x_test'),
-                                                             y_test=self.data_set.get('x_test'),
-                                                             x_valn=self.data_set.get('x_val'),
-                                                             y_valn=self.data_set.get('y_val')
-                                                             )
+                #if self.current_generation_meta_data['generation'] > 0:
+                self._sampling(features=self.feature_pairs[pop_idx])
+                if self.deep_learning:
+                    self.population[pop_idx].update_data(x_train=self.data_set.get('x_train'),
+                                                         y_train=self.data_set.get('y_train'),
+                                                         x_test=self.data_set.get('x_test'),
+                                                         y_test=self.data_set.get('x_test'),
+                                                         x_valn=self.data_set.get('x_val'),
+                                                         y_valn=self.data_set.get('y_val')
+                                                         )
             if self.deep_learning:
                 self.population[pop_idx].train()
             else:
@@ -838,7 +834,7 @@ class Genetic:
             #        _re_generate = True
             #        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Error while training model ({})\n{}'.format(self.population[pop_idx].model_name, e))
         if _re == _re_generate_max:
-            raise GeneticException('Maximum number of errors occurred. Check last error message ...')
+            raise GeneticAlgorithmException('Maximum number of errors occurred. Check last error message ...')
         if self.target_type == 'reg':
             if self.deep_learning:
                 self.population[pop_idx].predict()
@@ -850,12 +846,14 @@ class Genetic:
             if self.deep_learning:
                 self.population[pop_idx].predict()
             else:
-                _pred: np.array = self.population[pop_idx].predict(x=self.data_set.get('x_test').values, probability=True)
+                _pred: np.array = self.population[pop_idx].predict(x=self.data_set.get('x_test').values, probability=False)
                 self.population[pop_idx].eval(obs=self.data_set.get('y_test').values, pred=_pred, eval_metric=None)
             if self.target_type == 'clf_multi':
                 self._fitness(individual=self.population[pop_idx], ml_metric='cohen_kappa')
             else:
                 self._fitness(individual=self.population[pop_idx], ml_metric='auc')
+        #print(self.evolution_history.get('fitness_score')[pop_idx])
+        #print(self.population[pop_idx].fitness)
         self._collect_meta_data(current_gen=True, idx=pop_idx)
 
     def _mutate(self, parent: int, child: int, force_param: dict = None):
@@ -871,13 +869,16 @@ class Genetic:
         :param force_param: dict
             Model parameter config to force during mutation
         """
-        if self.mode == 'model':
+        if self.mode.find('model') >= 0:
             if np.random.uniform(low=0, high=1) <= self.mutation_prob:
-                if self.warm_start_strategy == 'adaptive':
+                if self.mode == 'model_sampler':
+                    self._sampling(features=self.population[child].features)
+                if self.deep_learning and self.warm_start_strategy == 'adaptive':
                     self.population[child].update_model_param(hidden_layer_size=self.population[child].hidden_layer_size + 1)
-                self.population[child] = self.population[parent].generate_model()
+                self.population[child] = ModelGeneratorReg(models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models).generate_model()
             else:
-                self.population[child] = self.population[parent].generate_params(param_rate=self.mutation_rate, force_param=force_param)
+                self.population[child] = ModelGeneratorReg(reg_params=self.population[parent].model_param, models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[parent].model_param, models=self.models).generate_model()
+                self.population[child].generate_params(param_rate=self.mutation_rate, force_param=force_param)
         elif self.mode.find('feature') >= 0:
             _new_features: List[str] = []
             _feature_pool: List[str] = self.feature_pairs[np.random.choice(a=self.parents_idx)]
@@ -950,13 +951,7 @@ class Genetic:
                     _warm_model = ModelGeneratorClf(models=self.models).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.mode.find('feature') >= 0:
-                    self.data_set = MLSampler(df=self.feature_engineer.get_data(),
-                                              target=self.target,
-                                              features=self.feature_pairs[p],
-                                              train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
-                                              random_sample=True if self.kwargs.get('random') is None else self.kwargs.get('random'),
-                                              stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
-                                              ).train_test_sampling(validation_split=0.1 if self.kwargs.get('validation_split') is None else self.kwargs.get('validation_split'))
+                    self._sampling(features=self.feature_pairs[p])
                 if self.evolution_continue:
                     _params: dict = self.final_generation.get('param')
                 else:
@@ -1010,13 +1005,7 @@ class Genetic:
             if self.evolution_continue:
                 _model_param: dict = self.final_generation[str(p + len(self.population))].get('param')
             if self.mode.find('feature') >= 0:
-                self.data_set = MLSampler(df=self.feature_engineer.get_data(),
-                                          target=self.target,
-                                          features=self.feature_pairs[p],
-                                          train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
-                                          random_sample=True if self.kwargs.get('random') is None else self.kwargs.get('random'),
-                                          stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
-                                          ).train_test_sampling(validation_split=0.1 if self.kwargs.get('validation_split') is None else self.kwargs.get('validation_split'))
+                self._sampling(features=self.feature_pairs[p])
             _net_gen: NetworkGenerator = NetworkGenerator(target=self.target,
                                                           predictors=self.features,
                                                           output_layer_size=self.deep_learning_output_size,
@@ -1054,6 +1043,20 @@ class Genetic:
             self.evolution_gradient[evo_gradient] = []
         self._populate()
 
+    def _sampling(self, features: List[str] = None):
+        """
+        Sample data set
+        """
+        if self.sampling_function is None:
+            self.data_set = MLSampler(df=self.df if self.feature_engineer is None else self.feature_engineer.get_data(),
+                                      target=self.target,
+                                      features=self.features if features is None else features,
+                                      train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
+                                      stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
+                                      ).train_test_sampling(validation_split=0.1 if self.kwargs.get('validation_split') is None else self.kwargs.get('validation_split'))
+        else:
+            self.data_set = self.sampling_function()
+
     @staticmethod
     def get_models() -> dict:
         """
@@ -1083,11 +1086,11 @@ class Genetic:
         if self.deep_learning:
             self._populate_networks()
         else:
-            #if self.dask_client is None:
-            #    self.dask_client = EasyExploreUtils().dask_setup(client_name='genetic_algorithm',
-            #                                                     client_address=self.kwargs.get('client_address'),
-            #                                                     mode='threads' if self.kwargs.get('client_mode') is None else self.kwargs.get('client_mode')
-            #                                                     )
+            if self.dask_client is None:
+                self.dask_client = HappyLearningUtils().dask_setup(client_name='genetic_algorithm',
+                                                                   client_address=self.kwargs.get('client_address'),
+                                                                   mode='threads' if self.kwargs.get('client_mode') is None else self.kwargs.get('client_mode')
+                                                                   )
             self._populate()
         while _evolve:
             Log(write=self.log, logger_file_path=self.output_file_path).log('Generation: {} / {}'.format(self.current_generation_meta_data['generation'], self.max_generations))
@@ -1098,7 +1101,7 @@ class Genetic:
                     if self.warm_start_strategy == 'monotone':
                         self.warm_start_constant_hidden_layers += 1
             self._mating_pool()
-            if (self.mode == 'model') and (self.current_generation_meta_data['generation'] > self.burn_in_generations):
+            if (self.mode.find('model') >= 0) and (self.current_generation_meta_data['generation'] > self.burn_in_generations):
                 if self.convergence:
                     if self._is_gradient_converged(compare=self.convergence_measure, threshold=0.05):
                         _evolve = False
@@ -1177,7 +1180,6 @@ class Genetic:
                                model_evolution=True,
                                param_distribution=False,
                                train_time_distribution=False,
-                               technical_usage=False,
                                breeding_map=False,
                                breeding_graph=False,
                                fitness_distribution=True,
@@ -1237,8 +1239,6 @@ class Genetic:
         :param final_generation: bool
             Save settings of each individual of final generation
         """
-        if self.dask_client is not None:
-            self.dask_client = None
         # Export evolution history data:
         if evolution_history:
             DataExporter(obj=self.evolution_history, file_path=os.path.join(self.output_file_path, 'evolution_history.p'), create_dir=True, overwrite=True).file()
@@ -1255,8 +1255,18 @@ class Genetic:
                 DataExporter(obj=self.model, file_path=os.path.join(self.output_file_path, 'model.p'), create_dir=True, overwrite=True).file()
         # Export Genetic class object:
         if ga:
+            self.df = None
             self.model = None
             self.population = []
+            self.data_set = None
+            self.feature_engineer = None
+            if self.dask_client is not None:
+                try:
+                    self.dask_client.close()
+                except TypeError:
+                    pass
+                finally:
+                    self.dask_client = None
             DataExporter(obj=self, file_path=os.path.join(self.output_file_path, 'genetic.p'), create_dir=True, overwrite=True).file()
 
     def visualize(self,
@@ -1265,7 +1275,6 @@ class Genetic:
                   model_evolution: bool = True,
                   param_distribution: bool = False,
                   train_time_distribution: bool = True,
-                  technical_usage: bool = True,
                   breeding_map: bool = False,
                   breeding_graph: bool = False,
                   fitness_distribution: bool = True,
@@ -1297,10 +1306,6 @@ class Genetic:
         :param train_time_distribution: bool
             Distribution of training time
                 -> Violin
-
-        :param technical_usage: bool
-            Distribution of CPU and RAM usage
-                -> Histogram
 
         :param breeding_map: bool
             Breeding evolution as
@@ -1336,7 +1341,7 @@ class Genetic:
         """
         _charts: dict = {}
         _evolution_history_data: pd.DataFrame = pd.DataFrame(data=self.evolution_history)
-        _m: List[str] = ['fitness_score', 'ml_metric', 'train_test_diff', 'cpu_usage', 'ram_usage']
+        _m: List[str] = ['fitness_score', 'ml_metric', 'train_test_diff']
         _evolution_history_data[_m] = _evolution_history_data[_m].round(decimals=2)
         _evolution_gradient_data: pd.DataFrame = pd.DataFrame(data=self.evolution_gradient)
         _evolution_gradient_data['generation'] = [i for i in range(0, len(self.evolution_gradient.get('max')), 1)]
@@ -1366,7 +1371,7 @@ class Genetic:
                                                                  )
                             })
         if model_distribution:
-            if len(self.models) > 1:
+            if self.models is None or len(self.models) > 1:
                 _charts.update({'Distribution of used ML Models:': dict(data=_evolution_history_data,
                                                                         features=['model'],
                                                                         group_by=['generation'] if per_generation else None,
@@ -1374,14 +1379,14 @@ class Genetic:
                                                                         file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_model_distribution.html')
                                                                         )
                                 })
-        if param_distribution:
-            _charts.update({'Distribution of ML Model parameters:': dict(data=_evolution_history_data,
-                                                                         features=['model_param'],
-                                                                         group_by=['generation'] if per_generation else None,
-                                                                         plot_type='tree',
-                                                                         file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_parameter_treemap.html')
-                                                                         )
-                            })
+        #if param_distribution:
+        #    _charts.update({'Distribution of ML Model parameters:': dict(data=_evolution_history_data,
+        #                                                                 features=['model_param'],
+        #                                                                 group_by=['generation'] if per_generation else None,
+        #                                                                 plot_type='tree',
+        #                                                                 file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_parameter_treemap.html')
+        #                                                                 )
+        #                    })
         if train_time_distribution:
             _charts.update({'Distribution of elapsed Training Time:': dict(data=_evolution_history_data,
                                                                            features=['train_time_in_seconds'],
@@ -1391,17 +1396,8 @@ class Genetic:
                                                                            file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_training_time_distribution.html')
                                                                            )
                             })
-        if technical_usage:
-            _charts.update({'Distribution of CPU & RAM usage:': dict(data=_evolution_history_data,
-                                                                     features=['ram_usage', 'cpu_usage'],
-                                                                     group_by=['model'],
-                                                                     plot_type='violin',
-                                                                     melt=True,
-                                                                     file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_cpu_ram_distribution.html')
-                                                                     )
-                            })
         if breeding_map:
-            _breeding_map: pd.DataFrame = pd.DataFrame(data=dict(gen_0=self.generation_history['population']['gen_0'].get('fitness')))
+            _breeding_map: pd.DataFrame = pd.DataFrame(data=dict(gen_0=self.generation_history['population']['gen_0'].get('fitness')), index=[0])
             for g in self.generation_history['population'].keys():
                 if g != 'gen_0':
                     _breeding_map[g] = self.generation_history['population'][g].get('fitness')
@@ -1430,8 +1426,6 @@ class Genetic:
         if fitness_dimensions:
             _charts.update({'Evolution Meta Data:': dict(data=_evolution_history_data,
                                                          features=['train_time_in_seconds',
-                                                                   'cpu_usage',
-                                                                   'ram_usage',
                                                                    'ml_metric',
                                                                    'train_test_diff',
                                                                    'fitness_score',

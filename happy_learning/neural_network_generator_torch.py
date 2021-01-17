@@ -1,6 +1,5 @@
 import copy
 import numpy as np
-import psutil
 import torch
 import torch.nn.functional
 
@@ -256,9 +255,6 @@ class NeuralNetwork:
         self.validation_iter = None
         self.sequential_type: str = sequential_type
         self.seed: int = 1234 if seed <= 0 else seed
-        self.cpu_usage = None
-        self.ram_usage = None
-        self.ram_memory: int = psutil.virtual_memory().percent
 
     @staticmethod
     def attention_network() -> dict:
@@ -379,7 +375,7 @@ class NeuralNetwork:
 
 class NetworkGenerator(NeuralNetwork):
     """
-    Class for generating supervised learning classification models
+    Class for generating neural networks using PyTorch
     """
     def __init__(self,
                  target: str,
@@ -445,6 +441,7 @@ class NetworkGenerator(NeuralNetwork):
                          seed=seed
                          )
         self.id: int = 0
+        self.fitness_score: float = 0.0
         self.fitness: dict = {}
         if self.output_size == 1:
             self.target_type: str = 'reg'
@@ -1025,6 +1022,12 @@ class NetworkGenerator(NeuralNetwork):
             self.model_param = getattr(NeuralNetwork(target=self.target,
                                                      predictors=self.predictors,
                                                      output_layer_size=self.output_size,
+                                                     x_train=self.x_train,
+                                                     y_train=self.y_train,
+                                                     x_test=self.x_test,
+                                                     y_test=self.y_test,
+                                                     x_val=self.x_val,
+                                                     y_val=self.y_val,
                                                      train_data_path=self.train_data_path,
                                                      test_data_path=self.test_data_path,
                                                      validation_data_path=self.validation_data_path,
@@ -1053,6 +1056,12 @@ class NetworkGenerator(NeuralNetwork):
         self.model = getattr(NeuralNetwork(target=self.target,
                                            predictors=self.predictors,
                                            output_layer_size=self.output_size,
+                                           x_train=self.x_train,
+                                           y_train=self.y_train,
+                                           x_test=self.x_test,
+                                           y_test=self.y_test,
+                                           x_val=self.x_val,
+                                           y_val=self.y_val,
                                            train_data_path=self.train_data_path,
                                            test_data_path=self.test_data_path,
                                            validation_data_path=self.validation_data_path,
@@ -1131,6 +1140,12 @@ class NetworkGenerator(NeuralNetwork):
         self.model = getattr(NeuralNetwork(target=self.target,
                                            predictors=self.predictors,
                                            output_layer_size=self.output_size,
+                                           x_train=self.x_train,
+                                           y_train=self.y_train,
+                                           x_test=self.x_test,
+                                           y_test=self.y_test,
+                                           x_val=self.x_val,
+                                           y_val=self.y_val,
                                            train_data_path=self.train_data_path,
                                            test_data_path=self.test_data_path,
                                            validation_data_path=self.validation_data_path,
@@ -1154,6 +1169,12 @@ class NetworkGenerator(NeuralNetwork):
                 self.model_param = getattr(NeuralNetwork(target=self.target,
                                                          predictors=self.predictors,
                                                          output_layer_size=self.output_size,
+                                                         x_train=self.x_train,
+                                                         y_train=self.y_train,
+                                                         x_test=self.x_test,
+                                                         y_test=self.y_test,
+                                                         x_val=self.x_val,
+                                                         y_val=self.y_val,
                                                          train_data_path=self.train_data_path,
                                                          test_data_path=self.test_data_path,
                                                          validation_data_path=self.validation_data_path
@@ -1176,6 +1197,12 @@ class NetworkGenerator(NeuralNetwork):
             self.model = getattr(NeuralNetwork(target=self.target,
                                                predictors=self.predictors,
                                                output_layer_size=self.output_size,
+                                               x_train=self.x_train,
+                                               y_train=self.y_train,
+                                               x_test=self.x_test,
+                                               y_test=self.y_test,
+                                               x_val=self.x_val,
+                                               y_val=self.y_val,
                                                train_data_path=self.train_data_path,
                                                test_data_path=self.test_data_path,
                                                validation_data_path=self.validation_data_path,
@@ -1229,8 +1256,6 @@ class NetworkGenerator(NeuralNetwork):
                 self._stochastic_learning()
             self._epoch_eval(iter_types=['train', 'val'])
         self.train_time = (datetime.now() - _t0).seconds
-        self.cpu_usage = psutil.cpu_percent(percpu=False)
-        self.ram_usage = psutil.virtual_memory().percent
 
     def update_data(self,
                     x_train: np.ndarray,

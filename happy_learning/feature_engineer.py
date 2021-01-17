@@ -14,13 +14,13 @@ from .chaid_decision_tree import CHAIDDecisionTree
 from .missing_data_analysis import MissingDataAnalysis
 from .multiple_imputation import MultipleImputation
 from .sampler import MLSampler, Sampler
+from .text_miner import TextMiner, TextMinerException
 from .utils import HappyLearningUtils
 from datetime import datetime
 from dateutil import parser
 from easyexplore.anomaly_detector import AnomalyDetector
 from easyexplore.data_explorer import DataExplorer
 from easyexplore.data_import_export import DataExporter, DataImporter, FileUtilsException
-from easyexplore.text_miner import TextMiner, TextMinerException
 from easyexplore.utils import EasyExploreUtils, INVALID_VALUES, Log, StatsUtils
 from scipy.stats import boxcox
 from sklearn.preprocessing import Binarizer, MinMaxScaler, Normalizer, KBinsDiscretizer, RobustScaler, PolynomialFeatures, StandardScaler
@@ -48,7 +48,7 @@ DATA_PROCESSING: dict = dict(processing=dict(process={},
                                           label={},
                                           one_hot={}
                                           ),
-                             scaler=dict(min_max={},
+                             scaler=dict(minmax={},
                                          robust={},
                                          normal={},
                                          standard={},
@@ -75,8 +75,22 @@ DATA_PROCESSING: dict = dict(processing=dict(process={},
                                          clean={},
                                          names={}
                                          ),
-                             text=dict(split=dict(count={}),
-                                       find=dict(count={})
+                             text=dict(occurances={},
+                                       split={},
+                                       categorical=dict(len={},
+                                                        numbers={},
+                                                        words={},
+                                                        chars={},
+                                                        special_chars={},
+                                                        email={},
+                                                        url={}
+                                                        ),
+                                       linguistic=dict(pos={},
+                                                       ner={},
+                                                       dep_tree={},
+                                                       dep_noun={},
+                                                       emoji={}
+                                                       )
                                        )
                              )
 PROCESSING_ACTION_SPACE: dict = dict(date=['date_categorizer',
@@ -178,6 +192,7 @@ def _float_adjustments(features: List[str], imp_value: float, convert_to_float32
     _inv_features: List[str] = EasyExploreUtils().get_invariant_features(df=DATA_PROCESSING.get('df')[features])
     _features: List[str] = copy.deepcopy(features)
     for inv in _inv_features:
+        DATA_PROCESSING['cleaned_features'].append(inv)
         del _features[_features.index(inv)]
         DATA_PROCESSING['df'] = DATA_PROCESSING.get('df').drop(labels=inv, axis=1, errors='ignore')
         Log(write=not DATA_PROCESSING.get('show_msg')).log('Cleaned feature "{}"'.format(features[0]))
@@ -375,70 +390,125 @@ def _process_handler(action: str,
             if feature == DATA_PROCESSING.get('last_generated_feature'):
                 DATA_PROCESSING['last_generated_feature'] = ''
         elif action == 'rename':
-            _tracked_processes: int = len(DATA_PROCESSING['processing']['process'].keys())
-            DATA_PROCESSING['processing']['process'].update({str(_tracked_processes + 1): dict(meth=meth, param=param, features={})})
-            _process: List[str] = process.split('|')
-            if len(_process) == 1:
-                DATA_PROCESSING[_process[0]].update({feature: new_feature})
-            elif len(_process) == 2:
-                DATA_PROCESSING[_process[0]][_process[1]].update({feature: new_feature})
-            _renamed_history: dict = {}
-            for level in DATA_PROCESSING['processing']['features'].keys():
-                print(level)
-                _renamed_history.update({level: {}})
-                for tracked_feature in DATA_PROCESSING['processing']['features'][level].keys():
-                    print(tracked_feature)
-                    if feature != tracked_feature:
-                        _renamed_history[level].update({tracked_feature: []})
-                        for relation in DATA_PROCESSING['processing']['features'][level][tracked_feature]:
-                            print(relation)
-                            if feature != relation:
-                                _renamed_history[level][tracked_feature].append(relation)
-            DATA_PROCESSING['processing']['features'] = _renamed_history
-            DATA_PROCESSING['df'] = DATA_PROCESSING['df'].rename(columns={feature: new_feature})
-            for feature_type in FEATURE_TYPES.keys():
-                if feature in FEATURE_TYPES.get(feature_type):
-                    FEATURE_TYPES[feature_type][FEATURE_TYPES[feature_type].index(feature)] = new_feature
-                    break
-            if feature in PREDICTORS:
-                PREDICTORS[PREDICTORS.index(feature)] = new_feature
-            if feature in DATA_PROCESSING['encoder']['label'].keys():
-                DATA_PROCESSING['encoder']['label'][DATA_PROCESSING['encoder']['label'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['encoder']['one_hot'].keys():
-                DATA_PROCESSING['encoder']['one_hot'][DATA_PROCESSING['encoder']['one_hot'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['scaler']['robust'].keys():
-                DATA_PROCESSING['scaler']['robust'][DATA_PROCESSING['scaler']['robust'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['scaler']['minmax'].keys():
-                DATA_PROCESSING['scaler']['minmax'][DATA_PROCESSING['scaler']['minmax'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['scaler']['normal'].keys():
-                DATA_PROCESSING['scaler']['normal'][DATA_PROCESSING['scaler']['normal'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['scaler']['standard'].keys():
-                DATA_PROCESSING['scaler']['standard'][DATA_PROCESSING['scaler']['standard'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['scaler']['box_cox'].keys():
-                DATA_PROCESSING['scaler']['box_cox'][DATA_PROCESSING['scaler']['box_cox'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['interaction']['date'].keys():
-                DATA_PROCESSING['interaction']['date'][DATA_PROCESSING['interaction']['date'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['interaction']['continuous'].keys():
-                DATA_PROCESSING['interaction']['continuous'][DATA_PROCESSING['interaction']['continuous'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['interaction']['simple'].keys():
-                DATA_PROCESSING['interaction']['simple'][DATA_PROCESSING['interaction']['simple'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['interaction']['poly'].keys():
-                DATA_PROCESSING['interaction']['poly'][DATA_PROCESSING['interaction']['poly'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['interaction']['one_hot'].keys():
-                DATA_PROCESSING['interaction']['one_hot'][DATA_PROCESSING['interaction']['one_hot'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['categorizer']['date'].keys():
-                DATA_PROCESSING['categorizer']['date'][DATA_PROCESSING['categorizer']['date'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['mapper']['obs'].keys():
-                DATA_PROCESSING['mapper']['obs'][DATA_PROCESSING['mapper']['obs'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['mapper']['mis'].keys():
-                DATA_PROCESSING['mapper']['mis'][DATA_PROCESSING['mapper']['mis'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['mapper']['imp'].keys():
-                DATA_PROCESSING['mapper']['imp'][DATA_PROCESSING['mapper']['imp'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['text']['split'].keys():
-                DATA_PROCESSING['text']['split'][DATA_PROCESSING['text']['split'].index(feature)] = new_feature
-            if feature in DATA_PROCESSING['text']['find'].keys():
-                DATA_PROCESSING['text']['find'][DATA_PROCESSING['text']['find'].index(feature)] = new_feature
-            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Rename feature {} to {}'.format(feature, new_feature))
+            if feature != new_feature:
+                _tracked_processes: int = len(DATA_PROCESSING['processing']['process'].keys())
+                DATA_PROCESSING['processing']['process'].update({str(_tracked_processes + 1): dict(meth=meth, param=param, features={})})
+                _process: List[str] = process.split('|')
+                if len(_process) == 1:
+                    DATA_PROCESSING[_process[0]].update({feature: new_feature})
+                elif len(_process) == 2:
+                    DATA_PROCESSING[_process[0]][_process[1]].update({feature: new_feature})
+                _renamed_history: dict = {}
+                for level in DATA_PROCESSING['processing']['features'].keys():
+                    #print(level)
+                    _renamed_history.update({level: {}})
+                    for tracked_feature in DATA_PROCESSING['processing']['features'][level].keys():
+                        #print(tracked_feature)
+                        if feature != tracked_feature:
+                            _renamed_history[level].update({tracked_feature: []})
+                            for relation in DATA_PROCESSING['processing']['features'][level][tracked_feature]:
+                                #print(relation)
+                                if feature != relation:
+                                    _renamed_history[level][tracked_feature].append(relation)
+                DATA_PROCESSING['processing']['features'] = _renamed_history
+                DATA_PROCESSING['df'] = DATA_PROCESSING['df'].rename(columns={feature: new_feature})
+                for feature_type in FEATURE_TYPES.keys():
+                    if feature in FEATURE_TYPES.get(feature_type):
+                        FEATURE_TYPES[feature_type][FEATURE_TYPES[feature_type].index(feature)] = new_feature
+                        break
+                if feature in PREDICTORS:
+                    PREDICTORS[PREDICTORS.index(feature)] = new_feature
+                if feature in DATA_PROCESSING['encoder']['label'].keys():
+                    DATA_PROCESSING['encoder']['label'].update({new_feature: DATA_PROCESSING['encoder']['label'][feature]})
+                    del DATA_PROCESSING['encoder']['label'][feature]
+                if feature in DATA_PROCESSING['encoder']['one_hot'].keys():
+                    DATA_PROCESSING['encoder']['one_hot'].update({new_feature: DATA_PROCESSING['encoder']['one_hot'][feature]})
+                    del DATA_PROCESSING['encoder']['one_hot'][feature]
+                if feature in DATA_PROCESSING['scaler']['robust'].keys():
+                    DATA_PROCESSING['scaler']['robust'].update({new_feature: DATA_PROCESSING['scaler']['robust'][feature]})
+                    del DATA_PROCESSING['scaler']['robust'][feature]
+                if feature in DATA_PROCESSING['scaler']['minmax'].keys():
+                    DATA_PROCESSING['scaler']['minmax'].update({new_feature: DATA_PROCESSING['scaler']['minmax'][feature]})
+                    del DATA_PROCESSING['scaler']['minmax'][feature]
+                if feature in DATA_PROCESSING['scaler']['normal'].keys():
+                    DATA_PROCESSING['scaler']['normal'].update({new_feature: DATA_PROCESSING['scaler']['normal'][feature]})
+                    del DATA_PROCESSING['scaler']['normal'][feature]
+                if feature in DATA_PROCESSING['scaler']['standard'].keys():
+                    DATA_PROCESSING['scaler']['standard'].update({new_feature: DATA_PROCESSING['scaler']['standard'][feature]})
+                    del DATA_PROCESSING['scaler']['standard'][feature]
+                if feature in DATA_PROCESSING['scaler']['box_cox'].keys():
+                    DATA_PROCESSING['scaler']['box_cox'].update({new_feature: DATA_PROCESSING['scaler']['box_cox'][feature]})
+                    del DATA_PROCESSING['scaler']['box_cox'][feature]
+                if feature in DATA_PROCESSING['interaction']['disparity']['date'].keys():
+                    DATA_PROCESSING['interaction']['disparity']['date'].update({new_feature: DATA_PROCESSING['interaction']['disparity']['date'][feature]})
+                    del DATA_PROCESSING['interaction']['disparity']['date'][feature]
+                if feature in DATA_PROCESSING['interaction']['disparity']['continuous'].keys():
+                    DATA_PROCESSING['interaction']['disparity']['continuous'].update({new_feature: DATA_PROCESSING['interaction']['disparity']['continuous'][feature]})
+                    del DATA_PROCESSING['interaction']['disparity']['continuous'][feature]
+                if feature in DATA_PROCESSING['interaction']['simple'].keys():
+                    DATA_PROCESSING['interaction']['simple'].update({new_feature: DATA_PROCESSING['interaction']['simple'][feature]})
+                    del DATA_PROCESSING['interaction']['simple'][feature]
+                if feature in DATA_PROCESSING['interaction']['polynomial'].keys():
+                    DATA_PROCESSING['interaction']['polynomial'].update({new_feature: DATA_PROCESSING['interaction']['polynomial'][feature]})
+                    del DATA_PROCESSING['interaction']['polynomial'][feature]
+                if feature in DATA_PROCESSING['interaction']['one_hot'].keys():
+                    DATA_PROCESSING['interaction']['one_hot'].update({new_feature: DATA_PROCESSING['interaction']['one_hot'][feature]})
+                    del DATA_PROCESSING['interaction']['one_hot'][feature]
+                if feature in DATA_PROCESSING['categorizer']['date'].keys():
+                    DATA_PROCESSING['categorizer']['date'].update({new_feature: DATA_PROCESSING['categorizer']['date'][feature]})
+                    del DATA_PROCESSING['categorizer']['date'][feature]
+                if feature in DATA_PROCESSING['mapper']['obs'].keys():
+                    DATA_PROCESSING['mapper']['obs'].update({new_feature: DATA_PROCESSING['mapper']['obs'][feature]})
+                    del DATA_PROCESSING['mapper']['obs'][feature]
+                if feature in DATA_PROCESSING['mapper']['mis'].keys():
+                    DATA_PROCESSING['mapper']['mis'].update({new_feature: DATA_PROCESSING['mapper']['mis'][feature]})
+                    del DATA_PROCESSING['mapper']['mis'][feature]
+                if feature in DATA_PROCESSING['mapper']['imp'].keys():
+                    DATA_PROCESSING['mapper']['imp'].update({new_feature: DATA_PROCESSING['mapper']['imp'][feature]})
+                    del DATA_PROCESSING['mapper']['imp'][feature]
+                if feature in DATA_PROCESSING['text']['occurances'].keys():
+                    DATA_PROCESSING['text']['occurances'].update({new_feature: DATA_PROCESSING['text']['occurances'][feature]})
+                    del DATA_PROCESSING['text']['occurances'][feature]
+                if feature in DATA_PROCESSING['text']['split'].keys():
+                    DATA_PROCESSING['text']['split'].update({new_feature: DATA_PROCESSING['text']['split'][feature]})
+                    del DATA_PROCESSING['text']['split'][feature]
+                if feature in DATA_PROCESSING['text']['categorical']['len'].keys():
+                    DATA_PROCESSING['text']['categorical']['len'].update({new_feature: DATA_PROCESSING['text']['categorical']['len'][feature]})
+                    del DATA_PROCESSING['text']['categorical']['len'][feature]
+                if feature in DATA_PROCESSING['text']['categorical']['numbers'].keys():
+                    DATA_PROCESSING['text']['categorical']['numbers'].update({new_feature: DATA_PROCESSING['text']['categorical']['numbers'][feature]})
+                    del DATA_PROCESSING['text']['categorical']['numbers'][feature]
+                if feature in DATA_PROCESSING['text']['categorical']['words'].keys():
+                    DATA_PROCESSING['text']['categorical']['words'].update({new_feature: DATA_PROCESSING['text']['categorical']['words'][feature]})
+                    del DATA_PROCESSING['text']['categorical']['words'][feature]
+                if feature in DATA_PROCESSING['text']['categorical']['chars'].keys():
+                    DATA_PROCESSING['text']['categorical']['chars'].update({new_feature: DATA_PROCESSING['text']['categorical']['chars'][feature]})
+                    del DATA_PROCESSING['text']['categorical']['chars'][feature]
+                if feature in DATA_PROCESSING['text']['categorical']['special_chars'].keys():
+                    DATA_PROCESSING['text']['categorical']['special_chars'].update({new_feature: DATA_PROCESSING['text']['categorical']['special_chars'][feature]})
+                    del DATA_PROCESSING['text']['categorical']['special_chars'][feature]
+                if feature in DATA_PROCESSING['text']['categorical']['email'].keys():
+                    DATA_PROCESSING['text']['categorical']['email'].update({new_feature: DATA_PROCESSING['text']['categorical']['email'][feature]})
+                    del DATA_PROCESSING['text']['categorical']['email'][feature]
+                if feature in DATA_PROCESSING['text']['categorical']['url'].keys():
+                    DATA_PROCESSING['text']['categorical']['url'].update({new_feature: DATA_PROCESSING['text']['categorical']['url'][feature]})
+                    del DATA_PROCESSING['text']['categorical']['url'][feature]
+                if feature in DATA_PROCESSING['text']['linguistic']['pos'].keys():
+                    DATA_PROCESSING['text']['linguistic']['pos'].update({new_feature: DATA_PROCESSING['text']['linguistic']['pos'][feature]})
+                    del DATA_PROCESSING['text']['linguistic']['pos'][feature]
+                if feature in DATA_PROCESSING['text']['linguistic']['ner'].keys():
+                    DATA_PROCESSING['text']['linguistic']['ner'].update({new_feature: DATA_PROCESSING['text']['linguistic']['ner'][feature]})
+                    del DATA_PROCESSING['text']['linguistic']['ner'][feature]
+                if feature in DATA_PROCESSING['text']['linguistic']['dep_tree'].keys():
+                    DATA_PROCESSING['text']['linguistic']['dep_tree'].update({new_feature: DATA_PROCESSING['text']['linguistic']['dep_tree'][feature]})
+                    del DATA_PROCESSING['text']['linguistic']['dep_tree'][feature]
+                if feature in DATA_PROCESSING['text']['linguistic']['dep_noun'].keys():
+                    DATA_PROCESSING['text']['linguistic']['dep_noun'].update({new_feature: DATA_PROCESSING['text']['linguistic']['dep_noun'][feature]})
+                    del DATA_PROCESSING['text']['linguistic']['dep_noun'][feature]
+                if feature in DATA_PROCESSING['text']['linguistic']['emoji'].keys():
+                    DATA_PROCESSING['text']['linguistic']['emoji'].update({new_feature: DATA_PROCESSING['text']['linguistic']['emoji'][feature]})
+                    del DATA_PROCESSING['text']['linguistic']['emoji'][feature]
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Rename feature {} to {}'.format(feature, new_feature))
     if msg is not None:
         if len(msg) > 0:
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg=msg)
@@ -455,10 +525,10 @@ def _set_feature_relations(feature: str, new_feature: str):
         Name of the new generated feature
     """
     if feature != new_feature:
-        if new_feature not in DATA_PROCESSING['processing']['features']['raw'].keys():
+        #if new_feature not in DATA_PROCESSING['processing']['features']['raw'].keys():
             # TODO: implement manual setting -> add "new" feature and related features to higher level
-            pass
-        elif new_feature not in DATA_PROCESSING['processing']['features']['raw'].keys():
+        #    pass
+        if new_feature not in DATA_PROCESSING['processing']['features']['raw'].keys():
             if feature in DATA_PROCESSING['processing']['features']['raw'].keys():
                 if new_feature not in DATA_PROCESSING['processing']['features']['raw'][feature]:
                     DATA_PROCESSING['processing']['features']['raw'][feature].append(new_feature)
@@ -847,7 +917,6 @@ class FeatureEngineer:
                                     keep_original_data=keep_original_data,
                                     features=[],
                                     predictors=[],
-                                    #target=target_feature,
                                     target_type=[],
                                     train_test=dict(simple={},
                                                     kfold={}
@@ -883,6 +952,7 @@ class FeatureEngineer:
                                     action_space=PROCESSING_ACTION_SPACE,
                                     actor_memory={},
                                     imp_features=None,
+                                    cleaned_features=[],
                                     avoid_overwriting=True,
                                     source='',
                                     activated=datetime.now(),
@@ -974,9 +1044,13 @@ class FeatureEngineer:
             if auto_engineering:
                 self.auto_engineering(geo_features=DATA_PROCESSING.get('geo_features'), target_feature=DATA_PROCESSING.get('target'))
             if len(FEATURE_TYPES.get('id_text')) > 0:
+                _potential_text_features: List[str] = FEATURE_TYPES.get('id_text')
+                if kwargs.get('include_categorical') is not None:
+                    if kwargs.get('include_categorical'):
+                        _potential_text_features.extend(FEATURE_TYPES.get('categorical'))
                 try:
                     _text_miner: TextMiner = TextMiner(df=DATA_PROCESSING.get('df'),
-                                                       features=FEATURE_TYPES.get('id_text'), # + FEATURE_TYPES.get('categorical'),
+                                                       features=_potential_text_features,
                                                        dask_client=self.dask_client,
                                                        lang=kwargs.get('lang'),
                                                        lang_model=kwargs.get('lang_model'),
@@ -993,6 +1067,8 @@ class FeatureEngineer:
                     Log(write=not print_msg, level='info', env='dev').log(msg='No text features found in data set')
                 except OSError as e:
                     Log(write=not print_msg, level='info', env='dev').log(msg='Error while loading language model:\n{}'.format(e))
+                finally:
+                    del _potential_text_features
             if write_note is not None:
                 self.write_notepad(note=write_note)
             self.kwargs: dict = {} if kwargs is None else kwargs
@@ -1018,8 +1094,8 @@ class FeatureEngineer:
         try:
             _actor_meta_data: pd.DataFrame = pd.DataFrame(data=DATA_PROCESSING['actor_memory']['action_config'])
         except ValueError:
-            for val in DATA_PROCESSING['actor_memory']['action_config'].keys():
-                print(val, len(DATA_PROCESSING['actor_memory']['action_config'][val]), DATA_PROCESSING['actor_memory']['action_config'][val])
+            #for val in DATA_PROCESSING['actor_memory']['action_config'].keys():
+            #    print(val, len(DATA_PROCESSING['actor_memory']['action_config'][val]), DATA_PROCESSING['actor_memory']['action_config'][val])
             return _critic
         if action == 'one_hot_merger':
             for one_hot_feature in actor.split('__m__'):
@@ -1071,8 +1147,8 @@ class FeatureEngineer:
         """
         _data: np.array = np.zeros(shape=len(DATA_PROCESSING['df']))
         for feature in features:
-            _data = _data + DATA_PROCESSING['df'][feature].compute()
-        _data[_data > 0] = 1
+            _data = _data + DATA_PROCESSING['df'][feature].values.compute()
+        _data[_data > 1] = 1
         _process_handler(action='add',
                          feature=features[0],
                          new_feature='{}__m__{}'.format(features[0], features[1]),
@@ -1169,7 +1245,7 @@ class FeatureEngineer:
         _trial: int = 0
         _max_trials: int = len(inter_actors) * 2
         # Categorical feature learning:
-        if actor not in _compatible_actors:
+        if _actor not in _compatible_actors:
             _categorical_interactor: str = ''
             while DATA_PROCESSING.get('act_trials') < _max_trials:
                 _categorical_interactor = np.random.choice(a=inter_actors)
@@ -1195,7 +1271,7 @@ class FeatureEngineer:
                 self._one_hot_merger(features=[actor, _categorical_interactor])
         # (Semi-) continuous feature learning:
         while True:
-            if actor not in _compatible_actors:
+            if _actor not in _compatible_actors:
                 break
             if DATA_PROCESSING.get('act_trials') < _max_trials:
                 if _force_action is None:
@@ -1441,7 +1517,7 @@ class FeatureEngineer:
                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Maximum of action re-trials ({}) exceeded. No feature generated'.format(_max_trials))
                 break
         _last_generated_feature: str = self.get_last_generated_feature()
-        if _last_generated_feature != '' and _last_generated_feature in DATA_PROCESSING.get('df').columns:
+        if actor in _compatible_actors and _last_generated_feature != '' and _last_generated_feature in DATA_PROCESSING.get('df').columns:
             if MissingDataAnalysis(df=DATA_PROCESSING.get('df')[[_actor, _last_generated_feature]]).has_nan():
                 _invariant_features: List[str] = EasyExploreUtils().get_invariant_features(df=DATA_PROCESSING.get('df')[[_actor, _last_generated_feature]])
                 _duplicate_features: dict = EasyExploreUtils().get_duplicates(df=DATA_PROCESSING.get('df')[[_actor, _last_generated_feature]], cases=False, features=True)
@@ -1853,8 +1929,8 @@ class FeatureEngineer:
                                 del _predictors[_predictors.index(feature)]
                         else:
                             _predictors: List[str] = predictors
-                        print(DATA_PROCESSING['df'][_predictors].values.compute())
-                        print(DATA_PROCESSING['df'][feature].values.compute())
+                        #print(DATA_PROCESSING['df'][_predictors].values.compute())
+                        #print(DATA_PROCESSING['df'][feature].values.compute())
                         _chaid.train(x=DATA_PROCESSING['df'][_predictors].values.compute(), y=np.reshape(DATA_PROCESSING['df'][feature].values.compute(), (-1, 1)))
                         _chaid_pred: np.array = _chaid.predict()
                         _process_handler(action='add',
@@ -1868,42 +1944,49 @@ class FeatureEngineer:
                                          obj=_chaid_pred
                                          )
                         Log(write=not DATA_PROCESSING.get('show_msg')).log('Binned feature "{}" using CHAID'.format(feature))
+                        del _chaid
+                        del _chaid_pred
                     elif optimal_meth == 'bayesian_blocks':
-                        _bayesian_blocks: np.array = HappyLearningUtils().bayesian_blocks(df=DATA_PROCESSING.get('df'), feature=feature)
+                        _bayesian_blocks: dict = HappyLearningUtils().bayesian_blocks(df=DATA_PROCESSING['df'][feature].compute())
                         _process_handler(action='add',
                                          feature=feature,
                                          new_feature='{}_blocks'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
                                          process='categorizer|continuous',
                                          meth='binning',
                                          param=_param,
-                                         data=_bayesian_blocks.get('labels'),
+                                         data=np.array(_bayesian_blocks.get('labels')),
                                          force_type='categorical',
                                          obj=_bayesian_blocks
                                          )
                         Log(write=not DATA_PROCESSING.get('show_msg')).log('Binned feature "{}" using Bayesian Blocks'.format(feature))
-                    elif optimal_meth == 'kbins':
-                        _kbins_discretizer: KBinsDiscretizer = KBinsDiscretizer(n_bins=bins,
-                                                                                encode=encode_meth,
-                                                                                strategy=strategy
-                                                                                )
-                        _kbins_discretizer.fit(X=np.reshape(DATA_PROCESSING['df'][feature].values.compute(), (-1, 1)))
-                        print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values, (-1, 1))))
-                        _process_handler(action='add',
-                                         feature=feature,
-                                         new_feature='{}_kbins'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
-                                         process='categorizer|continuous',
-                                         meth='binning',
-                                         param=_param,
-                                         data=_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))),
-                                         force_type='categorical',
-                                         obj=_kbins_discretizer
-                                         )
-                        Log(write=not DATA_PROCESSING.get('show_msg')).log('Binned feature "{}" using K-Bins Discretizer'.format(feature))
+                        del _bayesian_blocks
+                    #elif optimal_meth == 'kbins':
+                    #    _kbins_discretizer = KBinsDiscretizer(n_bins=bins,
+                    #                                          encode=encode_meth,
+                    #                                          strategy=strategy
+                    #                                          )
+                    #    _kbins_discretizer.fit(X=np.reshape(DATA_PROCESSING['df'][feature].values.compute(), (-1, 1)))
+                    #    #print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values, (-1, 1))))
+                    #    print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))))
+                    #    _process_handler(action='add',
+                    #                     feature=feature,
+                    #                     new_feature='{}_kbins'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
+                    #                     process='categorizer|continuous',
+                    #                     meth='binning',
+                    #                     param=_param,
+                    #                     data=_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))),
+                    #                     force_type='categorical',
+                    #                     obj=_kbins_discretizer
+                    #                     )
+                    #    del _kbins_discretizer
+                    #    Log(write=not DATA_PROCESSING.get('show_msg')).log('Binned feature "{}" using K-Bins Discretizer'.format(feature))
+                    else:
+                        Log(write=not DATA_PROCESSING.get('show_msg')).log('Binning method ({}) not supported'.format(optimal_meth))
                 else:
                     _labels = [i for i in range(0, len(edges) - 1, 1)] if labels is None else labels
                     if edges is None:
                         Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log('No edges for bins found')
-                    _edges: np.array = pd.cut(x=DATA_PROCESSING.get('df')[feature], bins=edges, labels=None, retbins=False)
+                    _edges: np.array = pd.cut(x=DATA_PROCESSING.get('df')[feature].compute(), bins=edges, labels=None, retbins=False)
                     _process_handler(action='add',
                                      feature=feature,
                                      new_feature='{}_supervised'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
@@ -1920,7 +2003,7 @@ class FeatureEngineer:
                     _labels = [i for i in range(0, bins, 1)] if labels is None else labels
                     if bins is None:
                         Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log('No size for equal-width binning (unsupervised) found')
-                    _edges: np.array = pd.cut(x=DATA_PROCESSING.get('df')[feature], bins=bins, labels=None, retbins=False)
+                    _edges: np.array = pd.cut(x=DATA_PROCESSING.get('df')[feature].compute(), bins=bins, labels=None, retbins=False)
                     _process_handler(action='add',
                                      feature=feature,
                                      new_feature='{}_bins_equal_width'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
@@ -2026,6 +2109,7 @@ class FeatureEngineer:
         if markers.get('features') is not None:
             if len(markers.get('features')) > 0:
                 DATA_PROCESSING['df'] = DATA_PROCESSING.get('df').drop(labels=markers['features'], axis=1, errors='ignore')
+                DATA_PROCESSING['cleaned_features'].extend([feature for feature in markers.get('features')])
                 Log(write=not DATA_PROCESSING.get('show_msg')).log('Cleaned {} features {}'.format(len(markers.get('features')),
                                                                                                    markers.get('features') if len(markers.get('features')) <= 10 else ''
                                                                                                    )
@@ -2062,6 +2146,7 @@ class FeatureEngineer:
         if len(_features) > 0:
             _features = list(set(_features))
         for feature in _features:
+            DATA_PROCESSING['cleaned_features'].append(feature)
             _process_handler(action='clean',
                              feature=feature,
                              new_feature=feature,
@@ -2154,7 +2239,10 @@ class FeatureEngineer:
         :param overwrite: bool
             Overwrite file with same name or not
         """
-        DataExporter(obj=DATA_PROCESSING.get('df').compute(), file_path=file_path, create_dir=create_dir, overwrite=overwrite).file()
+        if file_path.find('.parquet') >= 0:
+            DataExporter(obj=DATA_PROCESSING.get('df'), file_path=file_path, create_dir=create_dir, overwrite=overwrite).file()
+        else:
+            DataExporter(obj=DATA_PROCESSING.get('df').compute(), file_path=file_path, create_dir=create_dir, overwrite=overwrite).file()
         Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log('Data set saved as local file ({})'.format(file_path))
 
     @staticmethod
@@ -2637,7 +2725,6 @@ class FeatureEngineer:
                                                     plot=visualize,
                                                     plot_type=None,
                                                     file_path=file_path,
-                                                    multi_threading=True
                                                     ).data_health_check(sparsity=True if kwargs.get('sparsity') is None else kwargs.get('sparsity'),
                                                                         invariant=True if kwargs.get('invariant') is None else kwargs.get('invariant'),
                                                                         duplicate_cases=False if kwargs.get('duplicate_cases') is None else kwargs.get('duplicate_cases'),
@@ -2835,6 +2922,16 @@ class FeatureEngineer:
         return DATA_PROCESSING.get('actor_memory')
 
     @staticmethod
+    def get_cleaned_features() -> List[str]:
+        """
+        Get list of all names of the cleaned features
+
+        :return: List[str]
+            Name of the cleaned features
+        """
+        return DATA_PROCESSING.get('cleaned_features')
+
+    @staticmethod
     def get_data(dask_df: bool = True):
         """
         Get active data set
@@ -2867,6 +2964,16 @@ class FeatureEngineer:
                                                                                                                                                                                        MERGES
                                                                                                                                                                                        )
         )
+
+    @staticmethod
+    def get_data_processing() -> dict:
+        """
+        Get (all) data processing information
+
+        :return: dict
+            Data processing information
+        """
+        return DATA_PROCESSING
 
     @staticmethod
     def get_data_source() -> List[str]:
@@ -2957,7 +3064,7 @@ class FeatureEngineer:
         """
         if feature in DATA_PROCESSING['df'].columns:
             if unique:
-                return DATA_PROCESSING['df'][feature].unique().compute()
+                return DATA_PROCESSING['df'][feature].unique().values.compute()
             else:
                 return DATA_PROCESSING['df'][feature].values.compute()
         return np.ndarray(shape=[0, 0])
@@ -3104,15 +3211,12 @@ class FeatureEngineer:
         return DATA_PROCESSING.get('source')
 
     @staticmethod
-    def get_supported_types(data_type: str = None) -> dict:
+    def get_supported_types(data_type: str = None):
         """
         Get supported types
 
         :param data_type: str
             Name of the specific data type to show
-
-        :return dict:
-            Supported feature types for each method
         """
         if data_type in SUPPORTED_TYPES.keys():
             return SUPPORTED_TYPES.get(data_type)
@@ -3732,7 +3836,7 @@ class FeatureEngineer:
         if len(_features) > 0:
             for feature in _features:
                 if str(DATA_PROCESSING['df'][feature].dtype).find('object') >= 0:
-                    TEXT_MINER['obj'].get_linguistic_features(features=[feature], sep=sep)
+                    TEXT_MINER['obj'].generate_linguistic_features(features=[feature])
                     for lf in TEXT_MINER['obj'].generated_features[feature]['linguistic']:
                         _process_handler(action='add',
                                          feature=feature,
@@ -3780,9 +3884,13 @@ class FeatureEngineer:
             MERGES = self.data_processing.data_processing.get('merges')
             NOTEPAD = self.data_processing.data_processing.get('notepad')
             PROCESSING_ACTION_SPACE = self.data_processing.data_processing.get('processing_action_space')
-            print(PROCESSING_ACTION_SPACE)
             TEXT_MINER = self.data_processing.data_processing.get('text_miner')
             self.data_processing = None
+            DATA_PROCESSING['df'] = DataImporter(file_path='{}_data.parquet'.format(file_path.split('.')[0]),
+                                                 as_data_frame=True,
+                                                 use_dask=True,
+                                                 create_dir=False
+                                                 ).file()
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Load feature engineer')
 
     @staticmethod
@@ -4004,6 +4112,147 @@ class FeatureEngineer:
                                                                                                                                                     len(DATA_PROCESSING['df'].columns)
                                                                                                                                                     )
                                                                        )
+
+    @staticmethod
+    def merge_engineer(feature_engineer_file_path: str,
+                       merging: bool = False,
+                       merge_by: str = 'id',
+                       id_var: str = None,
+                       join_type: str = 'inner',
+                       concat_by: str = 'col'
+                       ):
+        """
+        Merge two complete FeatureEngineer class objects
+
+        :param feature_engineer_file_path: str
+            Complete file path of the external feature engineer object
+
+        :param merging: bool
+            Merge data frames (by id or index) or to concatenate (by row or col) them
+
+        :param merge_by: str
+            Defining merging strategy
+                -> id: Merge data frames by given id feature
+                -> index: Merge data frames by index value of both
+
+        :param id_var: str
+            Name of the id feature to merge by
+
+        :param join_type: str
+            Defining merging type
+                -> left: use only keys from left data frame and drop mismatching keys of right (new) data frame (preserve key order)
+                -> right: use only keys from right data frame and drop mismatching keys of left (old) data frame (preserve key order)
+                -> outer: use union of keys from both data frames and drop intersection keys of both data frames (sort keys lexicographically)
+                -> inner: use intersection of keys from both data frames and drop union keys of both data frames (preserve order of the left keys)
+
+        :param concat_by: str
+            Defining concatenation type:
+                -> row: Concatenate both data frames row-wise (the number of rows increases)
+                -> col: Concatenate both data frames column-wise (the number of columns increases)
+        """
+        if not os.path.isfile(feature_engineer_file_path):
+            raise FeatureEngineerException('No external FeatureEngineer class object found')
+        _external_engineer = DataImporter(file_path=feature_engineer_file_path, as_data_frame=False).file()
+        if isinstance(_external_engineer, FeatureEngineer):
+            _external_engineer_data_processing: dict = _external_engineer.data_processing
+            if _external_engineer_data_processing.get('feature_types') is None:
+                raise FeatureEngineerException('External file object is not a FeatureEngineer class object')
+            _external_data_set: dd.DataFrame = DataImporter(file_path='{}_data.parquet'.format(feature_engineer_file_path.split(sep='.')[0]),
+                                                            as_data_frame=True
+                                                            ).file()
+            _external_features: List[str] = []
+            for ft in _external_engineer_data_processing.get('feature_types').keys():
+                for feature in _external_engineer_data_processing.get('feature_types')[ft]:
+                    _external_features.append(feature)
+            global DATA_PROCESSING
+            global FEATURE_TYPES
+            global MERGES
+            MERGES.update({'original': list(DATA_PROCESSING['df'].columns),
+                           'current': list(DATA_PROCESSING['df'].columns),
+                           'external': _external_features
+                           })
+            _current: List[str] = copy.deepcopy(MERGES.get('current'))
+            _current.sort(reverse=False)
+            _external: List[str] = copy.deepcopy(MERGES.get(list(MERGES.keys())[-1]))
+            _external.sort(reverse=False)
+            _new_features: List[str] = list(set(_external).difference(_current))
+            _equal_features: List[str] = list(set(_external).intersection(_current))
+            for equal in _equal_features:
+                del _external_data_set[equal]
+            if DATA_PROCESSING.get('target') is not None:
+                if DATA_PROCESSING.get('target') in _external_data_set.columns:
+                    del _external_data_set[DATA_PROCESSING.get('target')]
+            if merging:
+                if merge_by == 'id':
+                    if id_var is None or id_var not in DATA_PROCESSING.get('df').columns:
+                        Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log(
+                            msg='ID variable ({}) not found'.format(id_var))
+                    else:
+                        DATA_PROCESSING['df'] = dd.merge(left=DATA_PROCESSING.get('df'),
+                                                         right=_external_data_set,
+                                                         on=id_var,
+                                                         how=join_type,
+                                                         suffixes=tuple(['', '_{}'.format(list(MERGES.keys())[-1])])
+                                                         ).compute()
+                        if len(_new_features) > 0:
+                            for new_feature in _new_features:
+                                _update_feature_types(feature=new_feature)
+                        if len(_equal_features) > 0:
+                            for equal_feature in _equal_features:
+                                _update_feature_types(feature='{}_{}'.format(equal_feature, list(MERGES.keys())[-1]))
+                        Log(write=not DATA_PROCESSING.get('show_msg')).log(
+                            msg='New Data Set after merging by {}\nCases: {}\nFeatures: {}'.format(id_var,
+                                                                                                   len(DATA_PROCESSING[
+                                                                                                           'df']),
+                                                                                                   len(DATA_PROCESSING[
+                                                                                                           'df'].columns),
+                                                                                                   )
+                            )
+                elif merge_by == 'index':
+                    DATA_PROCESSING['df'] = dd.merge(left=DATA_PROCESSING.get('df'),
+                                                     right=_external_data_set,
+                                                     left_index=True,
+                                                     right_index=True,
+                                                     suffixes=tuple(['', '_{}'.format(list(MERGES.keys())[-1])])
+                                                     ).compute()
+                    if len(_new_features) > 0:
+                        for new_feature in _new_features:
+                            _update_feature_types(feature=new_feature)
+                    if len(_equal_features) > 0:
+                        for equal_feature in _equal_features:
+                            _update_feature_types(feature='{}_{}'.format(equal_feature, list(MERGES.keys())[-1]))
+                    Log(write=not DATA_PROCESSING.get('show_msg')).log(
+                        msg='New Data Set after merging by index\nCases: {}\nFeatures: {}'.format(
+                            len(DATA_PROCESSING['df']),
+                            len(DATA_PROCESSING['df'].columns)
+                            )
+                        )
+                else:
+                    Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log(
+                        msg='Merge by method ({}) not found'.format(merge_by))
+            else:
+                if concat_by == 'row':
+                    DATA_PROCESSING['df'] = dd.concat([DATA_PROCESSING.get('df'), _external_data_set], axis=0)
+                elif concat_by == 'col':
+                    _rename: dict = {}
+                    if len(_equal_features) > 0:
+                        for equal_feature in _equal_features:
+                            _rename.update(
+                                {equal_feature: '{}_{}'.format(_rename.get(equal_feature), list(MERGES.keys())[-1])})
+                    #feature_engineer_obj.set_feature_names(name_map=_rename, lower_case=True)
+                    DATA_PROCESSING['df'] = dd.concat([DATA_PROCESSING.get('df'), _external_data_set], axis=1)
+                    if len(_new_features) > 0:
+                        for new_feature in _new_features:
+                            _update_feature_types(feature=new_feature)
+                    for renamed in _rename.keys():
+                        _update_feature_types(feature=_rename.get(renamed))
+            _new_features_types: dict = _external_engineer_data_processing.get('feature_types')
+            for feature_type in _new_features_types.keys():
+                for new_feature in _new_features_types.get(feature_type):
+                    if new_feature not in FEATURE_TYPES.get(feature_type):
+                        FEATURE_TYPES[feature_type].append(new_feature)
+        else:
+            raise FeatureEngineerException('File object type ({}) is not a dict'.format(type(_external_engineer)))
 
     @staticmethod
     @FeatureOrchestra(meth='merge_text', feature_types=['categorical', 'id_text'])
@@ -4330,14 +4579,14 @@ class FeatureEngineer:
         """
         if targets is None:
             FEATURE_TYPES[DATA_PROCESSING['target_type'][-1]].append(DATA_PROCESSING['target'])
-            DATA_PROCESSING['target'] = None
-            DATA_PROCESSING['target_type'] = None
+            DATA_PROCESSING['target'] = []
+            DATA_PROCESSING['target_type'] = []
         else:
             for target in targets:
                 if target == DATA_PROCESSING.get('target'):
                     FEATURE_TYPES[DATA_PROCESSING['target_type'][targets.index(target)]].append(target)
-                    DATA_PROCESSING['target'] = None
-                    DATA_PROCESSING['target_type'] = None
+                    DATA_PROCESSING['target'] = []
+                    DATA_PROCESSING['target_type'] = []
         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Reset target')
 
     @staticmethod
@@ -4355,7 +4604,7 @@ class FeatureEngineer:
         for feature in features:
             _process_handler(action='add',
                              feature=feature,
-                             new_feature='{}_{}'.format(feature, str(digits)) if DATA_PROCESSING.get('generate_new_feature') else feature,
+                             new_feature='{}_round_{}'.format(feature, str(digits)) if DATA_PROCESSING.get('generate_new_feature') else feature,
                              process='scaler|rounding',
                              meth='rounding',
                              param=dict(digits=digits),
@@ -4383,6 +4632,7 @@ class FeatureEngineer:
             Whether to create directory if they are not existed or not
         """
         global TEXT_MINER
+        global DATA_PROCESSING
         TEXT_MINER['obj'] = None
         if file_path is not None or os.path.isfile(DATA_PROCESSING.get('source')):
             self.data_processing = dict(processing=DATA_PROCESSING,
@@ -4400,6 +4650,13 @@ class FeatureEngineer:
             else:
                 _file_path: str = file_path
             self.dask_client = None
+            _parquet_file_path: str = _file_path.split('.')[0]
+            DataExporter(obj=DATA_PROCESSING.get('df'),
+                         file_path='{}_data.parquet'.format(_parquet_file_path),
+                         create_dir=False,
+                         overwrite=True
+                         ).file()
+            DATA_PROCESSING['df'] = None
             if cls_obj:
                 DataExporter(obj=self,
                              file_path=_file_path,
@@ -4732,7 +4989,7 @@ class FeatureEngineer:
         DATA_PROCESSING['df'] = DATA_PROCESSING.get('df').set_index(keys=idx, drop=True, append=False, verify_integrity=False)
 
     @staticmethod
-    def set_processing_level(level: int):
+    def set_max_processing_level(level: int):
         """
         Set maximum level of feature processing
 
@@ -4985,7 +5242,7 @@ class FeatureEngineer:
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Transformed feature "{}" using standardizing'.format(feature))
 
     @staticmethod
-    def subset(cond: str, by_partial_values: bool = False, value_type: str = 'value'):
+    def subset(cond: str, by_partial_values: bool = False, value_type: str = 'value', safer_subset: bool = True):
         """
         Subset data set by given condition
 
@@ -4998,22 +5255,32 @@ class FeatureEngineer:
         :param value_type: str
             Partial value type:
                 -> col, column, feature, var, variable, header: Select only features based on the condition containing partial value
+
+        :param safer_subset: bool
+            Apply subset using a copy of the original data set to ensure that the data set is not empty afterwards
         """
-        # TODO: by_partial_values -> case_name, feature_name, value based
+        _valid_subset: bool = True
         if by_partial_values:
+            # TODO: by_partial_values -> case_name, feature_name, value based
             raise NotImplementedError('Drawing subset by partial values not implemented')
         else:
             _n_cases: int = len(DATA_PROCESSING['df'])
-            _df: pd.DataFrame = copy.deepcopy(DATA_PROCESSING.get('df'))
-            _df = _df.query(expr=cond)
-            if _df.shape[0] == 0:
-                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Applying subset condition leads to an empty data set. Therefore no action is made.')
+            if safer_subset:
+                _df: dd.DataFrame = copy.deepcopy(DATA_PROCESSING.get('df'))
+                _df = _df.query(expr=cond)
+                if len(_df) == 0:
+                    _valid_subset = False
+                    Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Applying subset condition leads to an empty data set. Therefore no action is made.')
+                else:
+                    DATA_PROCESSING['df'] = _df
+                del _df
             else:
-                DATA_PROCESSING['df'] = _df
-                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Exclude {} cases by using following condition: {}\nData set has now {} cases'.format(_n_cases - DATA_PROCESSING['df'].shape[0],
-                                                                                                                                                             cond,
-                                                                                                                                                             DATA_PROCESSING['df'].shape[0]
-                                                                                                                                                             )
+                DATA_PROCESSING['df'] = DATA_PROCESSING['df'].query(expr=cond)
+            if _valid_subset:
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Exclude {} cases by applying following condition: {}\nData set has now {} cases'.format(_n_cases - len(DATA_PROCESSING['df']),
+                                                                                                                                                                cond,
+                                                                                                                                                                len(DATA_PROCESSING['df'])
+                                                                                                                                                                )
                                                                    )
 
     @staticmethod
@@ -5054,7 +5321,7 @@ class FeatureEngineer:
         """
         if level > 0 or level < -1:
             Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log(msg='Level for unstacking can either be -1 or 0')
-        return DATA_PROCESSING.get('df').stack(level=level, dropna=drop_nan).compute()
+        return DATA_PROCESSING.get('df').compute().stack(level=level, dropna=drop_nan)
 
     @staticmethod
     def unify_invalid_to_mis(add_invalid: list = None):
@@ -5085,7 +5352,7 @@ class FeatureEngineer:
         """
         if level > 0 or level < -1:
             Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log(msg='Level for unstacking can either be -1 or 0')
-        return DATA_PROCESSING.get('df').unstack(level=level, fill_value=impute_value).compute()
+        return DATA_PROCESSING.get('df').compute().unstack(level=level, fill_value=impute_value)
 
     @staticmethod
     def update_feature_types():
@@ -5149,18 +5416,19 @@ class FeatureEngineer:
                         for st in search_text:
                             TEXT_MINER['obj'].count_occurances(features=[feature], search_text=search_text)
                     _occurance_features: List[str] = TEXT_MINER['obj'].generated_features[feature]['occurances']
-                    _data: dd.DataFrame = TEXT_MINER['obj'].get_generated_features(features=_occurance_features, compute=False)
+                    _data: dd.DataFrame = TEXT_MINER['obj'].get_features(features=[feature], meth='occurances', compute=False)
                     for of in _occurance_features:
                         _process_handler(action='add',
                                          feature=feature,
                                          new_feature=of,
-                                         process='text|occurance',
+                                         process='text|occurances',
                                          meth='text_occurances',
                                          param=dict(search_text=search_text),
                                          data=_data[of].values.compute(),
                                          obj={feature: search_text}
                                          )
-                        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Count occurances "{}" in feature "{}"'.format(st, feature))
+                        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Count occurances "{}" in feature "{}"'.format(search_text, feature))
+                    del _data
 
     @staticmethod
     @FeatureOrchestra(meth='text_similarity', feature_types=['id_text'])
@@ -5175,66 +5443,6 @@ class FeatureEngineer:
             Whether to calculate embeddings as similarity score or not
         """
         raise NotImplementedError('Text similarity not supported')
-
-    @staticmethod
-    def train_test_split(features: List[str] = None,
-                         kfold: bool = False,
-                         k: int = 5,
-                         train_size: float = 0.8,
-                         stratify: bool = True,
-                         random: bool = True
-                         ):
-        """
-        Split data set into train and test sets
-
-        :param features: List[str]
-            Names of the features
-
-        :param kfold: bool
-            Split data using k-fold cross-validation or not
-
-        :param k: int
-            Number of k-folds to generate
-
-        :param train_size: float
-            Number of cases used in training
-
-        :param stratify: bool
-            Stratify split by target feature if target is categorical
-
-        :param random: bool
-            Sample cases randomly or not
-        """
-        _k: int = k if k > 0 else 5
-        if features is None or len(features) == 0:
-            if len(DATA_PROCESSING.get('predictors')) == 0:
-                _features: List[str] = list(DATA_PROCESSING.get('df').columns)
-                if DATA_PROCESSING.get('target') in _features:
-                    del _features[_features.index(DATA_PROCESSING.get('target'))]
-            else:
-                _features: List[str] = DATA_PROCESSING.get('predictors')
-        else:
-            _features: List[str] = features
-        if kfold:
-            DATA_PROCESSING.get('train_test').update({'kfold': MLSampler(df=DATA_PROCESSING.get('df'),
-                                                                         target=DATA_PROCESSING.get('target'),
-                                                                         features=_features,
-                                                                         train_size=train_size if train_size > 0 else 0.8,
-                                                                         stratification=stratify,
-                                                                         seed=DATA_PROCESSING.get('seed')
-                                                                         ).k_fold_cross_validation(k=_k)
-                                                      })
-            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Split data set into train & test data set using {}fold cross-validation'.format(_k))
-        else:
-            DATA_PROCESSING.get('train_test').update({'simple': MLSampler(df=DATA_PROCESSING.get('df'),
-                                                                          target=DATA_PROCESSING.get('target'),
-                                                                          features=_features,
-                                                                          train_size=train_size if train_size > 0 else 0.8,
-                                                                          stratification=stratify,
-                                                                          seed=DATA_PROCESSING.get('seed')
-                                                                          ).train_test_sampling()
-                                                      })
-            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Split data set into train & test data set')
 
     @staticmethod
     @FeatureOrchestra(meth='to_float32', feature_types=['continuous'])

@@ -3,7 +3,7 @@ import unittest
 
 from happy_learning.missing_data_analysis import MissingDataAnalysis
 
-DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='gun-violence-data_01-2013_03-2018.csv')
+DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/avocado.csv')
 
 
 class MissingDataAnalysisTest(unittest.TestCase):
@@ -11,7 +11,7 @@ class MissingDataAnalysisTest(unittest.TestCase):
     Class for testing class MissingDataAnalysis
     """
     def test_clean_nan(self):
-        self.assertTrue(expr=len(MissingDataAnalysis(df=DATA_SET).clean_nan()) < DATA_SET.shape[0])
+        self.assertTrue(expr=len(MissingDataAnalysis(df=DATA_SET).clean_nan()) <= DATA_SET.shape[0])
 
     def test_freq_nan_by_cases(self):
         _n_mis: int = DATA_SET.isnull().astype(int).sum().sum()

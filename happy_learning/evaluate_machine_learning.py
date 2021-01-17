@@ -19,8 +19,8 @@ ML_METRIC: Dict[str, List[str]] = dict(reg=['mae', 'mgd', 'mpd', 'mse', 'msle', 
 
 SML_SCORE: dict = dict(ml_metric=dict(clf_binary='roc_auc', clf_multi='cohen_kappa', reg='rmse_norm'),
                        ml_metric_best=dict(clf_binary=1, clf_multi=1, reg=0),
-                       ml_metric_weights=0.4,
-                       train_test_weights=0.5,
+                       ml_metric_weights=0.25,
+                       train_test_weights=0.35,
                        train_time_in_seconds_weights=0.0000005,
                        start_value=100,
                        normalized=False,
@@ -43,8 +43,6 @@ def sml_score(ml_metric: tuple,
         -> Dimensions:  1) Difference between normalized classification or regression metric of test data and it's optimal score
                         2) Difference between train and test metric
                         3) Training time in hours
-                        4) CPU usage during training
-                        5) RAM usage during training
 
     :param ml_metric: tuple
         Any normalized machine learning (test) metric and it's optimal value score
@@ -227,7 +225,7 @@ def sml_score_test(optimal_value: int, experiments: int = 10000):
                               )
     DataVisualizer(df=pd.DataFrame(data=_sml_scoring),
                    title='SML Scoring (Experiments = {})'.format(_experiments),
-                   features=['ram_usage', 'cpu_usage', 'training_time_in_seconds', 'train_error', 'test_error', 'sml_score'],
+                   features=['training_time_in_seconds', 'train_error', 'test_error', 'sml_score'],
                    color_feature='sml_score',
                    plot_type='parcoords',
                    render=True
