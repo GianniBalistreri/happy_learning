@@ -42,7 +42,7 @@ def sml_score(ml_metric: tuple,
     Productivity score for evaluating machine learning models multi-dimensional
         -> Dimensions:  1) Difference between normalized classification or regression metric of test data and it's optimal score
                         2) Difference between train and test metric
-                        3) Training time in hours
+                        3) Training time in seconds
 
     :param ml_metric: tuple
         Any normalized machine learning (test) metric and it's optimal value score
@@ -195,8 +195,6 @@ def sml_score_test(optimal_value: int, experiments: int = 10000):
     _train_error: List[float] = []
     _test_error: List[float] = []
     _training_time_in_seconds: List[float] = []
-    _cpu_usage: List[float] = []
-    _ram_usage: List[float] = []
     _experiments: int = experiments if experiments > 1 else 10000
     for i in range(0, _experiments, 1):
         if optimal_value == 0:
@@ -206,8 +204,6 @@ def sml_score_test(optimal_value: int, experiments: int = 10000):
             _train_error.append(np.random.uniform(low=0, high=1))
             _test_error.append(np.random.uniform(low=0, high=1))
         _training_time_in_seconds.append(np.random.uniform(low=1, high=500000))
-        _cpu_usage.append(np.random.uniform(low=0, high=1))
-        _ram_usage.append(np.random.uniform(low=0, high=1))
         if optimal_value == 0 or optimal_value == 1:
             _sml_score.append(sml_fitness_score(ml_metric=(optimal_value, _test_error[-1]),
                                                 train_test_metric=(_train_error[-1], _test_error[-1]),
@@ -219,8 +215,6 @@ def sml_score_test(optimal_value: int, experiments: int = 10000):
     _sml_scoring: dict = dict(train_error=_train_error,
                               test_error=_test_error,
                               training_time_in_seconds=_training_time_in_seconds,
-                              cpu_usage=_cpu_usage,
-                              ram_usage=_ram_usage,
                               sml_score=_sml_score
                               )
     DataVisualizer(df=pd.DataFrame(data=_sml_scoring),
