@@ -1,11 +1,6 @@
 Chaid>=5.1.0
 catboost>=0.24.2
 dask>=2.25.0
-dask-ml>=1.6.0
-dask-glm>=0.2.0
-dask-lightgbm>=0.1.0
-dask-tensorflow>=0.0.2
-dask-xgboost>=0.1.11
 easyexplore>=0.5.6
 emoji>=0.5.4
 fasttext>=0.9.2
