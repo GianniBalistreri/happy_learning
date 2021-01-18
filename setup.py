@@ -2,16 +2,16 @@ import setuptools
 import subprocess
 import sys
 
-from happy_learning.text_miner import LANG_MODELS
-
-# Install spacy language models:
-subprocess.run('python{} -m pip install spacy'.format('3' if sys.platform.find('win') != 0 else ''), shell=True)
-for lang in LANG_MODELS.keys():
-    for model in LANG_MODELS[lang]['model']['spacy'].keys():
-        subprocess.run('python{} -m spacy download {}'.format('3' if sys.platform.find('win') != 0 else '',
-                                                              LANG_MODELS[lang]['model']['spacy'][model]
-                                                              ),
-                       shell=True)
+#from happy_learning.text_miner import LANG_MODELS
+#
+## Install spacy language models:
+#subprocess.run('python{} -m pip install spacy'.format('3' if sys.platform.find('win') != 0 else ''), shell=True)
+#for lang in LANG_MODELS.keys():
+#    for model in LANG_MODELS[lang]['model']['spacy'].keys():
+#        subprocess.run('python{} -m spacy download {}'.format('3' if sys.platform.find('win') != 0 else '',
+#                                                              LANG_MODELS[lang]['model']['spacy'][model]
+#                                                              ),
+#                       shell=True)
 
 with open('README.md', 'r') as _read_me:
     long_description = _read_me.read()
