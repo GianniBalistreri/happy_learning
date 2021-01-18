@@ -5,7 +5,7 @@ from happy_learning.feature_engineer import FeatureEngineer
 from happy_learning.feature_learning import FeatureLearning
 from happy_learning.genetic_algorithm import GeneticAlgorithm
 
-DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/avocado.csv').iloc[0:9500, ]
+DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/avocado.csv')
 
 
 class FeatureLearningTest(unittest.TestCase):
