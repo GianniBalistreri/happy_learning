@@ -42,7 +42,7 @@ def sml_score(ml_metric: tuple,
     Productivity score for evaluating machine learning models multi-dimensional
         -> Dimensions:  1) Difference between normalized classification or regression metric of test data and it's optimal score
                         2) Difference between train and test metric
-                        3) Training time in hours
+                        3) Training time in seconds
 
     :param ml_metric: tuple
         Any normalized machine learning (test) metric and it's optimal value score
