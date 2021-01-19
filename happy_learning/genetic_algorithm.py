@@ -401,8 +401,6 @@ class GeneticAlgorithm:
                 self.current_generation_meta_data['fitness_score'][idx] = self.population[idx].fitness_score
         else:
             if idx is None:
-                print(self.current_generation_meta_data['fitness_metric'])
-                print(self.current_generation_meta_data['fitness_score'])
                 self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['fitness'] = self.current_generation_meta_data.get('fitness')
                 self.evolution_gradient.get('min').append(min(self.current_generation_meta_data.get('fitness_score')))
                 self.evolution_gradient.get('median').append(np.median(self.current_generation_meta_data.get('fitness_score')))
@@ -1149,9 +1147,6 @@ class GeneticAlgorithm:
                                     features=self.current_generation_meta_data['features'][self.best_individual_idx],
                                     target=self.target,
                                     target_type=self.target_type,
-                                    obs=self.data_set.get('y_test') if self.deep_learning else self.data_set.get('y_test').values,
-                                    pred=self.data_set.get('pred') if self.deep_learning else self.model.predict(self.data_set.get('x_test').values).flatten(),
-                                    prob=None,
                                     re_split_data=self.re_split_data,
                                     re_split_cases=self.re_sample_cases,
                                     re_sample_features=self.re_sample_features,
