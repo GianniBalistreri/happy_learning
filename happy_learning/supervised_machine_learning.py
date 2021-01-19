@@ -9,7 +9,7 @@ from catboost import CatBoostClassifier, CatBoostRegressor
 #from dask_lightgbm import LGBMClassifier, LGBMRegressor
 #from dask_xgboost import XGBClassifier, XGBRegressor
 from datetime import datetime
-from lightgbm import LGBMClassifier, LGBMRegressor
+#from lightgbm import LGBMClassifier, LGBMRegressor
 from pygam import GAM
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor, GradientBoostingClassifier, GradientBoostingRegressor, RandomForestClassifier, RandomForestRegressor
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor, kneighbors_graph
