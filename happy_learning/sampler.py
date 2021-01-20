@@ -114,7 +114,20 @@ class MLSampler:
             _y_train_ = _y_train
             del _y_train
             _y_val = None
-        return dict(x_train=_x_train_.compute(), x_test=_x_test.compute(), y_train=_y_train_.compute(), y_test=_y_test.compute(), x_val=_x_val.compute(), y_val=_y_val.compute())
+            return dict(x_train=_x_train_.compute(),
+                        x_test=_x_test.compute(),
+                        y_train=_y_train_.compute(),
+                        y_test=_y_test.compute(),
+                        x_val=_x_val,
+                        y_val=_y_val
+                        )
+        return dict(x_train=_x_train_.compute(),
+                    x_test=_x_test.compute(),
+                    y_train=_y_train_.compute(),
+                    y_test=_y_test.compute(),
+                    x_val=_x_val.compute(),
+                    y_val=_y_val.compute()
+                    )
 
     def k_fold_cross_validation(self, k: int = 5) -> dict:
         """
