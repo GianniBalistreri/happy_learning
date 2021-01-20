@@ -236,6 +236,7 @@ class GeneticAlgorithm:
         self.mode = mode
         self.model = None
         self.model_params: dict = copy.deepcopy(model_params)
+        self.n_training: int = 0
         self.include_neural_networks: bool = include_neural_networks
         _neural_nets: List[str] = []
         if models is None:
@@ -341,6 +342,7 @@ class GeneticAlgorithm:
         self.evolution_history: dict = dict(id=[],
                                             model=[],
                                             generation=[],
+                                            training=[],
                                             parent=[],
                                             mutation_type=[],
                                             fitness_score=[],
@@ -428,6 +430,7 @@ class GeneticAlgorithm:
                 self.evolution_history.get('generation').append(self.current_generation_meta_data['generation'])
                 self.evolution_history.get('model').append(self.population[idx].model_name)
                 self.evolution_history.get('mutation_type').append(self.population[idx].model_param_mutation)
+                self.evolution_history.get('training').append(self.n_training)
                 self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['id'].append(self.population[idx].id)
                 self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['model'].append(self.population[idx].model_name)
 
@@ -1075,6 +1078,7 @@ class GeneticAlgorithm:
         """
         Optimize attribute configuration of supervised machine learning models in order to select best model, parameter set or feature set
         """
+        self.n_training += 1
         if self.evolution_continue:
             self.current_generation_meta_data['generation'] += 1
         else:
