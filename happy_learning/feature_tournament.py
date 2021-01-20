@@ -111,7 +111,7 @@ class FeatureTournament:
                                           train_size=0.8 if kwargs.get('train_size') is None else kwargs.get('train_size'),
                                           random_sample=True if kwargs.get('random') is None else kwargs.get('random'),
                                           stratification=_stratify
-                                          ).train_test_sampling()
+                                          ).train_test_sampling(validation_split=0 if kwargs.get('validation_size') is None else kwargs.get('validation_size'))
         self.init_pairs: int = init_pairs
         self.init_games: int = init_games
         self.pair_size_factor: float = increasing_pair_size_factor
