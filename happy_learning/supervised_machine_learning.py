@@ -746,7 +746,7 @@ class Classification:
         return SVC(C=1.0 if self.clf_params.get('C') is None else self.clf_params.get('C'),
                    kernel='rbf' if self.clf_params.get('kernel') is None else self.clf_params.get('kernel'),
                    degree=3 if self.clf_params.get('degree') is None else self.clf_params.get('degree'),
-                   gamma='scale' if self.clf_params.get('gamma') is None else self.clf_params.get('gamma'),
+                   gamma='auto' if self.clf_params.get('gamma') is None else self.clf_params.get('gamma'),
                    coef0=0.0 if self.clf_params.get('coef0') is None else self.clf_params.get('coef0'),
                    tol=0.0001 if self.clf_params.get('tol') is None else self.clf_params.get('tol'),
                    shrinking=True if self.clf_params.get('shrinking') is None else self.clf_params.get('shrinking'),
@@ -768,7 +768,7 @@ class Classification:
         """
         return dict(C=np.random.uniform(low=0.0001, high=1.0),
                     kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid']), #'precomputed'
-                    gamma=np.random.choice(a=['auto', 'scale']),
+                    #gamma=np.random.choice(a=['auto', 'scale']),
                     shrinking=np.random.choice(a=[True, False]),
                     cache_size=np.random.randint(low=100, high=500),
                     decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
@@ -821,7 +821,7 @@ class Classification:
         return NuSVC(nu=0.5 if self.clf_params.get('nu') is None else self.clf_params.get('nu'),
                      kernel='rbf' if self.clf_params.get('kernel') is None else self.clf_params.get('kernel'),
                      degree=3 if self.clf_params.get('degree') is None else self.clf_params.get('degree'),
-                     gamma='scale' if self.clf_params.get('gamma') is None else self.clf_params.get('gamma'),
+                     gamma='auto' if self.clf_params.get('gamma') is None else self.clf_params.get('gamma'),
                      coef0=0.0 if self.clf_params.get('coef0') is None else self.clf_params.get('coef0'),
                      shrinking=True if self.clf_params.get('shrinking') is None else self.clf_params.get('shrinking'),
                      tol=0.001 if self.clf_params.get('tol') is None else self.clf_params.get('tol'),
@@ -844,7 +844,7 @@ class Classification:
         return dict(C=np.random.uniform(low=0.0001, high=1.0),
                     nu=np.random.uniform(low=0.01, high=0.99),
                     kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid']), #'precomputed'
-                    gamma=np.random.choice(a=['auto', 'scale']),
+                    #gamma=np.random.choice(a=['auto', 'scale']),
                     shrinking=np.random.choice(a=[True, False]),
                     cache_size=np.random.randint(low=100, high=500),
                     decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
@@ -1316,7 +1316,7 @@ class Regression:
         :return: RandomForestRegressor
             Model object
         """
-        return RandomForestRegressor(n_estimators=500 if self.reg_params.get('n_estimators') is None else self.reg_params.get('n_estimators'),
+        return RandomForestRegressor(n_estimators=100 if self.reg_params.get('n_estimators') is None else self.reg_params.get('n_estimators'),
                                      criterion='mse' if self.reg_params.get('criterion') is None else self.reg_params.get('criterion'),
                                      max_depth=1 if self.reg_params.get('max_depth') is None else self.reg_params.get('max_depth'),
                                      min_samples_split=2 if self.reg_params.get('min_samples_split') is None else self.reg_params.get('min_samples_split'),
@@ -1342,7 +1342,7 @@ class Regression:
         :return: dict
             Parameter config
         """
-        return dict(n_estimators=np.random.randint(low=5, high=1000),
+        return dict(n_estimators=np.random.randint(low=5, high=100),
                     criterion=np.random.choice(a=['mse', 'mae']),
                     max_depth=np.random.randint(low=1, high=12),
                     min_samples_split=np.random.randint(low=2, high=6),
@@ -1360,7 +1360,7 @@ class Regression:
         return SVR(C=1.0 if self.reg_params.get('C') is None else self.reg_params.get('C'),
                    kernel='rbf' if self.reg_params.get('kernel') is None else self.reg_params.get('kernel'),
                    degree=3 if self.reg_params.get('degree') is None else self.reg_params.get('degree'),
-                   gamma='scale' if self.reg_params.get('gamma') is None else self.reg_params.get('gamma'),
+                   gamma='auto' if self.reg_params.get('gamma') is None else self.reg_params.get('gamma'),
                    coef0=0.0 if self.reg_params.get('coef0') is None else self.reg_params.get('coef0'),
                    tol=0.0001 if self.reg_params.get('tol') is None else self.reg_params.get('tol'),
                    epsilon=0.1 if self.reg_params.get('epsilon') is None else self.reg_params.get('epsilon'),
@@ -1380,7 +1380,7 @@ class Regression:
         """
         return dict(C=np.random.uniform(low=0.0001, high=1.0),
                     kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid']),
-                    gamma=np.random.choice(a=['auto', 'scale']),
+                    #gamma=np.random.choice(a=['auto', 'scale']),
                     shrinking=np.random.choice(a=[True, False]),
                     cache_size=np.random.randint(low=100, high=500),
                     decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
@@ -1432,7 +1432,7 @@ class Regression:
                      C=1.0 if self.reg_params.get('C') is None else self.reg_params.get('C'),
                      kernel='rbf' if self.reg_params.get('kernel') is None else self.reg_params.get('kernel'),
                      degree=3 if self.reg_params.get('degree') is None else self.reg_params.get('degree'),
-                     gamma='scale' if self.reg_params.get('gamma') is None else self.reg_params.get('gamma'),
+                     gamma='auto' if self.reg_params.get('gamma') is None else self.reg_params.get('gamma'),
                      coef0=0.0 if self.reg_params.get('coef0') is None else self.reg_params.get('coef0'),
                      tol=0.0001 if self.reg_params.get('tol') is None else self.reg_params.get('tol'),
                      shrinking=True if self.reg_params.get('shrinking') is None else self.reg_params.get('shrinking'),
@@ -1452,7 +1452,7 @@ class Regression:
         return dict(C=np.random.uniform(low=0.0001, high=1.0),
                     nu=np.random.uniform(low=0.01, high=0.99),
                     kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid']),
-                    gamma=np.random.choice(a=['auto', 'scale']),
+                    #gamma=np.random.choice(a=['auto', 'scale']),
                     shrinking=np.random.choice(a=[True, False]),
                     cache_size=np.random.randint(low=100, high=500),
                     decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
