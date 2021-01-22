@@ -1031,6 +1031,7 @@ class GeneticAlgorithm:
         Re-populate generation 0 to increase likelihood for a good evolution start
         """
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Re-populate generation 0 because of the poor fitness scoring of all individuals')
+        self.n_individuals = 0
         for gen_history in self.generation_history.keys():
             self.generation_history[gen_history] = {}
         for evo_history in self.evolution_history.keys():
