@@ -327,7 +327,7 @@ class Classification:
 
         :return: CatBoostClassifier
         """
-        return CatBoostClassifier(n_estimators=500 if self.clf_params.get('n_estimators') is None else self.clf_params.get('n_estimators'),
+        return CatBoostClassifier(n_estimators=100 if self.clf_params.get('n_estimators') is None else self.clf_params.get('n_estimators'),
                                   learning_rate=0.03 if self.clf_params.get('learning_rate') is None else self.clf_params.get('learning_rate'),
                                   depth=self.clf_params.get('depth'),
                                   l2_leaf_reg=self.clf_params.get('l2_leaf_reg'),
@@ -755,7 +755,7 @@ class Classification:
                    verbose=False if self.clf_params.get('verbose') is None else self.clf_params.get('verbose'),
                    max_iter=-1 if self.clf_params.get('max_iter') is None else self.clf_params.get('max_iter'),
                    decision_function_shape='ovr' if self.clf_params.get('decision_function_shape') is None else self.clf_params.get('decision_function_shape'),
-                   probability=True if self.clf_params.get('probability') is None else self.clf_params.get('probability')
+                   probability=False if self.clf_params.get('probability') is None else self.clf_params.get('probability')
                    )
 
     @staticmethod
@@ -912,7 +912,7 @@ class Regression:
 
         :return: CatBoostRegressor
         """
-        return CatBoostRegressor(n_estimators=500 if self.reg_params.get('n_estimators') is None else self.reg_params.get('n_estimators'),
+        return CatBoostRegressor(n_estimators=100 if self.reg_params.get('n_estimators') is None else self.reg_params.get('n_estimators'),
                                  learning_rate=0.03 if self.reg_params.get('learning_rate') is None else self.reg_params.get('learning_rate'),
                                  depth=self.reg_params.get('depth'),
                                  l2_leaf_reg=self.reg_params.get('l2_leaf_reg'),
