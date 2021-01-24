@@ -799,41 +799,41 @@ class GeneticAlgorithm:
         _re_generate_max: int = 50
         while True:
             _re += 1
-            #try:
-            if self.mode == 'model':
-                if _re_generate:
-                    if np.random.uniform(low=0, high=1) <= self.mutation_prob:
-                        self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_model())
-                    else:
-                        self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_params(param_rate=self.mutation_rate))
-            elif self.mode == 'feature_engineer':
-                #if self.current_generation_meta_data['generation'] > 0:
-                self._sampling(features=self.feature_pairs[pop_idx])
+            try:
+                if self.mode == 'model':
+                    if _re_generate:
+                        if np.random.uniform(low=0, high=1) <= self.mutation_prob:
+                            self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_model())
+                        else:
+                            self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_params(param_rate=self.mutation_rate))
+                elif self.mode == 'feature_engineer':
+                    #if self.current_generation_meta_data['generation'] > 0:
+                    self._sampling(features=self.feature_pairs[pop_idx])
+                    if self.deep_learning:
+                        self.population[pop_idx].update_data(x_train=self.data_set.get('x_train'),
+                                                             y_train=self.data_set.get('y_train'),
+                                                             x_test=self.data_set.get('x_test'),
+                                                             y_test=self.data_set.get('x_test'),
+                                                             x_valn=self.data_set.get('x_val'),
+                                                             y_valn=self.data_set.get('y_val')
+                                                             )
                 if self.deep_learning:
-                    self.population[pop_idx].update_data(x_train=self.data_set.get('x_train'),
-                                                         y_train=self.data_set.get('y_train'),
-                                                         x_test=self.data_set.get('x_test'),
-                                                         y_test=self.data_set.get('x_test'),
-                                                         x_valn=self.data_set.get('x_val'),
-                                                         y_valn=self.data_set.get('y_val')
-                                                         )
-            if self.deep_learning:
-                self.population[pop_idx].train()
-            else:
-                self.population[pop_idx].train(x=copy.deepcopy(self.data_set.get('x_train').values),
-                                               y=copy.deepcopy(self.data_set.get('y_train').values),
-                                               validation=dict(x_val=copy.deepcopy(self.data_set.get('x_val').values),
-                                                               y_val=copy.deepcopy(self.data_set.get('y_val').values)
-                                                               )
-                                               )
-            _re = 0
-            break
-            #except Exception as e:
-            #    if _re == _re_generate_max:
-            #        break
-            #    else:
-            #        _re_generate = True
-            #        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Error while training model ({})\n{}'.format(self.population[pop_idx].model_name, e))
+                    self.population[pop_idx].train()
+                else:
+                    self.population[pop_idx].train(x=copy.deepcopy(self.data_set.get('x_train').values),
+                                                   y=copy.deepcopy(self.data_set.get('y_train').values),
+                                                   validation=dict(x_val=copy.deepcopy(self.data_set.get('x_val').values),
+                                                                   y_val=copy.deepcopy(self.data_set.get('y_val').values)
+                                                                   )
+                                                   )
+                _re = 0
+                break
+            except Exception as e:
+                if _re == _re_generate_max:
+                    break
+                else:
+                    _re_generate = True
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Error while training model ({})\n{}'.format(self.population[pop_idx].model_name, e))
         if _re == _re_generate_max:
             raise GeneticAlgorithmException('Maximum number of errors occurred. Check last error message ...')
         if self.target_type == 'reg':
@@ -1031,7 +1031,7 @@ class GeneticAlgorithm:
         Re-populate generation 0 to increase likelihood for a good evolution start
         """
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Re-populate generation 0 because of the poor fitness scoring of all individuals')
-        self.n_individuals = 0
+        self.n_individuals = -1
         for gen_history in self.generation_history.keys():
             self.generation_history[gen_history] = {}
         for evo_history in self.evolution_history.keys():
