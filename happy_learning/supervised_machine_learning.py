@@ -986,7 +986,7 @@ class Regression:
                                  num_trees=self.reg_params.get('num_trees'),
                                  colsample_bylevel=self.reg_params.get('colsample_bylevel'),
                                  random_state=self.reg_params.get('random_state'),
-                                 reg_lambda=self.reg_params.get('reg_lambda'),
+                                 #reg_lambda=self.reg_params.get('reg_lambda'),
                                  objective=self.reg_params.get('objective'),
                                  eta=self.reg_params.get('eta'),
                                  max_bin=self.reg_params.get('max_bin'),
