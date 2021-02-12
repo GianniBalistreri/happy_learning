@@ -11,7 +11,7 @@ subprocess.run(['python{} -m pip install "dask[complete]"'.format('3' if sys.pla
 # Install jupyter notebook extensions for using EasyExplore_examples.ipynb more conveniently:
 subprocess.run(['python{} -m pip install jupyter_contrib_nbextensions && jupyter contrib nbextension install'.format('3' if sys.platform.find('win') != 0 else '')], shell=True)
 
-## Install spacy language models:
+# Install spacy language models:
 #subprocess.run('python{} -m pip install spacy'.format('3' if sys.platform.find('win') != 0 else ''), shell=True)
 #for lang in LANG_MODELS.keys():
 #    for model in LANG_MODELS[lang]['model']['spacy'].keys():
@@ -30,7 +30,7 @@ requires = [r.strip() for r in requires.split('\n') if ((r.strip()[0] != "#") an
 
 setuptools.setup(
     name='happy_learning',
-    version='0.0.5',
+    version='0.0.8',
     author='Gianni Francesco Balistreri',
     author_email='gbalistreri@gmx.de',
     description='Toolbox for easy and effective developing of supervised machine learning models as proof-of-concept',

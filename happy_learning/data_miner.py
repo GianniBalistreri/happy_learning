@@ -222,9 +222,6 @@ class DataMiner:
             else:
                 self.feature_engineer.set_predictors(exclude_original_data=False)
             if feature_selector is not None:
-                print('Target', self.feature_engineer.get_target())
-                print('Predictors', self.feature_engineer.get_predictors())
-                print('Training Data', self.feature_engineer.get_training_data().columns)
                 _imp_features: dict = FeatureSelector(df=self.feature_engineer.get_training_data(output='df_dask'),
                                                       target=self.feature_engineer.get_target(),
                                                       features=self.feature_engineer.get_predictors(),

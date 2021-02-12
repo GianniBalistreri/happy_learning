@@ -111,7 +111,7 @@ class FeatureTournament:
                                           train_size=0.8 if kwargs.get('train_size') is None else kwargs.get('train_size'),
                                           random_sample=True if kwargs.get('random') is None else kwargs.get('random'),
                                           stratification=_stratify
-                                          ).train_test_sampling()
+                                          ).train_test_sampling(validation_split=0 if kwargs.get('validation_size') is None else kwargs.get('validation_size'))
         self.init_pairs: int = init_pairs
         self.init_games: int = init_games
         self.pair_size_factor: float = increasing_pair_size_factor
@@ -180,9 +180,9 @@ class FeatureTournament:
                                           ).generate_model()
                 _game.train(x=self.train_test.get('x_train')[pair].values,
                             y=self.train_test.get('y_train').values,
-                            validation=dict(x_val=self.train_test.get('x_val')[pair].values,
-                                            y_val=self.train_test.get('y_val').values
-                                            )
+                            #validation=dict(x_val=self.train_test.get('x_val')[pair].values,
+                            #                y_val=self.train_test.get('y_val').values
+                            #                )
                             )
                 _pred = _game.predict(x=self.train_test.get('x_test')[pair].values)
                 _game.eval(obs=self.train_test.get('y_test').values, pred=_pred, train_error=False)
@@ -196,11 +196,11 @@ class FeatureTournament:
                                           ).generate_model()
                 _game.train(x=self.train_test.get('x_train')[pair].values,
                             y=self.train_test.get('y_train').values,
-                            validation=dict(x_val=self.train_test.get('x_val')[pair].values,
-                                            y_val=self.train_test.get('y_val').values
-                                            )
+                            #validation=dict(x_val=self.train_test.get('x_val')[pair].values,
+                            #                y_val=self.train_test.get('y_val').values
+                            #                )
                             )
-                _pred = _game.predict(x=self.train_test.get('x_test')[pair].values, probability=True)
+                _pred = _game.predict(x=self.train_test.get('x_test')[pair].values, probability=False)
                 _game.eval(obs=self.train_test.get('y_test').values, pred=_pred, train_error=False)
                 _game_score: float = sml_fitness_score(ml_metric=tuple([1, _game.fitness['test'].get(self.ml_metric)]),
                                                        train_test_metric=tuple([_game.fitness['train'].get(self.ml_metric), _game.fitness['test'].get(self.ml_metric)]),
