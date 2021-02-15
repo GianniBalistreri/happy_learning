@@ -1,6 +1,8 @@
 import numpy as np
 import torch
+import torch.nn as nn
 
+from simpletransformers.model import ClassificationModel
 from torch.autograd import Variable
 from torch.nn import functional
 from typing import List
@@ -20,6 +22,9 @@ INITIALIZER: dict = dict(#constant=torch.nn.init.constant_,
                          xavier_uniform=torch.nn.init.xavier_uniform_,
                          zeros=torch.nn.init.zeros_
                          )
+CACHE_DIR: str = 'data/cache'
+BEST_MODEL_DIR: str = 'data/best_model'
+OUTPUT_DIR: str = 'data/output'
 
 
 def set_initializer(x, **kwargs):
@@ -75,32 +80,135 @@ def set_initializer(x, **kwargs):
 
 class PyTorchNetworkException(Exception):
     """
-    Class for handling exceptions for class MLP, RCNN
+    Class for handling exceptions for class Attention, MLP, LSTM, RCNN, RNN, SelfAttention, Transformers
     """
     pass
 
 
-class MLP(torch.nn.Module):
+class Attention(nn.Module):
     """
-    Class for applying Multi Layer Perceptron (Fully Connected Layer) using PyTorch as a Deep Learning Framework
+    Class for building deep learning attention network model using PyTorch
     """
-    def __init__(self,
-                 input_size: int,
-                 output_size: int,
-                 parameters: dict = None,
-                 ):
+    def __init__(self, parameters: dict, output_size: int):
         """
-        :param input_size: int
-            Number of predictors
+        :param parameters: dict
+			Parameter settings
 
         :param output_size: int
             Output size:
                 -> 1: Float value (Regression)
                 -> 2: Classes (Binary Classification)
                 -> >2: Classes (Multi-Class Classification)
+        """
+        super(Attention, self).__init__()
+        self.params: dict = parameters
+        self.output_size: int = output_size
+        self.batch_size: int = self.params.get('batch_size')
+        self.hidden_size: int = self.params.get('hidden_states')
+        self.vocab_size: int = self.params.get('vocab_size')
+        self.embedding_length: int = self.params.get('embedding_len')
+        self.word_embeddings.weights = nn.Parameter(self.params.get('weights'), requires_grad=False)
+        self.lstm_layer = nn.LSTM(self.embedding_length, self.hidden_size)
+        self.output_layer = nn.Linear(in_features=self.hidden_size, out_features=output_size)
 
+    @staticmethod
+    def attention_network(lstm_output, final_state):
+        """
+        Now we will incorporate Attention mechanism in our LSTM model. In this new model, we will use attention to compute soft alignment score corresponding
+        between each of the hidden_state and the last hidden_state of the LSTM. We will be using torch.bmm for the batch matrix multiplication.
+
+        :param lstm_output: torch.tensor
+            Final output of the LSTM which contains hidden layer outputs for each sequence
+
+        :param final_state: torch.tensor
+            Final time-step hidden state (h_n) of the LSTM
+
+        :return: torch.tensor
+            First computing weights for each of the sequence present in lstm_output and and then finally computing the new hidden state
+        """
+        _hidden = final_state.squeeze(0)
+        _attention_weights = torch.bmm(lstm_output, _hidden.unsqueeze(2)).squeeze(2)
+        _soft_attention_weights = torch.softmax(_attention_weights, 1)
+        return torch.bmm(lstm_output.transpose(1, 2), _soft_attention_weights.unsqueeze(2)).squeeze(2)
+
+    def forward(self, input_sentence):
+        """
+        :param input_sentence:
+            Input text (batch_size, num_sequences)
+
+        :return torch.tensor:
+            Logits from the attention network
+        """
+        _input = self.word_embeddings(input_sentence)
+        _input = _input.permute(1, 0, 2)
+        _h_0 = torch.autograd.Variable(torch.zeros(1, self.batch_size, self.hidden_size))
+        _c_0 = torch.autograd.Variable(torch.zeros(1, self.batch_size, self.hidden_size))
+        _output, (final_hidden_state, final_cell_state) = self.lstm_layer(_input, (_h_0, _c_0))
+        _output = _output.permute(1, 0, 2)
+        _attn_output = self.attention_network(lstm_output=_output, final_state=final_hidden_state)
+        return self.output_layer(_attn_output)
+
+
+class GRU(nn.Module):
+    """
+	Class for building deep learning gated recurrent unit network model using PyTorch
+	"""
+    def __init__(self, parameters: dict, output_size: int):
+        """
+		:param parameters: dict
+			Parameter settings
+
+        :param output_size: int
+            Output size:
+                -> 1: Float value (Regression)
+                -> 2: Classes (Binary Classification)
+                -> >2: Classes (Multi-Class Classification)
+		"""
+        super(GRU, self).__init__()
+        self.params: dict = parameters
+        self.output_size: int = output_size
+        self.batch_size: int = self.params.get('batch_size')
+        self.hidden_size: int = self.params.get('hidden_states')
+        self.vocab_size: int = self.params.get('vocab_size')
+        self.embedding_length: int = self.params.get('embedding_len')
+        self.word_embeddings.weights = nn.Parameter(self.params.get('weights'), requires_grad=False)
+        self.gru_layer = nn.GRU(self.embedding_length, self.hidden_size)
+        self.output_layer = nn.Linear(in_features=self.hidden_size, out_features=output_size)
+
+    def forward(self, input_sentence):
+        """
+		:param input_sentence:
+			Input text (batch_size, num_sequences)
+
+		:return torch.tensor:
+			Logits
+		"""
+        _input = self.word_embeddings(input_sentence)
+        _input = _input.permute(1, 0, 2)
+        _h_0 = torch.autograd.Variable(torch.zeros(1, self.batch_size, self.hidden_size))
+        torch.nn.init.ones_(_h_0)
+        _output, final_hidden_state = self.gru_layer(_input, _h_0)
+        return self.output_layer(_output)
+
+
+class MLP(torch.nn.Module):
+    """
+    Class for applying Multi Layer Perceptron (Fully Connected Layer) using PyTorch as a Deep Learning Framework
+    """
+    def __init__(self, parameters: dict, input_size: int, output_size: int
+                 ):
+        """
         :param parameters: dict
 			Parameter settings
+
+        :param input_size: int
+            Number of input features
+
+        :param output_size: int
+            Output size:
+                -> 1: Float value (Regression)
+                -> 2: Classes (Binary Classification)
+                -> >2: Classes (Multi-Class Classification)
         """
         super(MLP, self).__init__()
         self.params: dict = parameters
@@ -177,7 +285,51 @@ class MLP(torch.nn.Module):
                 x = functional.alpha_dropout(input=x, p=self.dropout_layers[l], training=True, inplace=False)
             else:
                 x = functional.dropout(input=x, p=self.dropout_layers[l], training=True, inplace=False)
-        return self.activation_output(self.fully_connected_layer(x)) # , dim=1
+        return self.activation_output(self.fully_connected_layer(x))
+
+
+class LSTM(nn.Module):
+    """
+	Class for building deep learning long-short term memory network model using PyTorch
+	"""
+    def __init__(self, parameters: dict, output_size: int):
+        """
+		:param parameters: dict
+			Parameter settings
+
+        :param output_size: int
+            Output size:
+                -> 1: Float value (Regression)
+                -> 2: Classes (Binary Classification)
+                -> >2: Classes (Multi-Class Classification)
+		"""
+        super(LSTM, self).__init__()
+        self.params: dict = parameters
+        self.output_size: int = output_size
+        self.batch_size: int = self.params.get('batch_size')
+        self.hidden_size: int = self.params.get('hidden_states')
+        self.vocab_size: int = self.params.get('vocab_size')
+        self.embedding_length: int = self.params.get('embedding_len')
+        self.word_embeddings.weights = nn.Parameter(self.params.get('weights'), requires_grad=False)
+        self.lstm_layer = nn.LSTM(self.embedding_length, self.hidden_size)
+        self.output_layer = nn.Linear(in_features=self.hidden_size, out_features=output_size)
+
+    def forward(self, input_sentence):
+        """
+		:param input_sentence:
+			Input text (batch_size, num_sequences)
+
+		:return torch.tensor:
+			Logits
+		"""
+        _input = self.word_embeddings(input_sentence)
+        _input = _input.permute(1, 0, 2)
+        _h_0 = torch.autograd.Variable(torch.zeros(1, self.batch_size, self.hidden_size))
+        _c_0 = torch.autograd.Variable(torch.zeros(1, self.batch_size, self.hidden_size))
+        torch.nn.init.ones_(_h_0)
+        torch.nn.init.ones_(_c_0)
+        _output, (final_hidden_state, final_cell_state) = self.lstm_layer(_input, (_h_0, _c_0))
+        return self.output_layer(final_hidden_state[-1])
 
 
 class RCNN(torch.nn.Module):
@@ -202,7 +354,6 @@ class RCNN(torch.nn.Module):
         self.hidden_size: int = self.params.get('hidden_states')
         self.vocab_size: int = self.params.get('vocab_size')
         self.embedding_length: int = self.params.get('embedding_len')
-        print(self.params)
         self.word_embeddings: torch.nn.Embedding = torch.nn.Embedding(self.vocab_size, self.embedding_length)  # Initializing the look-up table.
         self.word_embeddings.weight = torch.nn.Parameter(self.params.get('weights'), requires_grad=False) # Assigning the look-up table to the pre-trained GloVe word embedding.
         self.dropout: float = self.params.get('dropout')
@@ -334,88 +485,215 @@ class RCNN(torch.nn.Module):
         return self.output_layer(_target_output)
 
 
-class AttentionModel(torch.nn.Module):
-    def __init__(self, batch_size, output_size, hidden_size, vocab_size, embedding_length, weights):
-        super(AttentionModel, self).__init__()
+class RNN(nn.Module):
+    """
+	Class for building deep learning rnn model using PyTorch
+	"""
+    def __init__(self, parameters: dict, output_size: int):
         """
-        Arguments
-        ---------
-        batch_size : Size of the batch which is same as the batch_size of the data returned by the TorchText BucketIterator
-        output_size : 2 = (pos, neg)
-        hidden_sie : Size of the hidden_state of the LSTM
-        vocab_size : Size of the vocabulary containing unique words
-        embedding_length : Embeddding dimension of GloVe word embeddings
-        weights : Pre-trained GloVe word_embeddings which we will use to create our word_embedding look-up table 
+		:param parameters: dict
+			Parameter settings
 
-        --------
+        :param output_size: int
+            Output size:
+                -> 1: Float value (Regression)
+                -> 2: Classes (Binary Classification)
+                -> >2: Classes (Multi-Class Classification)
+		"""
+        super(RNN, self).__init__()
+        self.params: dict = parameters
+        self.output_size: int = output_size
+        self.batch_size: int = self.params.get('batch_size')
+        self.hidden_size: int = self.params.get('hidden_states')
+        self.vocab_size: int = self.params.get('vocab_size')
+        self.embedding_length: int = self.params.get('embedding_len')
+        self.word_embeddings.weights = nn.Parameter(self.params.get('weights'), requires_grad=False)
+        self.rnn = nn.RNN(self.embedding_length, self.hidden_size, num_layers=1, bidirectional=True)
+        self.output_layer = nn.Linear(in_features=4 * self.hidden_size, out_features=output_size)
+
+    def forward(self, input_sentence):
         """
-        self.batch_size = batch_size
-        self.output_size = output_size
-        self.hidden_size = hidden_size
-        self.vocab_size = vocab_size
-        self.embedding_length = embedding_length
+		:param input_sentence:
+			Input text (batch_size, num_sequences)
 
-        self.word_embeddings = torch.nn.Embedding(vocab_size, embedding_length)
-        self.word_embeddings.weights = torch.nn.Parameter(weights, requires_grad=False)
-        self.lstm = torch.nn.LSTM(embedding_length, hidden_size)
-        self.label = torch.nn.Linear(hidden_size, output_size)
-        #self.attn_fc_layer = torch.nn.Linear()
+		:return torch.tensor:
+			Logits
+		"""
+        _input = self.word_embeddings(input_sentence)
+        _input = _input.permute(1, 0, 2)
+        _h_0 = torch.autograd.Variable(torch.zeros(4, self.batch_size, self.hidden_size))
+        _output, _h_n = self.rnn(_input, _h_0)
+        _h_n = _h_n.permute(1, 0, 2)
+        _h_n = _h_n.contiguous().view(_h_n.size()[0], _h_n.size()[1] * _h_n.size()[2])
+        return self.output_layer(_h_n)
 
-    def attention_net(self, lstm_output, final_state):
+
+class SelfAttention(nn.Module):
+    """
+	Class for building deep learning self attention model using PyTorch
+	"""
+    def __init__(self, parameters: dict, output_size: int):
         """
-        Now we will incorporate Attention mechanism in our LSTM model. In this new model, we will use attention to compute soft alignment score corresponding
-        between each of the hidden_state and the last hidden_state of the LSTM. We will be using torch.bmm for the batch matrix multiplication.
+		:param parameters: dict
+			Parameter settings
 
-        Arguments
-        ---------
+        :param output_size: int
+            Output size:
+                -> 1: Float value (Regression)
+                -> 2: Classes (Binary Classification)
+                -> >2: Classes (Multi-Class Classification)
+		"""
+        super(SelfAttention, self).__init__()
+        self.params: dict = parameters
+        self.output_size: int = output_size
+        self.batch_size: int = self.params.get('batch_size')
+        self.hidden_size: int = self.params.get('hidden_states')
+        self.vocab_size: int = self.params.get('vocab_size')
+        self.embedding_length: int = self.params.get('embedding_len')
+        self.word_embeddings.weights = nn.Parameter(self.params.get('weights'), requires_grad=False)
+        self.dropout = 0.5
+        self.lstm_layer = nn.LSTM(self.embedding_length, self.hidden_size, dropout=self.dropout, bidirectional=True)
+        self.W_s1 = nn.Linear(2 * self.hidden_size, 350)
+        self.W_s2 = nn.Linear(350, 30)
+        self.fully_connected_layer = nn.Linear(30 * 2 * self.hidden_size, 2000)
+        self.output_layer = nn.Linear(in_features=2000, out_features=output_size)
 
-        lstm_output : Final output of the LSTM which contains hidden layer outputs for each sequence.
-        final_state : Final time-step hidden state (h_n) of the LSTM
-
-        ---------
-
-        Returns : It performs attention mechanism by first computing weights for each of the sequence present in lstm_output and and then finally computing the
-                  new hidden state.
-
-        Tensor Size :
-                    hidden.size() = (batch_size, hidden_size)
-                    attn_weights.size() = (batch_size, num_seq)
-                    soft_attn_weights.size() = (batch_size, num_seq)
-                    new_hidden_state.size() = (batch_size, hidden_size)
-
+    def attention_network(self, lstm_output):
         """
-        hidden = final_state.squeeze(0)
-        attn_weights = torch.bmm(lstm_output, hidden.unsqueeze(2)).squeeze(2)
-        soft_attn_weights = functional.softmax(attn_weights, 1)
-        new_hidden_state = torch.bmm(lstm_output.transpose(1, 2), soft_attn_weights.unsqueeze(2)).squeeze(2)
+		Now we will use self attention mechanism to produce a matrix embedding of the input sentence in which every row represents an
+		encoding of the inout sentence but giving an attention to a specific part of the sentence. We will use 30 such embedding of
+		the input sentence and then finally we will concatenate all the 30 sentence embedding vectors and connect it to a fully
+		connected layer of size 2000 which will be connected to the output layer of size 2 returning logits for our two classes i.e.,
+		pos & neg.
 
-        return new_hidden_state
+		Arguments
+		---------
 
-    def forward(self, input_sentences, batch_size=None):
+		lstm_output = A tensor containing hidden states corresponding to each time step of the LSTM network.
+		---------
+
+		Returns : Final Attention weight matrix for all the 30 different sentence embedding in which each of 30 embeddings give
+				  attention to different parts of the input sentence.
+
+		Tensor size : lstm_output.size() = (batch_size, num_seq, 2*hidden_size)
+					  attn_weight_matrix.size() = (batch_size, 30, num_seq)
+
+		"""
+        _attention_weight_matrix = self.W_s2(torch.tanh(self.W_s1(lstm_output)))
+        _attention_weight_matrix = _attention_weight_matrix.permute(0, 2, 1)
+        return torch.softmax(_attention_weight_matrix, dim=2)
+
+    def forward(self, input_sentence):
         """
-        Parameters
-        ----------
-        input_sentence: input_sentence of shape = (batch_size, num_sequences)
-        batch_size : default = None. Used only for prediction on a single sentence after training (batch_size = 1)
+		:param input_sentence:
+			Input text (batch_size, num_sequences)
 
-        Returns
-        -------
-        Output of the linear layer containing logits for pos & neg class which receives its input as the new_hidden_state which is basically the output of the Attention network.
-        final_output.shape = (batch_size, output_size)
+		:return torch.tensor:
+			Logits
+		"""
+        _input = self.word_embeddings(input_sentence)
+        _input = _input.permute(1, 0, 2)
+        _h_0 = torch.autograd.Variable(torch.zeros(2, self.batch_size, self.hidden_size))
+        _c_0 = torch.autograd.Variable(torch.zeros(2, self.batch_size, self.hidden_size))
+        _output, (_h_n, _c_n) = self.lstm_layer(_input, (_h_0, _c_0))
+        _output = _output.permute(1, 0, 2)
+        _attention_weight_matrix = self.attention_network(lstm_output=_output)
+        _hidden_matrix = torch.bmm(_attention_weight_matrix, _output)
+        _fully_connected_output = self.fc_layer(_hidden_matrix.view(-1, _hidden_matrix.size()[1] * _hidden_matrix.size()[2]))
+        return self.output_layer(_fully_connected_output)
 
+
+class Transformers:
+    """
+    Class for building encoder decoder transformer networks using simpletransformers based on hugging face
+    """
+    def __init__(self, parameters: dict, output_size: int):
         """
-        input = self.word_embeddings(input_sentences)
-        input = input.permute(1, 0, 2)
-        if batch_size is None:
-            h_0 = Variable(torch.zeros(1, self.batch_size, self.hidden_size))  # .cuda())
-            c_0 = Variable(torch.zeros(1, self.batch_size, self.hidden_size))  # .cuda())
-        else:
-            h_0 = Variable(torch.zeros(1, batch_size, self.hidden_size))  # .cuda())
-            c_0 = Variable(torch.zeros(1, batch_size, self.hidden_size))  # .cuda())
+        :param parameters: dict
+			Parameter settings
 
-        output, (final_hidden_state, final_cell_state) = self.lstm(input, (
-        h_0, c_0))  # final_hidden_state.size() = (1, batch_size, hidden_size)
-        output = output.permute(1, 0, 2)  # output.size() = (batch_size, num_seq, hidden_size)
-        attn_output = self.attention_net(output, final_hidden_state)
-        logits = self.label(attn_output)
-        return logits
+        :param output_size: int
+            Output size:
+                -> 1: Float value (Regression)
+                -> 2: Classes (Binary Classification)
+                -> >2: Classes (Multi-Class Classification)
+        """
+        self.args: dict = dict(model_type=parameters.get('model_type'),
+                               model_name=parameters.get('model_name'),
+                               regression=False if output_size > 1 else True,
+                               num_train_epochs=parameters.get('epoch'),
+                               learning_rate=parameters.get('learning_rate'),
+                               train_batch_size=parameters.get('batch_size'),
+                               eval_batch_size=parameters.get('batch_size'),
+                               max_seq_length=512,
+                               adafactor_beta1=parameters.get('adafactor_beta1'),
+                               adafactor_clip_threshold=parameters.get('adafactor_clip_threshold'),
+                               adafactor_decay_rate=parameters.get('adafactor_decay_rate'),
+                               adafactor_eps=parameters.get('adafactor_eps'),
+                               adafactor_relative_step=parameters.get('adafactor_relative_step'),
+                               adafactor_scale_parameter=parameters.get('adafactor_scale_parameter'),
+                               adafactor_warmup_init=parameters.get('adafactor_warmup_init'),
+                               adam_epsilon=parameters.get('adam_epsilon'),
+                               cosine_schedule_num_cycles=parameters.get('cosine_schedule_num_cycles'),
+                               dynamic_quantize=parameters.get('dynamic_quantize'),
+                               early_stopping_consider_epochs=parameters.get('early_stopping_consider_epochs'),
+                               use_early_stopping=parameters.get('use_early_stopping'),
+                               early_stopping_delta=parameters.get('early_stopping_delta'),
+                               early_stopping_patience=parameters.get('early_stopping_patience'),
+                               attention_probs_dropout_prob=parameters.get('attention_probs_dropout_prob'),
+                               hidden_size=parameters.get('hidden_size'),
+                               hidden_dropout_prob=parameters.get('hidden_dropout_prob'),
+                               initializer_range=parameters.get('initializer_range'),
+                               layer_norm_eps=parameters.get('layer_norm_eps'),
+                               num_attention_heads=parameters.get('num_attention_heads'),
+                               num_hidden_layers=parameters.get('num_hidden_layers'),
+                               optimizer=parameters.get('optimizer'),
+                               scheduler=parameters.get('scheduler'),
+                               polynomial_decay_schedule_lr_end=parameters.get('polynomial_decay_schedule_lr_end'),
+                               polynomial_decay_schedule_power=parameters.get('polynomial_decay_schedule_power'),
+                               weight_decay=parameters.get('weight_decay'),
+                               gradient_accumulation_steps=parameters.get('gradient_accumulation_steps'),
+                               max_grad_norm=parameters.get('max_grad_norm'),
+                               early_stopping_metric='eval_loss',
+                               early_stopping_metric_minimize=True,
+                               sliding_window=True,
+                               manual_seed=1234,
+                               warmup_ratio=parameters.get('warmup_ratio'),
+                               warmup_step=parameters.get('warmup_step'),
+                               config=dict(attention_probs_dropout_prob=parameters.get('attention_probs_dropout_prob'),
+                                           hidden_size=parameters.get('hidden_size'),
+                                           hidden_dropout_prob=parameters.get('hidden_dropout_prob'),
+                                           initializer_range=parameters.get('initializer_range'),
+                                           layer_norm_eps=parameters.get('layer_norm_eps'),
+                                           num_attention_heads=parameters.get('num_attention_heads'),
+                                           num_hidden_layers=parameters.get('num_hidden_layers')
+                                           ),
+                               save_steps=2000,
+                               logging_steps=100,
+                               evaluate_during_training=True,
+                               eval_all_checkpoints=True,
+                               use_tensorboard=True,
+                               overwrite_output_dir=True,
+                               reprocess_input_data=False,
+                               do_lower_case=True,
+                               no_save=True,
+                               best_model_dir=BEST_MODEL_DIR,
+                               output_dir=OUTPUT_DIR,
+                               cache_dir=CACHE_DIR,
+                               fp16=parameters.get('fp16'),
+                               fp16_opt_level=parameters.get('fp16_opt_level')
+                               )
+        self.model = ClassificationModel(model_type=parameters.get('model_type'),
+                                         model_name=parameters.get('model_model'),
+                                         tokenizer_type=None,
+                                         tokenizer_name=None,
+                                         num_labels=output_size,
+                                         weight=None,
+                                         args=self.args,
+                                         use_cuda=torch.cuda.is_available(),
+                                         cuda_device=-1,
+                                         onnx_execution_provider=None
+                                         )
+
+    def forward(self) -> ClassificationModel:
+        return self.model
