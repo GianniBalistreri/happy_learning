@@ -4,8 +4,9 @@ dask>=2.25.0
 dask-ml>=1.7.0
 easyexplore>=0.5.6
 emoji>=0.5.4
-fasttext>=0.9.2
+fasttext==0.9.1
 fsspec>=0.8.0
+gensim>=3.8.3
 geocoder>=1.38.1
 googletrans>=3.0.0
 joblib>=0.14.1
