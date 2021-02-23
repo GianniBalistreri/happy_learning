@@ -416,6 +416,7 @@ class NetworkGenerator(NeuralNetwork):
                  hidden_layer_size: int = 0,
                  hidden_layer_size_category: str = None,
                  models: List[str] = None,
+                 sep: str = '\t',
                  seed: int = 1234
                  ):
         """
@@ -437,6 +438,9 @@ class NetworkGenerator(NeuralNetwork):
 
         :param hidden_layer_size: int
             Number of hidden layers
+
+        :paramn sep: str
+            Separator
 
         :param seed: int
             Seed
@@ -486,6 +490,7 @@ class NetworkGenerator(NeuralNetwork):
         self.train_time = None
         self.obs: list = []
         self.pred: list = []
+        self.sep: str = sep
         self.embedding_text = None
         self.embedding_label = None
         self.hidden_layer_size: int = hidden_layer_size
@@ -554,7 +559,6 @@ class NetworkGenerator(NeuralNetwork):
             self.model.train()
             self._config_params(loss=True, optimizer=True)
             _optim: torch.optim = self.model_param.get('optimizer_torch')
-            print('\nParameter:', self.model_param, '\n')
             for idx, batch in enumerate(self.train_iter):
                 if self.sequential_type == 'text':
                     _predictors = batch.text[0]
@@ -567,9 +571,8 @@ class NetworkGenerator(NeuralNetwork):
                     _target = _target.cuda()
                     _predictors = _predictors.cuda()
                 _optim.zero_grad()
-                _prediction = self.model(_predictors)
+                _prediction = torch.softmax(input=self.model(_predictors), dim=1)
                 _, _pred = torch.max(input=_prediction, dim=1)
-                #_pred = _prediction.view(self.model_param.get('batch_size'), self.output_size).argmax(1)
                 _loss = self.model_param.get('loss_torch')(_prediction, _target)
                 _loss.backward()
                 self._clip_gradient(self.model, 1e-1)
@@ -612,9 +615,8 @@ class NetworkGenerator(NeuralNetwork):
                         _predictors = _predictors.cuda()
                     if _target.size()[0] != self.model_param.get('batch_size'):
                         continue
-                    _prediction = self.model(_predictors)
+                    _prediction = torch.softmax(input=self.model(_predictors), dim=1)
                     _, _pred = torch.max(input=_prediction, dim=1)
-                    #_pred = _prediction.view(self.model_param.get('batch_size'), self.output_size).argmax(1)
                     _loss = self.model_param.get('loss_torch')(_prediction, _target)
                     _predictions.extend(_pred.detach().tolist())
                     _observations.extend(_target.detach().numpy().tolist())
@@ -897,6 +899,7 @@ class NetworkGenerator(NeuralNetwork):
         else:
             if self.learning_type == 'batch':
                 if self.sequential_type == 'text':
+                    _unique_labels: list = pd.read_csv(filepath_or_buffer=self.train_data_path, sep=self.sep)[self.target].unique().tolist()
                     _data_fields: List[tuple] = []
                     self.embedding_text: Field = Field(sequential=True,
                                                        tokenize=lambda x: x.split(),
@@ -905,7 +908,7 @@ class NetworkGenerator(NeuralNetwork):
                                                        batch_first=True,
                                                        fix_length=300 if self.model_param.get('embedding_len') is None else self.model_param.get('embedding_len')
                                                        )
-                    self.embedding_label: LabelField = LabelField()
+                    self.embedding_label: Field = Field(sequential=False, is_target=True, unk_token=None)
                     for predictor in self.predictors:
                         _data_fields.append((predictor, self.embedding_text))
                     _data_fields.append((self.target, self.embedding_label))
@@ -931,6 +934,12 @@ class NetworkGenerator(NeuralNetwork):
                         self.embedding_text.build_vocab(_train_data,
                                                         vectors=EMBEDDING[self.model_param.get('embedding_model')](language='de' if self.model_param.get('lang') is None else self.model_param.get('lang'))
                                                         )
+                    if 0 in _unique_labels:
+                        for label in _unique_labels:
+                            self.embedding_label.vocab.stoi.update({str(label): label})
+                    else:
+                        for label in _unique_labels:
+                            self.embedding_label.vocab.stoi.update({str(label): label - 1})
                     self.embedding_label.build_vocab(_train_data)
                     self.model_param.update(dict(weights=self.embedding_text.vocab.vectors, vocab_size=len(self.embedding_text.vocab)))
                     if self.test_data_path is None:
@@ -1001,7 +1010,6 @@ class NetworkGenerator(NeuralNetwork):
             self.model.train()
             self._config_params(loss=True, optimizer=True)
             _optim: torch.optim = self.model_param.get('optimizer_torch')
-            print('\nParameter:', self.model_param, '\n')
             for idx, sample in enumerate(self.train_iter):
                 if self.sequential_type == 'text':
                     _predictors = sample.text[0]
@@ -1014,7 +1022,7 @@ class NetworkGenerator(NeuralNetwork):
                     _target = _target.cuda()
                     _predictors = _predictors.cuda()
                 _optim.zero_grad()
-                _prediction = self.model(_predictors)
+                _prediction = torch.softmax(input=self.model(_predictors), dim=1)
                 _, _pred = torch.max(input=_prediction, dim=1)
                 _loss = self.model_param.get('loss_torch')(_prediction, _target)
                 _loss.backward()
@@ -1052,8 +1060,7 @@ class NetworkGenerator(NeuralNetwork):
                     if _target.size()[0] != self.model_param.get('sample_size'):
                         continue
                     _prediction = self.model(_predictors)
-                    _, _pred = torch.max(input=_prediction, dim=1)
-                    # _pred = _prediction.view(self.model_param.get('batch_size'), self.output_size).argmax(1)
+                    _, _pred = torch.softmax(input=torch.max(input=_prediction, dim=1))
                     _loss = self.model_param.get('loss_torch')(_prediction, _target)
                     _predictions.extend(_pred.detach().tolist())
                     _observations.extend(_target.detach().numpy().tolist())
@@ -1074,6 +1081,11 @@ class NetworkGenerator(NeuralNetwork):
                                eval_df=self.val_data_df,
                                verbose=True
                                )
+        _result, _predictions, _wrong_predictions = self.model.eval_model(self.train_data_df)
+        self._eval(iter_type='train', obs=self.train_data_df.values.tolist(), pred=_predictions)
+        del _result
+        del _predictions
+        del _wrong_predictions
 
     def generate_model(self) -> object:
         """
@@ -1295,10 +1307,21 @@ class NetworkGenerator(NeuralNetwork):
         :param validation: bool
             Whether to run validation or testing iteration
         """
-        if self.learning_type == 'batch':
-            self._batch_learning(train=False, eval_set='val' if validation else 'test')
-        elif self.learning_type == 'stochastic':
-            self._stochastic_learning()
+        if self.transformer:
+            if validation:
+                _result, _predictions, _wrong_predictions = self.model.eval_model(self.val_data_df)
+                self._eval(iter_type='val', obs=self.val_data_df.values.tolist(), pred=_predictions)
+            else:
+                _result, _predictions, _wrong_predictions = self.model.eval_model(self.test_data_df)
+                self._eval(iter_type='test', obs=self.test_data_df.values.tolist(), pred=_predictions)
+            del _result
+            del _predictions
+            del _wrong_predictions
+        else:
+            if self.learning_type == 'batch':
+                self._batch_learning(train=False, eval_set='val' if validation else 'test')
+            elif self.learning_type == 'stochastic':
+                self._stochastic_learning()
 
     def predict(self):
         """
@@ -1333,6 +1356,9 @@ class NetworkGenerator(NeuralNetwork):
         _t0: datetime = datetime.now()
         if transformer:
             self._train_transformer()
+            self.train_time = (datetime.now() - _t0).seconds
+            self.eval(validation=True)
+            self.eval(validation=False)
         else:
             for _ in range(0, self.model_param.get('epoch'), 1):
                 print('\nEpoch: {}'.format(_))
@@ -1342,7 +1368,7 @@ class NetworkGenerator(NeuralNetwork):
                 elif self.learning_type == 'stochastic':
                     self._stochastic_learning()
                 self._epoch_eval(iter_types=['train', 'val'])
-        self.train_time = (datetime.now() - _t0).seconds
+            self.train_time = (datetime.now() - _t0).seconds
 
     def update_data(self,
                     x_train: np.ndarray,
