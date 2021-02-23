@@ -6,10 +6,7 @@ import os
 
 from .evaluate_machine_learning import EvalClf, EvalReg, SML_SCORE
 from catboost import CatBoostClassifier, CatBoostRegressor
-#from dask_lightgbm import LGBMClassifier, LGBMRegressor
-#from dask_xgboost import XGBClassifier, XGBRegressor
 from datetime import datetime
-#from lightgbm import LGBMClassifier, LGBMRegressor
 from pygam import GAM
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor, GradientBoostingClassifier, GradientBoostingRegressor, RandomForestClassifier, RandomForestRegressor
 from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor, kneighbors_graph
@@ -728,7 +725,7 @@ class Classification:
         :return: dict
             Parameter config
         """
-        return dict(n_estimators=np.random.randint(low=5, high=1000),
+        return dict(n_estimators=np.random.randint(low=5, high=100),
                     criterion=np.random.choice(a=['gini', 'entropy']),
                     max_depth=np.random.randint(low=1, high=12),
                     min_samples_split=np.random.randint(low=2, high=6),
@@ -772,7 +769,7 @@ class Classification:
                     shrinking=np.random.choice(a=[True, False]),
                     cache_size=np.random.randint(low=100, high=500),
                     decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
-                    max_iter=np.random.randint(low=10, high=1000)
+                    max_iter=np.random.randint(low=10, high=100)
                     )
 
     def linear_support_vector_machine(self) -> LinearSVC:
@@ -793,7 +790,7 @@ class Classification:
                          class_weight=None if self.clf_params.get('class_weight') is None else self.clf_params.get('class_weight'),
                          verbose=0 if self.clf_params.get('verbose') is None else self.clf_params.get('verbose'),
                          random_state=self.seed,
-                         max_iter=1000 if self.clf_params.get('max_iter') is None else self.clf_params.get('max_iter')
+                         max_iter=500 if self.clf_params.get('max_iter') is None else self.clf_params.get('max_iter')
                          )
 
     @staticmethod
@@ -808,7 +805,7 @@ class Classification:
                     penalty=np.random.choice(a=['l1', 'l2']),
                     loss=np.random.choice(a=['hinge', 'squared_hinge']),
                     multi_class=np.random.choice(a=['ovr', 'crammer_singer']),
-                    max_iter=np.random.randint(low=10, high=1000)
+                    max_iter=np.random.randint(low=10, high=100)
                     )
 
     def nu_support_vector_machine(self) -> NuSVC:
@@ -848,7 +845,7 @@ class Classification:
                     shrinking=np.random.choice(a=[True, False]),
                     cache_size=np.random.randint(low=100, high=500),
                     decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
-                    max_iter=np.random.randint(low=10, high=1000)
+                    max_iter=np.random.randint(low=10, high=100)
                     )
 
 
@@ -1384,7 +1381,7 @@ class Regression:
                     shrinking=np.random.choice(a=[True, False]),
                     cache_size=np.random.randint(low=100, high=500),
                     decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
-                    max_iter=np.random.randint(low=10, high=1000)
+                    max_iter=np.random.randint(low=10, high=500)
                     )
 
     def linear_support_vector_machine(self) -> LinearSVR:
@@ -1418,7 +1415,7 @@ class Regression:
                     penalty=np.random.choice(a=['l1', 'l2']),
                     loss=np.random.choice(a=['hinge', 'squared_hinge']),
                     multi_class=np.random.choice(a=['ovr', 'crammer_singer']),
-                    max_iter=np.random.randint(low=10, high=1000)
+                    max_iter=np.random.randint(low=10, high=500)
                     )
 
     def nu_support_vector_machine(self) -> NuSVR:
@@ -1456,7 +1453,7 @@ class Regression:
                     shrinking=np.random.choice(a=[True, False]),
                     cache_size=np.random.randint(low=100, high=500),
                     decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
-                    max_iter=np.random.randint(low=10, high=1000)
+                    max_iter=np.random.randint(low=10, high=500)
                     )
 
 
