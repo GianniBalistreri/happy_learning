@@ -319,7 +319,6 @@ class FeatureLearning:
                                            overwrite=True,
                                            create_dir=False
                                            )
-                #self.feature_engineer = None
                 del self.feature_engineer
                 self.feature_engineer: FeatureEngineer = FeatureEngineer(feature_engineer_file_path='{}feature_learning.p'.format(self.output_path))
                 _continuous_features: List[str] = self.feature_engineer.get_feature_types().get('continuous')
@@ -337,7 +336,6 @@ class FeatureLearning:
                 else:
                     Log(write=False, env='dev').log(msg='Not enough categorical features to efficiently run reinforcement feature learning framework')
         if len(self.evolved_features) > 0:
-            print(list(set(self.evolved_features)))
             self.feature_engineer.set_predictors(features=list(set(self.evolved_features)), exclude_original_data=False)
         return self.feature_engineer
 
