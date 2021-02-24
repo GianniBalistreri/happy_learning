@@ -236,6 +236,7 @@ class GeneticAlgorithm:
         self.mode = mode
         self.model = None
         self.model_params: dict = copy.deepcopy(model_params)
+        self.deploy_model: bool = False
         self.n_training: int = 0
         self.include_neural_networks: bool = include_neural_networks
         _neural_nets: List[str] = []
@@ -254,12 +255,12 @@ class GeneticAlgorithm:
                 self.models = _neural_nets
         self.parents_ratio: float = parents_ratio
         self.pop_size: int = pop_size if pop_size >= 3 else 64
-        if (self.pop_size * self.parents_ratio) % 2 != 0:
+        if (self.pop_size * self.parents_ratio) % 2 != 1:
             if self.parents_ratio == 0.5:
                 self.pop_size += 1
             else:
                 self.parents_ratio = 0.5
-                if (self.pop_size * self.parents_ratio) % 2 != 0:
+                if (self.pop_size * self.parents_ratio) % 2 != 1:
                     self.pop_size += 1
         self.input_file_path: str = input_file_path
         self.train_data_file_path: str = train_data_file_path
@@ -853,8 +854,6 @@ class GeneticAlgorithm:
                 self._fitness(individual=self.population[pop_idx], ml_metric='cohen_kappa')
             else:
                 self._fitness(individual=self.population[pop_idx], ml_metric='auc')
-        #print(self.evolution_history.get('fitness_score')[pop_idx])
-        #print(self.population[pop_idx].fitness)
         self._collect_meta_data(current_gen=True, idx=pop_idx)
 
     def _mutate(self, parent: int, child: int, force_param: dict = None):
@@ -932,9 +931,11 @@ class GeneticAlgorithm:
         """
         # Calculate number of parents within generation:
         _count_parents: int = int(self.pop_size * self.parents_ratio)
-        # Rank parents according to their fitness score
+        # Rank individuals according to their fitness score:
         _sorted_fitness_matrix: pd.DataFrame = pd.DataFrame(data=dict(fitness=self.current_generation_meta_data.get('fitness_score'))).sort_values(by='fitness', axis=0, ascending=False)
+        # Set parents:
         self.parents_idx = _sorted_fitness_matrix[0:_count_parents].index.values.tolist()
+        # Set children:
         self.child_idx = _sorted_fitness_matrix[_count_parents:].index.values.tolist()
 
     def _populate(self):
@@ -1142,8 +1143,9 @@ class GeneticAlgorithm:
             self.data_set = dict(y_test=self.population[self.best_individual_idx].obs,
                                  pred=self.population[self.best_individual_idx].pred
                                  )
-        self.evolution: dict = dict(trained_model=self.model,
-                                    model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
+        else:
+            self.data_set.update({'pred': self.population[self.best_individual_idx].predict(x=self.data_set.get('x_test'))})
+        self.evolution: dict = dict(model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
                                     param=self.current_generation_meta_data['param'][self.best_individual_idx],
                                     param_mutated=self.current_generation_meta_data['param_mutated'][self.best_individual_idx],
                                     fitness_score=self.current_generation_meta_data['fitness_score'][self.best_individual_idx],
@@ -1174,41 +1176,42 @@ class GeneticAlgorithm:
                                     stopping_reason=_stopping_reason
                                     )
         if self.plot:
-            try:
-                self.visualize(results_table=True,
-                               model_distribution=False,
-                               model_evolution=True,
-                               param_distribution=False,
-                               train_time_distribution=False,
-                               breeding_map=False,
-                               breeding_graph=False,
-                               fitness_distribution=True,
-                               fitness_evolution=True if self.current_generation_meta_data['generation'] > 0 else False,
-                               fitness_dimensions=True,
-                               per_generation=True if self.current_generation_meta_data['generation'] > 0 else False,
-                               prediction_of_best_model=True,
-                               epoch_stats=False
-                               )
-            except Exception as e:
-                Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Error during visualization:\n{}'.format(e))
+            self.visualize(results_table=True,
+                           model_distribution=True,
+                           model_evolution=True,
+                           param_distribution=False,
+                           train_time_distribution=True,
+                           breeding_map=True,
+                           breeding_graph=True,
+                           fitness_distribution=True,
+                           fitness_evolution=True if self.current_generation_meta_data['generation'] > 0 else False,
+                           fitness_dimensions=True,
+                           per_generation=True if self.current_generation_meta_data['generation'] > 0 else False,
+                           prediction_of_best_model=True,
+                           epoch_stats=True
+                           )
         if self.output_file_path is not None:
             if len(self.output_file_path) > 0:
                 self.save_evolution(ga=True,
-                                    model=True,
+                                    model=self.deploy_model,
                                     evolution_history=False,
                                     generation_history=False,
                                     final_generation=False
                                     )
 
-    def optimize_continue(self, max_generations: int = 5):
+    def optimize_continue(self, deploy_model: bool = True, max_generations: int = 5):
         """
         Continue evolution by using last generation of previous evolution as new generation 0
+
+        :param deploy_model: bool
+            Deploy fittest model to cloud platform
 
         :param max_generations: int
             Maximum number of generations
         """
         self.data_set = None
         self.evolution_continue = True
+        self.deploy_model = deploy_model
         _max_gen: int = max_generations if max_generations > 0 else 5
         self.max_generations: int = self.max_generations + _max_gen
         self.burn_in_generations += self.current_generation_meta_data['generation']
@@ -1258,7 +1261,7 @@ class GeneticAlgorithm:
             self.df = None
             self.model = None
             self.population = []
-            self.data_set = None
+            #self.data_set = None
             self.feature_engineer = None
             if self.dask_client is not None:
                 try:
@@ -1345,8 +1348,8 @@ class GeneticAlgorithm:
         _evolution_history_data[_m] = _evolution_history_data[_m].round(decimals=2)
         _evolution_gradient_data: pd.DataFrame = pd.DataFrame(data=self.evolution_gradient)
         _evolution_gradient_data['generation'] = [i for i in range(0, len(self.evolution_gradient.get('max')), 1)]
-        _best_model_results: pd.DataFrame = pd.DataFrame(data=dict(obs=self.evolution.get('obs'),
-                                                                   pred=self.evolution.get('pred')
+        _best_model_results: pd.DataFrame = pd.DataFrame(data=dict(obs=self.data_set.get('y_test'),
+                                                                   pred=self.data_set.get('pred')
                                                                    )
                                                          )
         if self.target_type == 'reg':
@@ -1474,8 +1477,8 @@ class GeneticAlgorithm:
                                                                                                 )
                                 })
             else:
-                _confusion_matrix: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.evolution.get('obs'),
-                                                                            pred=self.evolution.get('pred')
+                _confusion_matrix: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
+                                                                            pred=self.data_set.get('pred')
                                                                             ).confusion(),
                                                                index=self.target_labels,
                                                                columns=self.target_labels
@@ -1497,8 +1500,8 @@ class GeneticAlgorithm:
                                                                  file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_prediction_confusion_heatmap.html')
                                                                  )
                                 })
-                _confusion_matrix_normalized: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.evolution.get('obs'),
-                                                                                       pred=self.evolution.get('pred')
+                _confusion_matrix_normalized: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
+                                                                                       pred=self.data_set.get('pred')
                                                                                        ).confusion(normalize='pred'),
                                                                           #index=['obs', 'pred'],
                                                                           #columns=['obs', 'pred']
@@ -1535,7 +1538,8 @@ class GeneticAlgorithm:
                                                           time_features=['baseline'],
                                                           #xaxis_label=['False Positive Rate'],
                                                           #yaxis_label=['True Positive Rate'],
-                                                          plot_type='line'
+                                                          plot_type='line',
+                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_prediction_roc_auc_curve.html')
                                                           )
                                     })
         if len(_charts.keys()) > 0:
