@@ -9,8 +9,8 @@ from .neural_network_torch import Attention, MLP, LSTM, RCNN, RNN, SelfAttention
 from .utils import HappyLearningUtils
 from datetime import datetime
 from torch.utils.data import DataLoader, TensorDataset
-from torchtext.data import BucketIterator, Field, LabelField, TabularDataset
-from torchtext.vocab import FastText, GloVe
+from torchtext.data import BucketIterator, Field, TabularDataset
+from torchtext.vocab import FastText
 from typing import Dict, List, Tuple
 
 
