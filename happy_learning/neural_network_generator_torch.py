@@ -1,20 +1,16 @@
 import copy
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn.functional
 
 from .evaluate_machine_learning import EvalClf, EvalReg, ML_METRIC, SML_SCORE
-from .neural_network_torch import MLP, RCNN
+from .neural_network_torch import Attention, MLP, LSTM, RCNN, RNN, SelfAttention, Transformers
 from .utils import HappyLearningUtils
 from datetime import datetime
-from pytorch_transformers import BertModel, BertForSequenceClassification, BertConfig, BertTokenizer
-from pytorch_transformers import DistilBertModel, DistilBertForSequenceClassification, DistilBertConfig, DistilBertTokenizer
-from pytorch_transformers import RobertaModel, RobertaForSequenceClassification, RobertaConfig, RobertaTokenizer
-from pytorch_transformers import XLMModel, XLMForSequenceClassification, XLMConfig, XLMTokenizer
-from pytorch_transformers import XLNetModel, XLNetForSequenceClassification, XLNetConfig, XLNetTokenizer
 from torch.utils.data import DataLoader, TensorDataset
-from torchtext.data import BucketIterator, Field, LabelField, TabularDataset
-from torchtext.vocab import FastText, GloVe
+from torchtext.data import BucketIterator, Field, TabularDataset
+from torchtext.vocab import FastText
 from typing import Dict, List, Tuple
 
 
@@ -25,10 +21,11 @@ NETWORK_TYPE: Dict[str, str] = dict(att='attention_network',
                                     mlp='multi_layer_perceptron',
                                     rnn='recurrent_neural_network',
                                     rcnn='recurrent_convolutional_neural_network',
-                                    self='self_attention_network'
+                                    self='self_attention_network',
+                                    trans='transformers'
                                     )
 NETWORK_TYPE_CATEGORY: Dict[str, List[str]] = dict(tabular=['mlp'],
-                                                   seq=['att', 'cnn', 'rnn', 'rcnn', 'lstm', 'self']
+                                                   seq=['att', 'cnn', 'lstm', 'rnn', 'rcnn', 'lstm', 'self', 'trans']
                                                    )
 HIDDEN_LAYER_CATEGORY_EVOLUTION: List[str] = ['random',
                                               'constant',
@@ -85,34 +82,10 @@ OPTIMIZER: dict = dict(adam=torch.optim.Adam,
                        rmsprop=torch.optim.RMSprop,
                        sgd=torch.optim.SGD
                        )
-EMBEDDING: dict = dict(fast_text=FastText,
-                       glove=GloVe
-                       )
-TRANSFORMER: dict = dict(bert=dict(model=BertModel,
-                                   config=BertConfig,
-                                   tokenizer=BertTokenizer,
-                                   clf=BertForSequenceClassification
-                                   ),
-                         distil=dict(model=DistilBertModel,
-                                     config=DistilBertConfig,
-                                     tokenizer=DistilBertTokenizer,
-                                     clf=DistilBertForSequenceClassification
-                                     ),
-                         roberta=dict(model=RobertaModel,
-                                      config=RobertaConfig,
-                                      tokenizer=RobertaTokenizer,
-                                      clf=RobertaForSequenceClassification
-                                      ),
-                         xlm=dict(model=XLMModel,
-                                  config=XLMConfig,
-                                  tokenizer=XLMTokenizer,
-                                  clf=XLMForSequenceClassification
-                                  ),
-                         xlnet=dict(model=XLNetModel,
-                                    config=XLNetConfig,
-                                    tokenizer=XLNetTokenizer,
-                                    clf=XLNetForSequenceClassification
-                                    )
+EMBEDDING: dict = dict(fast_text=FastText)
+TRANSFORMER: dict = dict(roberta='roberta-large',
+                         xlm='xlm-mlm-100-1280',
+                         xlm_roberta='xlm-roberta-large'
                          )
 IGNORE_PARAM_FOR_OPTIMIZATION: List[str] = ['embedding_len',
                                             'weights',
@@ -236,6 +209,9 @@ class NeuralNetwork:
         self.y_test: np.array = y_test
         self.x_val: np.ndarray = x_val
         self.y_val: np.array = y_val
+        self.train_data_df: pd.DataFrame = None
+        self.test_data_df: pd.DataFrame = None
+        self.val_data_df: pd.DataFrame = None
         self.train_data_path: str = train_data_path
         self.test_data_path: str = test_data_path
         self.validation_data_path: str = validation_data_path
@@ -256,15 +232,14 @@ class NeuralNetwork:
         self.sequential_type: str = sequential_type
         self.seed: int = 1234 if seed <= 0 else seed
 
-    @staticmethod
-    def attention_network() -> dict:
+    def attention_network(self) -> Attention:
         """
-        Generate Long-Short Term Memory Network + Attention classifier parameter configuration randomly
+        Config Attention Network
 
-        :return: dict
-            Parameter config
+        :return: Attention
+            Model object
         """
-        return dict()
+        return Attention(parameters=self.model_param, output_size=self.output_size)
 
     @staticmethod
     def attention_network_param() -> dict:
@@ -274,7 +249,9 @@ class NeuralNetwork:
         :return: dict
             Parameter config
         """
-        return dict()
+        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()),
+                    bidirectional=np.random.choice(a=[False, True])
+                    )
 
     @staticmethod
     def convolutional_neural_network_param() -> dict:
@@ -307,17 +284,14 @@ class NeuralNetwork:
         """
         return dict(hidden_neurons=np.random.choice(a=HappyLearningUtils().geometric_progression()))
 
-    @staticmethod
-    def long_short_term_memory_network() -> dict:
+    def long_short_term_memory_network(self) -> LSTM:
         """
-        Generate Long-Short Term Memory Network (LSTM) classifier parameter randomly
+        Config LSTM Network
 
-        :return: dict
-            Parameter config
+        :return: LSTM
+            Model object
         """
-        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()),
-                    bidirectional=np.random.choice(a=[False, True])
-                    )
+        return LSTM(parameters=self.model_param, output_size=self.output_size)
 
     @staticmethod
     def long_short_term_memory_network_param() -> dict:
@@ -331,6 +305,15 @@ class NeuralNetwork:
                     bidirectional=np.random.choice(a=[False, True])
                     )
 
+    def recurrent_neural_network(self) -> RNN:
+        """
+        Config RNN Network
+
+        :return: RNN
+            Model object
+        """
+        return RNN(parameters=self.model_param, output_size=self.output_size)
+
     @staticmethod
     def recurrent_neural_network_param() -> dict:
         """
@@ -339,7 +322,7 @@ class NeuralNetwork:
         :return: dict
             Parameter config
         """
-        return dict()
+        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()))
 
     def recurrent_convolutional_neural_network(self) -> RCNN:
         """
@@ -362,6 +345,15 @@ class NeuralNetwork:
                     bidirectional=np.random.choice(a=[False, True])
                     )
 
+    def self_attention_network(self) -> SelfAttention:
+        """
+        Config Self-Attention Network
+
+        :return: SelfAttention
+            Model object
+        """
+        return SelfAttention(parameters=self.model_param, output_size=self.output_size)
+
     @staticmethod
     def self_attention_network_param() -> dict:
         """
@@ -370,7 +362,33 @@ class NeuralNetwork:
         :return: dict
             Parameter config
         """
-        return dict()
+        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()))
+
+    def transformer(self) -> Transformers:
+        """
+        Config Transformer Network
+
+        :return: Transformers
+            Model object
+        """
+        return Transformers(parameters=self.model_param, output_size=self.output_size)
+
+    @staticmethod
+    def transformer_param() -> dict:
+        """
+        Generate Transformer Network classifier parameter configuration randomly
+
+        :return: dict
+            Parameter config
+        """
+        return dict(attention_probs_dropout_prob=np.random.uniform(low=0.05, high=0.95),
+                    hidden_size=np.random.randint(low=100, high=1000),
+                    hidden_dropout_prob=np.random.uniform(low=0.05, high=0.95),
+                    initializer_range=np.random.uniform(low=0.05, high=0.95),
+                    layer_norm_eps=np.random.uniform(low=0.05, high=0.5),
+                    num_attention_heads=np.random.randint(low=2, high=20),
+                    num_hidden_layers=np.random.randint(low=2, high=20)
+                    )
 
 
 class NetworkGenerator(NeuralNetwork):
@@ -398,6 +416,7 @@ class NetworkGenerator(NeuralNetwork):
                  hidden_layer_size: int = 0,
                  hidden_layer_size_category: str = None,
                  models: List[str] = None,
+                 sep: str = '\t',
                  seed: int = 1234
                  ):
         """
@@ -419,6 +438,9 @@ class NetworkGenerator(NeuralNetwork):
 
         :param hidden_layer_size: int
             Number of hidden layers
+
+        :paramn sep: str
+            Separator
 
         :param seed: int
             Seed
@@ -451,6 +473,7 @@ class NetworkGenerator(NeuralNetwork):
             self.target_type: str = 'clf_multi'
         self.models: List[str] = models
         self.model_name: str = model_name
+        self.transformer: bool = True if model_name == 'transformer' else False
         if self.model_name is None:
             self.random: bool = True
             if self.models is not None:
@@ -467,6 +490,9 @@ class NetworkGenerator(NeuralNetwork):
         self.train_time = None
         self.obs: list = []
         self.pred: list = []
+        self.sep: str = sep
+        self.embedding_text = None
+        self.embedding_label = None
         self.hidden_layer_size: int = hidden_layer_size
         self.hidden_layer_size_category: str = hidden_layer_size_category
         self.learning_type: str = learning_type if learning_type in ['batch', 'stochastic'] else 'batch'
@@ -533,7 +559,6 @@ class NetworkGenerator(NeuralNetwork):
             self.model.train()
             self._config_params(loss=True, optimizer=True)
             _optim: torch.optim = self.model_param.get('optimizer_torch')
-            print('\nParameter:', self.model_param, '\n')
             for idx, batch in enumerate(self.train_iter):
                 if self.sequential_type == 'text':
                     _predictors = batch.text[0]
@@ -546,9 +571,8 @@ class NetworkGenerator(NeuralNetwork):
                     _target = _target.cuda()
                     _predictors = _predictors.cuda()
                 _optim.zero_grad()
-                _prediction = self.model(_predictors)
+                _prediction = torch.softmax(input=self.model(_predictors), dim=1)
                 _, _pred = torch.max(input=_prediction, dim=1)
-                #_pred = _prediction.view(self.model_param.get('batch_size'), self.output_size).argmax(1)
                 _loss = self.model_param.get('loss_torch')(_prediction, _target)
                 _loss.backward()
                 self._clip_gradient(self.model, 1e-1)
@@ -591,9 +615,8 @@ class NetworkGenerator(NeuralNetwork):
                         _predictors = _predictors.cuda()
                     if _target.size()[0] != self.model_param.get('batch_size'):
                         continue
-                    _prediction = self.model(_predictors)
+                    _prediction = torch.softmax(input=self.model(_predictors), dim=1)
                     _, _pred = torch.max(input=_prediction, dim=1)
-                    #_pred = _prediction.view(self.model_param.get('batch_size'), self.output_size).argmax(1)
                     _loss = self.model_param.get('loss_torch')(_prediction, _target)
                     _predictions.extend(_pred.detach().tolist())
                     _observations.extend(_target.detach().numpy().tolist())
@@ -683,6 +706,7 @@ class NetworkGenerator(NeuralNetwork):
             _hidden_layer_size: tuple = HIDDEN_LAYER_CATEGORY.get(self.hidden_layer_size_category)
         if self.hidden_layer_size is None or self.hidden_layer_size <= 0:
             self.hidden_layer_size = np.random.randint(low=_hidden_layer_size[0], high=_hidden_layer_size[1])
+        self.model_param.update({'num_hidden_layers': self.hidden_layer_size + 1})
         for hidden in range(1, self.hidden_layer_size + 1, 1):
             _hidden_layer_settings: dict = self._get_param_space(general=True)
             self.model_param.update({'hidden_layer_{}_neurons'.format(hidden): _hidden_layer_settings.get('hidden_neurons')})
@@ -820,7 +844,7 @@ class NetworkGenerator(NeuralNetwork):
                         learning_rate=np.random.uniform(low=0.00001, high=0.4),
                         batch_size=np.random.choice(a=HappyLearningUtils().geometric_progression(n=8)),
                         sample_size=np.random.choice(a=HappyLearningUtils().geometric_progression(n=8)),
-                        epoch=np.random.randint(low=3, high=5) if len(self.model_param_mutated.keys()) == 0 else np.random.randint(low=5, high=15),
+                        epoch=np.random.randint(low=3, high=10) if len(self.model_param_mutated.keys()) == 0 else np.random.randint(low=5, high=15),
                         #early_stopping=[False, True],
                         #patience=np.random.uniform(low=2, high=20),
                         dropout=np.random.uniform(low=0.05, high=0.95),
@@ -829,7 +853,36 @@ class NetworkGenerator(NeuralNetwork):
                         optimizer=np.random.choice(a=list(OPTIMIZER.keys()))
                         )
         else:
-            return dict(transformer=np.random.choice(a=list(TRANSFORMER.keys())),
+            _model_type: str = np.random.choice(a=list(TRANSFORMER.keys()))
+            _model_name: str = TRANSFORMER.get(_model_type)
+            return dict(transformer=dict(model_type=_model_type,
+                                         model_name=_model_name,
+                                         adafactor_beta1=np.random.uniform(low=0.0, high=1),
+                                         adafactor_clip_threshold=np.random.uniform(low=0.001, high=1),
+                                         adafactor_decay_rate=np.random.uniform(low=-0.001, high=0.999),
+                                         adafactor_eps=(np.random.uniform(low=1e-50, high=1e-10), np.random.uniform(low=1e-50, high=1e-10)),
+                                         adafactor_relative_step=np.random.choice(a=[False, True]),
+                                         adafactor_scale_parameter=np.random.choice(a=[False, True]),
+                                         adafactor_warmup_init=np.random.choice(a=[False, True]),
+                                         adam_epsilon=np.random.uniform(low=1e-10, high=1e-5),
+                                         cosine_schedule_num_cycles=np.random.uniform(low=0.3, high=0.7),
+                                         dynamic_quantize=np.random.choice(a=[False, True]),
+                                         early_stopping_consider_epochs=np.random.choice(a=[False, True]),
+                                         use_early_stopping=np.random.choice(a=[False, True]),
+                                         early_stopping_delta=np.random.uniform(low=0, high=0.3),
+                                         early_stopping_patience=np.random.randint(low=3, high=10),
+                                         attention_probs_dropout_prob=np.random.uniform(low=0.05, high=0.95),
+                                         hidden_size=np.random.randint(low=100, high=1000),
+                                         hidden_dropout_prob=np.random.uniform(low=0.05, high=0.95),
+                                         initializer_range=np.random.uniform(low=0.05, high=0.95),
+                                         layer_norm_eps=np.random.uniform(low=0.05, high=0.5),
+                                         num_attention_heads=np.random.randint(low=2, high=20),
+                                         num_hidden_layers=np.random.randint(low=2, high=20),
+                                         optimizer=np.random.choice(a=['AdamW', 'Adafactor']),
+                                         scheduler=np.random.choice(a=['constant_schedule', 'constant_schedule_with_warmup', 'linear_schedule_with_warmup', 'cosine_schedule_with_warmup', 'cosine_with_hard_restarts_schedule_with_warmup', 'polynomial_decay_schedule_with_warmup']),
+                                         polynomial_decay_schedule_lr_end=np.random.uniform(low=1e-8, high=1e-4),
+                                         polynomial_decay_schedule_power=np.random.uniform(low=0.5, high=1.0)
+                                         ),
                         embedding=dict(embedding_len=300,
                                        embedding_model=np.random.choice(a=list(EMBEDDING.keys()))
                                        )
@@ -839,82 +892,99 @@ class NetworkGenerator(NeuralNetwork):
         """
         Import data sets (Training, Testing, Validation) from file
         """
-        if self.learning_type == 'batch':
-            if self.sequential_type == 'text':
-                _data_fields: List[tuple] = []
-                _text: Field = Field(sequential=True,
-                                     tokenize=lambda x: x.split(),
-                                     lower=True,
-                                     include_lengths=True,
-                                     batch_first=True,
-                                     fix_length=300 if self.model_param.get('embedding_len') is None else self.model_param.get('embedding_len')
-                                     )
-                _label: LabelField = LabelField()
-                for predictor in self.predictors:
-                    _data_fields.append((predictor, _text))
-                _data_fields.append((self.target, _label))
-                _train_data: TabularDataset = TabularDataset(path=self.train_data_path,
-                                                             format='csv',
-                                                             fields=_data_fields,
-                                                             skip_header=True
-                                                             )
-                if self.test_data_path is None:
-                    _test_data = None
-                else:
-                    _test_data: TabularDataset = TabularDataset(path=self.test_data_path,
-                                                                format='csv',
-                                                                fields=_data_fields,
-                                                                skip_header=True
-                                                                )
-                _validation_data: TabularDataset = TabularDataset(path=self.validation_data_path,
-                                                                  format='csv',
-                                                                  fields=_data_fields,
-                                                                  skip_header=True
-                                                                  )
-                if self.model_param.get('embedding_model') == 'glove':
-                    _text.build_vocab(_train_data,
-                                      vectors=EMBEDDING[self.model_param.get('embedding_model')](name='42B', dim=300)
-                                      )
-                elif self.model_param.get('embedding_model') == 'fast_text':
-                    _text.build_vocab(_train_data,
-                                      vectors=EMBEDDING[self.model_param.get('embedding_model')](language='de' if self.model_param.get('lang') is None else self.model_param.get('lang'))
-                                      )
-                _label.build_vocab(_train_data)
-                self.model_param.update(dict(weights=_text.vocab.vectors, vocab_size=len(_text.vocab)))
-                if self.test_data_path is None:
-                    self.train_iter, self.validation_iter = BucketIterator.splits((_train_data, _validation_data),
-                                                                                  batch_size=int(self.model_param.get('batch_size')),
-                                                                                  sort_key=lambda x: len(x.text),
-                                                                                  repeat=False,
-                                                                                  shuffle=True
-                                                                                  )
-                else:
-                    self.train_iter, self.validation_iter, self.test_iter = BucketIterator.splits((_train_data, _validation_data, _test_data),
-                                                                                                  batch_size=int(self.model_param.get('batch_size')),
-                                                                                                  sort_key=lambda x: len(x.text),
-                                                                                                  repeat=False,
-                                                                                                  shuffle=True
-                                                                                                  )
-            else:
-                _train_data: TensorDataset = TensorDataset(torch.from_numpy(self.x_train), torch.from_numpy(self.y_train))
-                _test_data: TensorDataset = TensorDataset(torch.from_numpy(self.x_test), torch.from_numpy(self.y_test))
-                _validation_data: TensorDataset = TensorDataset(torch.from_numpy(self.x_val), torch.from_numpy(self.y_val))
-                self.train_iter = DataLoader(dataset=_train_data, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
-                self.test_iter = DataLoader(dataset=_test_data, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
-                self.validation_iter = DataLoader(dataset=_validation_data, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
-        elif self.learning_type == 'stochastic':
-            pass
+        if self.transformer:
+            self.train_data_df = pd.read_csv(filepath_or_buffer=self.train_data_path)
+            self.test_data_df = pd.read_csv(filepath_or_buffer=self.test_data_path)
+            self.val_data_df = pd.read_csv(filepath_or_buffer=self.validation_data_path)
         else:
-            raise NeuralNetworkException('Learning type ({}) not supported'.format(self.learning_type))
-        self.x_train = None
-        self.y_train = None
-        self.x_test = None
-        self.y_test = None
-        self.x_val = None
-        self.y_val = None
-        del _train_data
-        del _test_data
-        del _validation_data
+            if self.learning_type == 'batch':
+                if self.sequential_type == 'text':
+                    _unique_labels: list = pd.read_csv(filepath_or_buffer=self.train_data_path, sep=self.sep)[self.target].unique().tolist()
+                    _data_fields: List[tuple] = []
+                    self.embedding_text: Field = Field(sequential=True,
+                                                       tokenize=lambda x: x.split(),
+                                                       lower=True,
+                                                       include_lengths=True,
+                                                       batch_first=True,
+                                                       fix_length=300 if self.model_param.get('embedding_len') is None else self.model_param.get('embedding_len')
+                                                       )
+                    self.embedding_label: Field = Field(sequential=False, is_target=True, unk_token=None)
+                    for predictor in self.predictors:
+                        _data_fields.append((predictor, self.embedding_text))
+                    _data_fields.append((self.target, self.embedding_label))
+                    _train_data: TabularDataset = TabularDataset(path=self.train_data_path,
+                                                                 format='csv',
+                                                                 fields=_data_fields,
+                                                                 skip_header=True
+                                                                 )
+                    if self.test_data_path is None:
+                        _test_data = None
+                    else:
+                        _test_data: TabularDataset = TabularDataset(path=self.test_data_path,
+                                                                    format='csv',
+                                                                    fields=_data_fields,
+                                                                    skip_header=True
+                                                                    )
+                    _validation_data: TabularDataset = TabularDataset(path=self.validation_data_path,
+                                                                      format='csv',
+                                                                      fields=_data_fields,
+                                                                      skip_header=True
+                                                                      )
+                    if self.model_param.get('embedding_model') == 'fast_text':
+                        self.embedding_text.build_vocab(_train_data,
+                                                        vectors=EMBEDDING[self.model_param.get('embedding_model')](language='de' if self.model_param.get('lang') is None else self.model_param.get('lang'))
+                                                        )
+                    if 0 in _unique_labels:
+                        for label in _unique_labels:
+                            self.embedding_label.vocab.stoi.update({str(label): label})
+                    else:
+                        for label in _unique_labels:
+                            self.embedding_label.vocab.stoi.update({str(label): label - 1})
+                    self.embedding_label.build_vocab(_train_data)
+                    self.model_param.update(dict(weights=self.embedding_text.vocab.vectors, vocab_size=len(self.embedding_text.vocab)))
+                    if self.test_data_path is None:
+                        self.train_iter, self.validation_iter = BucketIterator.splits((_train_data, _validation_data),
+                                                                                      batch_size=int(self.model_param.get('batch_size')),
+                                                                                      sort_key=lambda x: len(x.text),
+                                                                                      repeat=False,
+                                                                                      shuffle=True
+                                                                                      )
+                    else:
+                        self.train_iter, self.validation_iter, self.test_iter = BucketIterator.splits((_train_data, _validation_data, _test_data),
+                                                                                                      batch_size=int(self.model_param.get('batch_size')),
+                                                                                                      sort_key=lambda x: len(x.text),
+                                                                                                      repeat=False,
+                                                                                                      shuffle=True
+                                                                                                      )
+                else:
+                    _train_data: TensorDataset = TensorDataset(torch.from_numpy(self.x_train), torch.from_numpy(self.y_train))
+                    _test_data: TensorDataset = TensorDataset(torch.from_numpy(self.x_test), torch.from_numpy(self.y_test))
+                    _validation_data: TensorDataset = TensorDataset(torch.from_numpy(self.x_val), torch.from_numpy(self.y_val))
+                    self.train_iter = DataLoader(dataset=_train_data, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
+                    self.test_iter = DataLoader(dataset=_test_data, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
+                    self.validation_iter = DataLoader(dataset=_validation_data, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
+            elif self.learning_type == 'stochastic':
+                pass
+            else:
+                raise NeuralNetworkException('Learning type ({}) not supported'.format(self.learning_type))
+            self.x_train = None
+            self.y_train = None
+            self.x_test = None
+            self.y_test = None
+            self.x_val = None
+            self.y_val = None
+            del _train_data
+            del _test_data
+            del _validation_data
+
+    def _predict_transformer(self, text_data: str):
+        """
+        Get prediction from pre-trained neural network (transformer only)
+
+        :param text_data: str
+            Text data sequence
+        """
+        return self.model.predict(to_predict=text_data, multi_label=False if self.output_size <= 2 else True)
 
     def _stochastic_learning(self, train: bool = True, eval_set: str = 'val'):
         """
@@ -940,7 +1010,6 @@ class NetworkGenerator(NeuralNetwork):
             self.model.train()
             self._config_params(loss=True, optimizer=True)
             _optim: torch.optim = self.model_param.get('optimizer_torch')
-            print('\nParameter:', self.model_param, '\n')
             for idx, sample in enumerate(self.train_iter):
                 if self.sequential_type == 'text':
                     _predictors = sample.text[0]
@@ -953,9 +1022,8 @@ class NetworkGenerator(NeuralNetwork):
                     _target = _target.cuda()
                     _predictors = _predictors.cuda()
                 _optim.zero_grad()
-                _prediction = self.model(_predictors)
+                _prediction = torch.softmax(input=self.model(_predictors), dim=1)
                 _, _pred = torch.max(input=_prediction, dim=1)
-                # _pred = _prediction.view(self.model_param.get('batch_size'), self.output_size).argmax(1)
                 _loss = self.model_param.get('loss_torch')(_prediction, _target)
                 _loss.backward()
                 self._clip_gradient(self.model, 1e-1)
@@ -992,8 +1060,7 @@ class NetworkGenerator(NeuralNetwork):
                     if _target.size()[0] != self.model_param.get('sample_size'):
                         continue
                     _prediction = self.model(_predictors)
-                    _, _pred = torch.max(input=_prediction, dim=1)
-                    # _pred = _prediction.view(self.model_param.get('batch_size'), self.output_size).argmax(1)
+                    _, _pred = torch.softmax(input=torch.max(input=_prediction, dim=1))
                     _loss = self.model_param.get('loss_torch')(_prediction, _target)
                     _predictions.extend(_pred.detach().tolist())
                     _observations.extend(_target.detach().numpy().tolist())
@@ -1002,6 +1069,23 @@ class NetworkGenerator(NeuralNetwork):
                     self.obs = copy.deepcopy(_observations)
                     self.pred = copy.deepcopy(_predictions)
                     self._eval(iter_type=_iter_type, obs=_observations, pred=_predictions)
+
+    def _train_transformer(self):
+        """
+        Train neural network using deep learning framework 'PyTorch' (transformer only)
+        """
+        self.model.train_model(train_df=self.train_data_df,
+                               multi_label=False if self.output_size <= 2 else True,
+                               output_dir=None,
+                               show_running_loss=True,
+                               eval_df=self.val_data_df,
+                               verbose=True
+                               )
+        _result, _predictions, _wrong_predictions = self.model.eval_model(self.train_data_df)
+        self._eval(iter_type='train', obs=self.train_data_df.values.tolist(), pred=_predictions)
+        del _result
+        del _predictions
+        del _wrong_predictions
 
     def generate_model(self) -> object:
         """
@@ -1018,6 +1102,7 @@ class NetworkGenerator(NeuralNetwork):
             _model = copy.deepcopy(NETWORK_TYPE.get(self.model_name))
         else:
             _model = copy.deepcopy(NETWORK_TYPE.get(self.model_name))
+        self.transformer = True if self.model_name == 'transformer' else False
         if len(self.input_param.keys()) == 0:
             self.model_param = getattr(NeuralNetwork(target=self.target,
                                                      predictors=self.predictors,
@@ -1165,35 +1250,38 @@ class NetworkGenerator(NeuralNetwork):
         if self.model_name is None:
             return self
         else:
-            if len(self.input_param.keys()) == 0:
-                self.model_param = getattr(NeuralNetwork(target=self.target,
-                                                         predictors=self.predictors,
-                                                         output_layer_size=self.output_size,
-                                                         x_train=self.x_train,
-                                                         y_train=self.y_train,
-                                                         x_test=self.x_test,
-                                                         y_test=self.y_test,
-                                                         x_val=self.x_val,
-                                                         y_val=self.y_val,
-                                                         train_data_path=self.train_data_path,
-                                                         test_data_path=self.test_data_path,
-                                                         validation_data_path=self.validation_data_path
-                                                         ),
-                                           '{}_param'.format(NETWORK_TYPE.get(self.model_name))
-                                           )()
-                self.model_param.update(self._get_param_space(general=True))
-                self.model_param.update(learning_rate=0.001)
-                if self.sequential_type == 'text':
-                    self._config_params(natural_language=True)
+            if self.transformer:
+                pass
             else:
-                self.model_param = copy.deepcopy(self.input_param)
-            if len(self.predictors) > 0:
-                if self.target != '':
-                    self._import_data_torch()
+                if len(self.input_param.keys()) == 0:
+                    self.model_param = getattr(NeuralNetwork(target=self.target,
+                                                             predictors=self.predictors,
+                                                             output_layer_size=self.output_size,
+                                                             x_train=self.x_train,
+                                                             y_train=self.y_train,
+                                                             x_test=self.x_test,
+                                                             y_test=self.y_test,
+                                                             x_val=self.x_val,
+                                                             y_val=self.y_val,
+                                                             train_data_path=self.train_data_path,
+                                                             test_data_path=self.test_data_path,
+                                                             validation_data_path=self.validation_data_path
+                                                             ),
+                                               '{}_param'.format(NETWORK_TYPE.get(self.model_name))
+                                               )()
+                    self.model_param.update(self._get_param_space(general=True))
+                    self.model_param.update(learning_rate=0.001)
+                    if self.sequential_type == 'text':
+                        self._config_params(natural_language=True)
                 else:
-                    raise NeuralNetworkException('No target feature found')
-            else:
-                raise NeuralNetworkException('No predictors found')
+                    self.model_param = copy.deepcopy(self.input_param)
+                if len(self.predictors) > 0:
+                    if self.target != '':
+                        self._import_data_torch()
+                    else:
+                        raise NeuralNetworkException('No target feature found')
+                else:
+                    raise NeuralNetworkException('No predictors found')
             self.model = getattr(NeuralNetwork(target=self.target,
                                                predictors=self.predictors,
                                                output_layer_size=self.output_size,
@@ -1219,14 +1307,25 @@ class NetworkGenerator(NeuralNetwork):
         :param validation: bool
             Whether to run validation or testing iteration
         """
-        if self.learning_type == 'batch':
-            self._batch_learning(train=False, eval_set='val' if validation else 'test')
-        elif self.learning_type == 'stochastic':
-            self._stochastic_learning()
+        if self.transformer:
+            if validation:
+                _result, _predictions, _wrong_predictions = self.model.eval_model(self.val_data_df)
+                self._eval(iter_type='val', obs=self.val_data_df.values.tolist(), pred=_predictions)
+            else:
+                _result, _predictions, _wrong_predictions = self.model.eval_model(self.test_data_df)
+                self._eval(iter_type='test', obs=self.test_data_df.values.tolist(), pred=_predictions)
+            del _result
+            del _predictions
+            del _wrong_predictions
+        else:
+            if self.learning_type == 'batch':
+                self._batch_learning(train=False, eval_set='val' if validation else 'test')
+            elif self.learning_type == 'stochastic':
+                self._stochastic_learning()
 
     def predict(self):
         """
-        Get prediction from trained supervised machine learning model
+        Get prediction from pre-trained neural network using PyTorch
         """
         if self.test_iter is None:
             self.eval(validation=True)
@@ -1240,22 +1339,36 @@ class NetworkGenerator(NeuralNetwork):
         :param file_path: str
             Complete file path of the PyTorch model to save
         """
-        torch.save(obj=self.model, f=file_path)
+        if self.transformer:
+            self.model.save_model(output_dir=file_path,
+                                  optimizer=None,
+                                  scheduler=None,
+                                  model=None,
+                                  results=None
+                                  )
+        else:
+            torch.save(obj=self.model, f=file_path)
 
-    def train(self):
+    def train(self, transformer: bool = True):
         """
         Train neural network using deep learning framework 'PyTorch'
         """
         _t0: datetime = datetime.now()
-        for _ in range(0, self.model_param.get('epoch'), 1):
-            print('\nEpoch: {}'.format(_))
-            if self.learning_type == 'batch':
-                self._batch_learning(train=True)
-                self.eval(validation=True)
-            elif self.learning_type == 'stochastic':
-                self._stochastic_learning()
-            self._epoch_eval(iter_types=['train', 'val'])
-        self.train_time = (datetime.now() - _t0).seconds
+        if transformer:
+            self._train_transformer()
+            self.train_time = (datetime.now() - _t0).seconds
+            self.eval(validation=True)
+            self.eval(validation=False)
+        else:
+            for _ in range(0, self.model_param.get('epoch'), 1):
+                print('\nEpoch: {}'.format(_))
+                if self.learning_type == 'batch':
+                    self._batch_learning(train=True)
+                    self.eval(validation=True)
+                elif self.learning_type == 'stochastic':
+                    self._stochastic_learning()
+                self._epoch_eval(iter_types=['train', 'val'])
+            self.train_time = (datetime.now() - _t0).seconds
 
     def update_data(self,
                     x_train: np.ndarray,
