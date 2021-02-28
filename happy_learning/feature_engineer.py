@@ -3,12 +3,14 @@ import dask.dataframe as dd
 import gc
 import geocoder
 import inspect
+import json
 import numpy as np
 import multiprocessing
 import pandas as pd
 import re
 import os
 import sys
+import warnings
 
 from .chaid_decision_tree import CHAIDDecisionTree
 from .missing_data_analysis import MissingDataAnalysis
@@ -25,6 +27,10 @@ from easyexplore.utils import EasyExploreUtils, INVALID_VALUES, Log, StatsUtils
 from scipy.stats import boxcox
 from sklearn.preprocessing import Binarizer, MinMaxScaler, Normalizer, KBinsDiscretizer, RobustScaler, PolynomialFeatures, StandardScaler
 from typing import Dict, List, Tuple
+
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
 
 DASK_INDEXER: str = '___dask_index___'
 NOTEPAD: dict = {}
@@ -3708,7 +3714,7 @@ class FeatureEngineer:
                 Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log(msg='Method for multiple imputation ({}) not supported'.format(multiple_meth))
         else:
             for feature in features:
-                if MissingDataAnalysis(df=DATA_PROCESSING.get('df')).has_nan():
+                if MissingDataAnalysis(df=DATA_PROCESSING.get('df'), features=[feature]).has_nan():
                     _std: float = DATA_PROCESSING['df'][feature].std().compute()
                     if single_meth == 'constant':
                         if impute_int_value is None:
@@ -3739,7 +3745,7 @@ class FeatureEngineer:
                             if len(other_mis_values) > 0:
                                 for mis in other_mis_values:
                                     DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].replace(mis, np.nan)
-                        if MissingDataAnalysis(df=DATA_PROCESSING.get('df')).has_nan():
+                        if MissingDataAnalysis(df=DATA_PROCESSING.get('df'), features=[feature]).has_nan():
                             DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].fillna(value=_imp_value, method=None)
                             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Imputed feature "{}" using {}: {}'.format(feature, single_meth, str(_imp_value)))
                     _std_diff: float = 1 - round(_std / DATA_PROCESSING['df'][feature].std().compute())
