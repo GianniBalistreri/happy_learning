@@ -30,7 +30,7 @@ requires = [r.strip() for r in requires.split('\n') if ((r.strip()[0] != "#") an
 
 setuptools.setup(
     name='happy_learning',
-    version='0.0.8',
+    version='0.0.9',
     author='Gianni Francesco Balistreri',
     author_email='gbalistreri@gmx.de',
     description='Toolbox for easy and effective developing of supervised machine learning models as proof-of-concept',
@@ -72,6 +72,7 @@ setuptools.setup(
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
         'Operating System :: OS Independent',
     ],
     python_requires='>=3.6',

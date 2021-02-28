@@ -55,7 +55,7 @@ class MissingDataAnalysis:
             self.df: dd.DataFrame = df
         else:
             raise MissingDataAnalysisException('Format of data set ({}) not supported. Use Pandas or dask DataFrame instead'.format(type(df)))
-        self.features: str = self.df.columns.to_list() if features is None else features
+        self.features: List[str] = self.df.columns.to_list() if features is None else features
         if len(self.features) == 0:
             raise MissingDataAnalysisException('No features found. Please check your parameter config')
         if other_mis is not None:
@@ -86,6 +86,7 @@ class MissingDataAnalysis:
     def _is_missing(x) -> int:
         """
         Check if value is missing value
+
         :return: int
             0 for valid value 1 for missing value
         """
