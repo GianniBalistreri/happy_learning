@@ -3,6 +3,7 @@ import geocoder
 import inspect
 import itertools
 import json
+import logging
 import numpy as np
 import pandas as pd
 import subprocess
@@ -149,7 +150,11 @@ class HappyLearningUtils:
         return np.array(array_with_nan[~pd.isnull(array_with_nan)], dtype=np.int_)
 
     @staticmethod
-    def dask_setup(client_name: str, client_address: str = None, mode: str = 'threads', **kwargs) -> Client:
+    def dask_setup(client_name: str,
+                   client_address: str = None,
+                   mode: str = 'threads',
+                   show_warnings: bool = False,
+                   **kwargs) -> Client:
         """
         Setup dask framework for parallel computation
 
@@ -164,6 +169,9 @@ class HappyLearningUtils:
                 threads: Multi-Threading
                 processes: Multi-Processing
                 single-threaded: Single thread and process
+
+        :param show_warnings: bool
+            Print warnings or just errors
 
         :param kwargs: dict
             Key-word arguments for dask client implementation
@@ -193,6 +201,7 @@ class HappyLearningUtils:
                       direct_to_workers=kwargs.get('direct_to_workers'),
                       connection_limit=512 if kwargs.get('connection_limit') is None else kwargs.get('connection_limit'),
                       processes=False if kwargs.get('processes') is None else kwargs.get('processes'),
+                      silence_logs=logging.WARNING if show_warnings else logging.ERROR,
                       **kwargs
                       )
 

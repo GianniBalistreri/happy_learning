@@ -3,7 +3,6 @@ import dask.dataframe as dd
 import gc
 import geocoder
 import inspect
-import json
 import numpy as np
 import multiprocessing
 import pandas as pd
@@ -3748,8 +3747,11 @@ class FeatureEngineer:
                         if MissingDataAnalysis(df=DATA_PROCESSING.get('df'), features=[feature]).has_nan():
                             DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].fillna(value=_imp_value, method=None)
                             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Imputed feature "{}" using {}: {}'.format(feature, single_meth, str(_imp_value)))
-                    _std_diff: float = 1 - round(_std / DATA_PROCESSING['df'][feature].std().compute())
-                    Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Variance of feature ({}) {}creases by {}%'.format(feature, 'in' if _std_diff > 0 else 'de', _std_diff))
+                    try:
+                        _std_diff: float = 1 - round(_std / DATA_PROCESSING['df'][feature].std().compute())
+                        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Variance of feature ({}) {}creases by {}%'.format(feature, 'in' if _std_diff > 0 else 'de', _std_diff))
+                    except ValueError:
+                        pass
                 else:
                     Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='No missing values in feature ({}) found'.format(feature))
 
