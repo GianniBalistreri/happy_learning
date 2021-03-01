@@ -3,6 +3,7 @@ import geocoder
 import inspect
 import itertools
 import json
+import logging
 import numpy as np
 import pandas as pd
 import subprocess
@@ -193,6 +194,7 @@ class HappyLearningUtils:
                       direct_to_workers=kwargs.get('direct_to_workers'),
                       connection_limit=512 if kwargs.get('connection_limit') is None else kwargs.get('connection_limit'),
                       processes=False if kwargs.get('processes') is None else kwargs.get('processes'),
+                      silence_logs=logging.ERROR,
                       **kwargs
                       )
 
