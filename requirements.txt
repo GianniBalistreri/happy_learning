@@ -1,5 +1,6 @@
 Chaid>=5.1.0
 catboost>=0.24.2
+combo>=0.1.1
 dask>=2.25.0
 dask-ml>=1.7.0
 easyexplore>=0.6.0
