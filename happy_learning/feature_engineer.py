@@ -31,6 +31,7 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 
+CLOUD_PROVIDER: List[str] = ['aws', 'google']
 DASK_INDEXER: str = '___dask_index___'
 NOTEPAD: dict = {}
 PREDICTORS: List[str] = []
@@ -4623,7 +4624,13 @@ class FeatureEngineer:
                              )
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Transformed feature "{}" using rounding'.format(feature))
 
-    def save(self, file_path: str = None, cls_obj: bool = True, overwrite: bool = True, create_dir: bool = True):
+    def save(self,
+             file_path: str = None,
+             cls_obj: bool = True,
+             overwrite: bool = True,
+             create_dir: bool = False,
+             cloud: str = None
+             ):
         """
         Save data engineering information
 
@@ -4638,7 +4645,17 @@ class FeatureEngineer:
 
         :param create_dir: bool
             Whether to create directory if they are not existed or not
+
+        :param cloud: str
+            Name of the cloud provider
+                -> google: Google Cloud Storage
         """
+        if cloud is not None:
+            if cloud not in CLOUD_PROVIDER:
+                raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
+            _bucket_name: str = file_path.split("//")[1].split("/")[0]
+        else:
+            _bucket_name: str = None
         global TEXT_MINER
         global DATA_PROCESSING
         TEXT_MINER['obj'] = None
@@ -4669,13 +4686,17 @@ class FeatureEngineer:
                 DataExporter(obj=self,
                              file_path=_file_path,
                              create_dir=create_dir,
-                             overwrite=overwrite
+                             overwrite=overwrite,
+                             cloud=cloud,
+                             bucket_name=_bucket_name
                              ).file()
             else:
                 DataExporter(obj=self.data_processing,
                              file_path=_file_path,
                              create_dir=create_dir,
-                             overwrite=overwrite
+                             overwrite=overwrite,
+                             cloud=cloud,
+                             bucket_name=_bucket_name
                              ).file()
             self.data_processing = None
             self.dask_client = HappyLearningUtils().dask_setup(client_name='feature_engineer',
