@@ -4627,6 +4627,7 @@ class FeatureEngineer:
     def save(self,
              file_path: str = None,
              cls_obj: bool = True,
+             write_parquet: bool = True,
              overwrite: bool = True,
              create_dir: bool = False,
              cloud: str = None
@@ -4639,6 +4640,9 @@ class FeatureEngineer:
 
         :param cls_obj: bool
             Whether to export class object or processing dictionary as pickle file
+
+        :param write_parquet: bool
+            Write data set (dask DataFrame) as parquet
 
         :param overwrite: bool
             Whether to overwrite existing file or not
@@ -4675,12 +4679,13 @@ class FeatureEngineer:
             else:
                 _file_path: str = file_path
             self.dask_client = None
-            _parquet_file_path: str = _file_path.split('.')[0]
-            DataExporter(obj=DATA_PROCESSING.get('df'),
-                         file_path='{}_data.parquet'.format(_parquet_file_path),
-                         create_dir=False,
-                         overwrite=True
-                         ).file()
+            if write_parquet:
+                _parquet_file_path: str = _file_path.split('.')[0]
+                DataExporter(obj=DATA_PROCESSING.get('df'),
+                             file_path='{}_data.parquet'.format(_parquet_file_path),
+                             create_dir=create_dir,
+                             overwrite=overwrite
+                             ).file()
             DATA_PROCESSING['df'] = None
             if cls_obj:
                 DataExporter(obj=self,
