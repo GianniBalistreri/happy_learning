@@ -817,6 +817,7 @@ class FeatureEngineer:
                  n_cpu_cores: int = -1,
                  seed: int = 1234,
                  partitions: int = 4,
+                 cloud: str = None,
                  **kwargs
                  ):
         """
@@ -894,6 +895,11 @@ class FeatureEngineer:
 
         :param partitions: int
             Number of partitions to split data set using dask parallel computing framework
+
+        :param cloud: str
+            Name of the cloud provider:
+                -> google: Google Cloud Storage
+                -> aws: AWS Cloud
 
         :param kwargs: dict
             Key-word arguments
@@ -986,7 +992,7 @@ class FeatureEngineer:
                                                                    )
         else:
             _init: bool = False
-            self.load(file_path=feature_engineer_file_path)
+            self.load(file_path=feature_engineer_file_path, cloud=cloud)
         if _init:
             if 'Unnamed: 0' in list(DATA_PROCESSING['df'].columns):
                 del DATA_PROCESSING['df']['Unnamed: 0']
