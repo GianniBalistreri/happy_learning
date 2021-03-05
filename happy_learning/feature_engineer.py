@@ -3914,7 +3914,7 @@ class FeatureEngineer:
             PROCESSING_ACTION_SPACE = self.data_processing.data_processing.get('processing_action_space')
             TEXT_MINER = self.data_processing.data_processing.get('text_miner')
             self.data_processing = None
-            DATA_PROCESSING['df'] = DataImporter(file_path='{}_data.parquet'.format(file_path.split('.')[0]),
+            DATA_PROCESSING['df'] = DataImporter(file_path='{}.parquet'.format(file_path.split('.')[0]),
                                                  as_data_frame=True,
                                                  use_dask=True,
                                                  create_dir=False
@@ -4701,7 +4701,7 @@ class FeatureEngineer:
             if write_parquet:
                 _parquet_file_path: str = _file_path.split('.')[0]
                 DataExporter(obj=DATA_PROCESSING.get('df'),
-                             file_path='{}_data.parquet'.format(_parquet_file_path),
+                             file_path='{}.parquet'.format(_parquet_file_path),
                              create_dir=create_dir,
                              overwrite=overwrite
                              ).file()
