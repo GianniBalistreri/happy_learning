@@ -3858,16 +3858,27 @@ class FeatureEngineer:
                                          )
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Generated numeric linguistic feature "{}" based on text feature "{}"'.format(lf, feature))
 
-    def load(self, file_path: str = None, **kwargs):
+    def load(self, file_path: str = None, cloud: str = None, **kwargs):
         """
         Load data engineering information (FeatureEngineer object)
 
         :param file_path: str
             Complete file path of the external stored engineering information
 
+        :param cloud: str
+            Name of the cloud provider
+                -> google: Google Cloud Storage
+                -> aws: AWS Cloud
+
         :param kwargs: dict
             Key-word arguments
         """
+        if cloud is not None:
+            if cloud not in CLOUD_PROVIDER:
+                raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
+            _bucket_name: str = file_path.split("//")[1].split("/")[0]
+        else:
+            _bucket_name: str = None
         global DATA_PROCESSING
         global FEATURE_TYPES
         global SPECIAL_JOBS
@@ -3880,7 +3891,9 @@ class FeatureEngineer:
             if len(file_path) > 0:
                 self.data_processing = DataImporter(file_path=file_path,
                                                     as_data_frame=False,
-                                                    create_dir=False
+                                                    create_dir=False,
+                                                    cloud=cloud,
+                                                    bucket_name=_bucket_name
                                                     ).file()
                 self.kwargs = self.data_processing.data_processing.get('kwargs')
         if self.data_processing is None:
