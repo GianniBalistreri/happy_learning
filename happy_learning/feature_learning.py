@@ -28,8 +28,10 @@ class FeatureLearning:
                  train_categorical_critic: bool = False,
                  engineer_time_disparity: bool = True,
                  engineer_categorical: bool = True,
+                 engineer_continuous: bool = True,
                  engineer_text: bool = True,
                  output_path: str = None,
+                 save_temp_data: bool = False,
                  **kwargs
                  ):
         """
@@ -57,11 +59,17 @@ class FeatureLearning:
         :param engineer_categorical: bool
             Whether to process categorical features or not
 
+        :param engineer_continuous: bool
+            Whether to process continuous features or not
+
         :param engineer_text: bool
             Whether to process text features or not
 
         :param output_path: str
             Complete path to write temporary data sets
+
+        :param save_temp_data: bool
+            Save temporary data before engineering categorical features (one-hot-merging)
 
         :param kwargs: dict
             Key-word arguments
@@ -74,6 +82,7 @@ class FeatureLearning:
         self.train_continuous_critic: bool = train_continuous_critic
         self.train_categorical_critic: bool = train_categorical_critic
         self.engineer_text: bool = engineer_text
+        self.engineer_continuous: bool = engineer_continuous
         self.engineer_categorical: bool = engineer_categorical
         self.engineer_time_disparity: bool = engineer_time_disparity
         if output_path is None:
@@ -82,6 +91,7 @@ class FeatureLearning:
             self.output_path: str = output_path.replace('\\', '/')
             if self.output_path[len(self.output_path) - 1] != '/':
                 self.output_path = '{}/'.format(self.output_path)
+        self.save_temp_data: bool = save_temp_data
         if feature_engineer is None:
             self.feature_engineer = FeatureEngineer(df=df,
                                                     target_feature=target,
@@ -301,38 +311,51 @@ class FeatureLearning:
         :return: FeatureEngineer
             FeatureEngineer object containing the hole feature engineering, meta data included
         """
-        self._generate_continuous_features()
-        if len(self.feature_engineer.get_predictors()) >= 4:
-            if self.train_continuous_critic:
-                self._feature_critic()
-            self._pre_define_max_features(feature_type='continuous', scale=True if self.user_defined_max_features <= 1 else False)
-            self._evolve_feature_learning_ai(feature_type='continuous')
-            self._feature_learning(feature_type='continuous')
-        else:
-            Log(write=False, env='dev').log(msg='Not enough continuous or ordinal features to efficiently run reinforcement feature learning framework')
-        if self.engineer_categorical:
-            if self.output_path is None:
-                Log(write=False, level='info').log(msg='No output path found for writing temporary data for applying one-hot merging')
+        if self.engineer_continuous:
+            self._generate_continuous_features()
+            if len(self.feature_engineer.get_predictors()) >= 4:
+                if self.train_continuous_critic:
+                    self._feature_critic()
+                self._pre_define_max_features(feature_type='continuous', scale=True if self.user_defined_max_features <= 1 else False)
+                self._evolve_feature_learning_ai(feature_type='continuous')
+                self._feature_learning(feature_type='continuous')
             else:
-                self.feature_engineer.save(file_path='{}feature_learning.p'.format(self.output_path),
-                                           cls_obj=True,
-                                           overwrite=True,
-                                           create_dir=False
-                                           )
-                del self.feature_engineer
-                self.feature_engineer: FeatureEngineer = FeatureEngineer(feature_engineer_file_path='{}feature_learning.p'.format(self.output_path))
-                _continuous_features: List[str] = self.feature_engineer.get_feature_types().get('continuous')
-                self.feature_engineer.clean(markers=dict(features=_continuous_features))
+                Log(write=False, env='dev').log(msg='Not enough continuous or ordinal features to efficiently run reinforcement feature learning framework')
+        if self.engineer_categorical:
+            if self.save_temp_data:
+                if self.output_path is None:
+                    Log(write=False, level='info').log(msg='No output path found for writing temporary data for applying one-hot merging')
+                else:
+                    self.feature_engineer.save(file_path='{}feature_learning.p'.format(self.output_path),
+                                               cls_obj=True,
+                                               overwrite=True,
+                                               create_dir=False
+                                               )
+                    del self.feature_engineer
+                    self.feature_engineer: FeatureEngineer = FeatureEngineer(feature_engineer_file_path='{}feature_learning.p'.format(self.output_path))
+                    _continuous_features: List[str] = self.feature_engineer.get_feature_types().get('continuous')
+                    self.feature_engineer.clean(markers=dict(features=_continuous_features))
+                    self._generate_categorical_features()
+                    _remaining_non_categorical_features: List[str] = self.feature_engineer.get_feature_types().get('date')# + self.feature_engineer.get_feature_types().get('text')
+                    self.feature_engineer.clean(markers=dict(features=_remaining_non_categorical_features))
+                    if len(self.feature_engineer.get_predictors()) >= 4:
+                        if self.train_categorical_critic:
+                            self._feature_critic()
+                        self._pre_define_max_features(feature_type='categorical', scale=True if self.user_defined_max_features <= 1 else False)
+                        self._evolve_feature_learning_ai(feature_type='categorical')
+                        self._feature_learning(feature_type='categorical')
+                        self.feature_engineer.merge_engineer(feature_engineer_file_path='{}feature_learning.p'.format(self.output_path))
+                    else:
+                        Log(write=False, env='dev').log(msg='Not enough categorical features to efficiently run reinforcement feature learning framework')
+            else:
                 self._generate_categorical_features()
-                _remaining_non_categorical_features: List[str] = self.feature_engineer.get_feature_types().get('date')# + self.feature_engineer.get_feature_types().get('text')
-                self.feature_engineer.clean(markers=dict(features=_remaining_non_categorical_features))
                 if len(self.feature_engineer.get_predictors()) >= 4:
                     if self.train_categorical_critic:
                         self._feature_critic()
-                    self._pre_define_max_features(feature_type='categorical', scale=True if self.user_defined_max_features <= 1 else False)
+                    self._pre_define_max_features(feature_type='categorical',
+                                                  scale=True if self.user_defined_max_features <= 1 else False)
                     self._evolve_feature_learning_ai(feature_type='categorical')
                     self._feature_learning(feature_type='categorical')
-                    self.feature_engineer.merge_engineer(feature_engineer_file_path='{}feature_learning.p'.format(self.output_path))
                 else:
                     Log(write=False, env='dev').log(msg='Not enough categorical features to efficiently run reinforcement feature learning framework')
         if len(self.evolved_features) > 0:
