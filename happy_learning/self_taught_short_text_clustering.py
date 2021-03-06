@@ -77,16 +77,13 @@ class Clustering(torch.nn.Module):
     """
     Class for building clustering layer for updating network weights used in encoder
     """
-    def __init__(self, n_clusters: int, in_features: int, out_features: int, alpha: float = 1.0):
+    def __init__(self, dims: int, n_clusters: int, alpha: float = 1.0):
         """
-        :param n_clusters: int
-            Number of pre-defined clusters
-
-        :param in_features: int
+        :param dims: int
             Number of input dimensions
 
-        :param out_features: int
-            Number of output dimensions
+        :param n_clusters: int
+            Number of pre-defined clusters
 
         :param alpha: float
 
@@ -94,7 +91,7 @@ class Clustering(torch.nn.Module):
         super(Clustering, self).__init__()
         self.alpha: float = alpha
         self.n_clusters: int = n_clusters
-        self.weights_layer: torch.nn.Parameter = torch.nn.Parameter(data=torch.Tensor(in_features, out_features), requires_grad=False)
+        self.weights_layer: torch.nn.Parameter = torch.nn.Parameter(data=torch.Tensor(self.n_clusters, dims), requires_grad=False)
         self.weights_layer = torch.nn.init.xavier_uniform_(tensor=self.weights_layer, gain=1.0)
 
     def forward(self, x: torch.tensor) -> torch.tensor:
@@ -107,10 +104,9 @@ class Clustering(torch.nn.Module):
         :return: torch.tensor
             Soft cluster assignment (measure similarity between embedding points and cluster centroids)
         """
-        self.weights_layer = torch.nn.Parameter(data=x, requires_grad=False)
-        _q = 1.0 / (1.0 + (torch.sum(torch.square(torch.unsqueeze(input=self.weights_layer, dim=2) - self.n_clusters)) / self.alpha))
+        _q = 1.0 / (1.0 + (torch.sum(torch.square(torch.unsqueeze(input=x, dim=1) - self.weights_layer), dim=2) / self.alpha))
         _q = torch.pow(input=_q, exponent=(self.alpha + 1.0) / 2.0)
-        _q = (_q.transpose(dim0=0, dim1=0) / torch.sum(_q)).transpose(0, 0)
+        _q = (_q.transpose(dim0=1, dim1=0) / torch.sum(_q, dim=1)).transpose(1, 0)
         return _q
 
     def set_weights(self, cluster_centers: np.ndarray):
@@ -334,8 +330,6 @@ class STC(torch.nn.Module):
         """
         super(STC, self).__init__()
         self.dims: List[int] = dimensions
-        self.input_dim: int = dimensions[0]
-        self.n_stacks: int = len(self.dims) - 1
         self.n_clusters: int = n_clusters
         self.alpha: float = alpha
         self.n_iterations: int = n_iterations
@@ -352,11 +346,7 @@ class STC(torch.nn.Module):
         self.auto_encoder = AutoEncoder(encoder_hidden_layer=encoder_hidden_layer, decoder_hidden_layer=decoder_hidden_layer)
         print('Pre-train AutoEncoder ...')
         self.pre_train_auto_encoder()
-        _clustering_layer = Clustering(n_clusters=self.n_clusters,
-                                       in_features=20,
-                                       out_features=20,
-                                       alpha=self.alpha
-                                       )
+        _clustering_layer = Clustering(dims=self.dims[1], n_clusters=self.n_clusters, alpha=self.alpha)
         self.model.add_module(name='encoder', module=self.encoder)
         self.model.add_module(name='cluster', module=_clustering_layer)
 
@@ -398,49 +388,50 @@ class STC(torch.nn.Module):
         if torch.cuda.is_available():
             self.model.cuda()
         self.model.train()
-        if self.optimizer == 'rmsprop':
-            _optim: torch.optim = torch.optim.RMSprop(params=self.model.parameters(), lr=0.0001)
-        elif self.optimizer == 'adam':
-            _optim: torch.optim = torch.optim.Adam(params=self.model.parameters(), lr=0.0001)
-        elif self.optimizer == 'sgd':
-            _optim: torch.optim = torch.optim.SGD(params=self.model.parameters(), lr=0.0001)
-        else:
-            raise SelfTaughtShortTextClusteringException('Optimizer ({}) not supported'.format(self.optimizer))
-        _loss_function: torch.nn.KLDivLoss = torch.nn.KLDivLoss()
-        _k_means: KMeans = KMeans(n_clusters=self.n_clusters, n_init=self.n_iterations)
-        _pred: np.ndarray = _k_means.fit_predict(self.encoder(x).detach().numpy())
-        _last_pred: np.ndarray = np.copy(_pred)
-        self.model[1].set_weights(cluster_centers=_k_means.cluster_centers_)
-        _index: int = 0
-        _index_array: np.ndarray = np.arange(x.shape[0])
-        for i in range(0, self.max_iterations, 1):
-            print('Iteration: ', i)
-            if i % self.update_interval == 0:
-                _q = self.model(x)
-                _p = self.target_distribution(_q)
-                _pred = _q.argmax(-1)
-                # check stopping criterion
-                print('_pred', _pred)
-                print('_pred.shape', _pred.shape)
-                print('_last_pred', _last_pred)
-                _delta_label = np.sum(_pred != _last_pred).astype(np.float32) / _pred.shape[0]
-                _last_pred = np.copy(_pred)
-                if i > 0 and _delta_label < self.tol:
-                    break
-            _idx: np.ndarray = _index_array[_index * self.batch_size: min((_index + 1) * self.batch_size, x.shape[0])]
-            _predictors, _target = self.iterator.dataset[_idx]
-            if torch.cuda.is_available():
-                _predictors = _predictors.cuda()
-            _optim.zero_grad()
-            _prediction = torch.softmax(input=self.model(_predictors), dim=0)
-            _top_class, _top_p = _prediction.topk(k=1, dim=0)
-            _predictions.extend(_top_class.detach().tolist())
-            _observations.extend(_target.detach().numpy().tolist())
-            _loss = _loss_function(_prediction, _p[_idx])
-            _loss.backward()
-            self._clip_gradient(clip_value=1e-1)
-            _optim.step()
-            _index = _index + 1 if (_index + 1) * self.batch_size <= x.shape[0] else 0
+        with torch.autograd.set_detect_anomaly(True):
+            if self.optimizer == 'rmsprop':
+                _optim: torch.optim = torch.optim.RMSprop(params=filter(lambda p: p.requires_grad, self.model.parameters()), lr=0.0001)
+            elif self.optimizer == 'adam':
+                _optim: torch.optim = torch.optim.Adam(params=self.model.parameters(), lr=0.0001)
+            elif self.optimizer == 'sgd':
+                _optim: torch.optim = torch.optim.SGD(params=self.model.parameters(), lr=0.0001)
+            else:
+                raise SelfTaughtShortTextClusteringException('Optimizer ({}) not supported'.format(self.optimizer))
+            _loss_function: torch.nn.KLDivLoss = torch.nn.KLDivLoss()
+            _k_means: KMeans = KMeans(n_clusters=self.n_clusters, n_init=self.n_iterations)
+            _pred: np.ndarray = _k_means.fit_predict(self.encoder(x).detach().numpy())
+            _last_pred: np.ndarray = np.copy(_pred)
+            self.model[1].set_weights(cluster_centers=_k_means.cluster_centers_)
+            _index: int = 0
+            _index_array: np.ndarray = np.arange(x.shape[0])
+            for i in range(0, self.max_iterations, 1):
+                print('Iteration: ', i)
+                if i % self.update_interval == 0:
+                    _q = self.model(x)
+                    _p = self.target_distribution(_q)
+                    _pred = _q.argmax(1)
+                    # check stopping criterion
+                    _delta_label = np.sum(_pred != _last_pred).astype(np.float32) / _pred.shape[0]
+                    _last_pred = np.copy(_pred)
+                    if i > 0 and _delta_label < self.tol:
+                        break
+                _idx: np.ndarray = _index_array[_index * self.batch_size: min((_index + 1) * self.batch_size, x.shape[0])]
+                _predictors, _target = self.iterator.dataset[_idx]
+                if torch.cuda.is_available():
+                    _predictors = _predictors.cuda()
+                _prediction = torch.softmax(input=self.model(_predictors), dim=0)
+                print('Predictions', _prediction)
+                _top_class, _top_p = _prediction.topk(k=1, dim=0)
+                print('Top Class', _top_class)
+                print('Top Prob', _top_p)
+                _predictions.extend(_top_class.detach().tolist())
+                _observations.extend(_target.detach().numpy().tolist())
+                _loss = _loss_function(_prediction, _p[_idx].detach())
+                _optim.zero_grad()
+                _loss.backward(retain_graph=True)
+                self._clip_gradient(clip_value=1e-1)
+                _optim.step()
+                _index = _index + 1 if (_index + 1) * self.batch_size <= x.shape[0] else 0
         return _observations, _predictions
 
     def predict(self, x: np.ndarray) -> int:
@@ -454,7 +445,7 @@ class STC(torch.nn.Module):
             Label value
         """
         _q: np.ndarray = self.model(x)
-        return _q.argmax(0)
+        return _q.argmax(1)
 
     def pre_train_auto_encoder(self):
         """
@@ -464,7 +455,7 @@ class STC(torch.nn.Module):
             self.auto_encoder.cuda()
         self.auto_encoder.train()
         if self.optimizer == 'rmsprop':
-            _optim: torch.optim = torch.optim.RMSprop(params=self.auto_encoder.parameters(), lr=0.0001)
+            _optim: torch.optim = torch.optim.RMSprop(params=filter(lambda p: p.requires_grad, self.auto_encoder.parameters()), lr=0.0001)
         elif self.optimizer == 'adam':
             _optim: torch.optim = torch.optim.Adam(params=self.auto_encoder.parameters(), lr=0.0001)
         elif self.optimizer == 'sgd':
@@ -497,4 +488,4 @@ class STC(torch.nn.Module):
         :return:
         """
         _weight = q ** 2 / q.sum(0)
-        return (_weight.transpose(0, 0) / _weight.sum(0)).transpose(0, 0)
+        return (_weight.transpose(1, 0) / _weight.sum(1)).transpose(1, 0)

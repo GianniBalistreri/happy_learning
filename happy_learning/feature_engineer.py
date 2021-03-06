@@ -3879,12 +3879,12 @@ class FeatureEngineer:
         :param kwargs: dict
             Key-word arguments
         """
-        if cloud is not None:
+        if cloud is None:
+            _bucket_name: str = None
+        else:
             if cloud not in CLOUD_PROVIDER:
                 raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
             _bucket_name: str = file_path.split("//")[1].split("/")[0]
-        else:
-            _bucket_name: str = None
         global DATA_PROCESSING
         global FEATURE_TYPES
         global SPECIAL_JOBS
@@ -4147,7 +4147,8 @@ class FeatureEngineer:
                        merge_by: str = 'id',
                        id_var: str = None,
                        join_type: str = 'inner',
-                       concat_by: str = 'col'
+                       concat_by: str = 'col',
+                       cloud: str = None
                        ):
         """
         Merge two complete FeatureEngineer class objects
@@ -4177,16 +4178,34 @@ class FeatureEngineer:
             Defining concatenation type:
                 -> row: Concatenate both data frames row-wise (the number of rows increases)
                 -> col: Concatenate both data frames column-wise (the number of columns increases)
+
+        :param cloud: str
+            Name of the cloud provider:
+                -> google: Google Cloud Provider
+                -> aws: AWS Cloud
         """
-        if not os.path.isfile(feature_engineer_file_path):
-            raise FeatureEngineerException('No external FeatureEngineer class object found')
-        _external_engineer = DataImporter(file_path=feature_engineer_file_path, as_data_frame=False).file()
+        if cloud is None:
+            _bucket_name: str = None
+            if not os.path.isfile(feature_engineer_file_path):
+                raise FeatureEngineerException('No external FeatureEngineer class object found')
+        else:
+            if cloud not in CLOUD_PROVIDER:
+                raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
+            _bucket_name: str = feature_engineer_file_path.split("//")[1].split("/")[0]
+        _external_engineer = DataImporter(file_path=feature_engineer_file_path,
+                                          as_data_frame=False,
+                                          cloud=cloud,
+                                          bucket_name=_bucket_name
+                                          ).file()
         if isinstance(_external_engineer, FeatureEngineer):
             _external_engineer_data_processing: dict = _external_engineer.data_processing
             if _external_engineer_data_processing.get('feature_types') is None:
                 raise FeatureEngineerException('External file object is not a FeatureEngineer class object')
-            _external_data_set: dd.DataFrame = DataImporter(file_path='{}_data.parquet'.format(feature_engineer_file_path.split(sep='.')[0]),
-                                                            as_data_frame=True
+            _external_data_set: dd.DataFrame = DataImporter(file_path='{}.parquet'.format(feature_engineer_file_path.split(sep='.')[0]),
+                                                            as_data_frame=True,
+                                                            use_dask=True,
+                                                            cloud=cloud,
+                                                            bucket_name=_bucket_name
                                                             ).file()
             _external_features: List[str] = []
             for ft in _external_engineer_data_processing.get('feature_types').keys():
@@ -4673,12 +4692,12 @@ class FeatureEngineer:
             Name of the cloud provider
                 -> google: Google Cloud Storage
         """
-        if cloud is not None:
+        if cloud is None:
+            _bucket_name: str = None
+        else:
             if cloud not in CLOUD_PROVIDER:
                 raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
             _bucket_name: str = file_path.split("//")[1].split("/")[0]
-        else:
-            _bucket_name: str = None
         global TEXT_MINER
         global DATA_PROCESSING
         TEXT_MINER['obj'] = None
