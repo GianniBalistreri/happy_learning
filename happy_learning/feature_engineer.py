@@ -3913,7 +3913,8 @@ class FeatureEngineer:
             PROCESSING_ACTION_SPACE = self.data_processing.data_processing.get('processing_action_space')
             TEXT_MINER = self.data_processing.data_processing.get('text_miner')
             self.data_processing = None
-            DATA_PROCESSING['df'] = DataImporter(file_path='{}.parquet'.format(file_path.split('.')[0]),
+            DATA_PROCESSING['df'] = DataImporter(file_path=file_path.split('.')[0],
+                                                 #file_path='{}.parquet'.format(file_path.split('.')[0]),
                                                  as_data_frame=True,
                                                  use_dask=True,
                                                  create_dir=False
@@ -4200,7 +4201,8 @@ class FeatureEngineer:
             _external_engineer_data_processing: dict = _external_engineer.data_processing
             if _external_engineer_data_processing.get('feature_types') is None:
                 raise FeatureEngineerException('External file object is not a FeatureEngineer class object')
-            _external_data_set: dd.DataFrame = DataImporter(file_path='{}.parquet'.format(feature_engineer_file_path.split(sep='.')[0]),
+            _external_data_set: dd.DataFrame = DataImporter(file_path=feature_engineer_file_path.split(sep='.')[0],
+                                                            #file_path='{}.parquet'.format(feature_engineer_file_path.split(sep='.')[0]),
                                                             as_data_frame=True,
                                                             use_dask=True,
                                                             cloud=cloud,
@@ -4719,7 +4721,8 @@ class FeatureEngineer:
             if write_parquet:
                 _parquet_file_path: str = _file_path.split('.')[0]
                 DataExporter(obj=DATA_PROCESSING.get('df'),
-                             file_path='{}.parquet'.format(_parquet_file_path),
+                             file_path=_parquet_file_path,
+                             #file_path='{}.parquet'.format(_parquet_file_path),
                              create_dir=create_dir,
                              overwrite=overwrite
                              ).file()
