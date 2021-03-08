@@ -21,7 +21,7 @@ from datetime import datetime
 from dateutil import parser
 from easyexplore.anomaly_detector import AnomalyDetector
 from easyexplore.data_explorer import DataExplorer
-from easyexplore.data_import_export import DataExporter, DataImporter, FileUtilsException
+from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter, DataImporter, FileUtilsException
 from easyexplore.utils import EasyExploreUtils, INVALID_VALUES, Log, StatsUtils
 from scipy.stats import boxcox
 from sklearn.preprocessing import Binarizer, MinMaxScaler, Normalizer, KBinsDiscretizer, RobustScaler, PolynomialFeatures, StandardScaler
@@ -31,7 +31,6 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 
-CLOUD_PROVIDER: List[str] = ['aws', 'google']
 DASK_INDEXER: str = '___dask_index___'
 NOTEPAD: dict = {}
 PREDICTORS: List[str] = []
