@@ -12,13 +12,15 @@ from .sampler import MLSampler
 from .supervised_machine_learning import CLF_ALGORITHMS, ModelGeneratorClf, ModelGeneratorReg, REG_ALGORITHMS
 from .utils import HappyLearningUtils
 from datetime import datetime
-from easyexplore.data_import_export import DataExporter
+from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter
 from easyexplore.data_visualizer import DataVisualizer
 from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
 from typing import Dict, List
 
-warnings.filterwarnings('ignore')
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
 
 # TODO:
 #  Visualize:
@@ -76,6 +78,7 @@ class GeneticAlgorithm:
                  include_neural_networks: bool = False,
                  deep_learning_type: str = 'batch',
                  deep_learning_output_size: int = None,
+                 cloud: str = None,
                  multi_threading: bool = False,
                  multi_processing: bool = False,
                  log: bool = False,
@@ -216,6 +219,11 @@ class GeneticAlgorithm:
         :param deep_learning_output_size: int
             Number of neurons of the last layer of the neural network (necessary if you have separate train / test / validatation data file as input)
 
+        :param cloud: str
+            Name of the cloud provider
+                -> google: Google Cloud Storage
+                -> aws: AWS Cloud
+
         :param multi_threading: bool
             Whether to run genetic algorithm using multiple threads (of one cpu core) or single thread
 
@@ -238,6 +246,15 @@ class GeneticAlgorithm:
         self.model_params: dict = copy.deepcopy(model_params)
         self.deploy_model: bool = False
         self.n_training: int = 0
+        self.cloud: str = None
+        if self.cloud is None:
+            self.bucket_name: str = None
+        else:
+            if self.cloud not in CLOUD_PROVIDER:
+                raise GeneticAlgorithmException('Cloud provider ({}) not supported'.format(cloud))
+            if output_file_path is None:
+                raise GeneticAlgorithmException('Output file path is None')
+            self.bucket_name: str = output_file_path.split("//")[1].split("/")[0]
         self.include_neural_networks: bool = include_neural_networks
         _neural_nets: List[str] = []
         if models is None:
@@ -1244,18 +1261,42 @@ class GeneticAlgorithm:
         """
         # Export evolution history data:
         if evolution_history:
-            DataExporter(obj=self.evolution_history, file_path=os.path.join(self.output_file_path, 'evolution_history.p'), create_dir=True, overwrite=True).file()
+            DataExporter(obj=self.evolution_history,
+                         file_path=os.path.join(self.output_file_path, 'evolution_history.p'),
+                         create_dir=True,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name
+                         ).file()
         # Export generation history data:
         if generation_history:
-            DataExporter(obj=self.generation_history, file_path=os.path.join(self.output_file_path, 'generation_history.p'), create_dir=True, overwrite=True).file()
+            DataExporter(obj=self.generation_history,
+                         file_path=os.path.join(self.output_file_path, 'generation_history.p'),
+                         create_dir=True,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name
+                         ).file()
         if final_generation:
-            DataExporter(obj=self.final_generation, file_path=os.path.join(self.output_file_path, 'final_generation.p'), create_dir=True, overwrite=True).file()
+            DataExporter(obj=self.final_generation,
+                         file_path=os.path.join(self.output_file_path, 'final_generation.p'),
+                         create_dir=True,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name
+                         ).file()
         # Export evolved model:
         if model:
             if self.deep_learning:
                 self.population[self.best_individual_idx].save(file_path=os.path.join(self.output_file_path, 'model.p'))
             else:
-                DataExporter(obj=self.model, file_path=os.path.join(self.output_file_path, 'model.p'), create_dir=True, overwrite=True).file()
+                DataExporter(obj=self.model,
+                             file_path=os.path.join(self.output_file_path, 'model.p'),
+                             create_dir=True,
+                             overwrite=True,
+                             cloud=self.cloud,
+                             bucket_name=self.bucket_name
+                             ).file()
         # Export Genetic class object:
         if ga:
             self.df = None
@@ -1270,7 +1311,13 @@ class GeneticAlgorithm:
                     pass
                 finally:
                     self.dask_client = None
-            DataExporter(obj=self, file_path=os.path.join(self.output_file_path, 'genetic.p'), create_dir=True, overwrite=True).file()
+            DataExporter(obj=self,
+                         file_path=os.path.join(self.output_file_path, 'genetic.p'),
+                         create_dir=True,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name
+                         ).file()
 
     def visualize(self,
                   results_table: bool = True,
