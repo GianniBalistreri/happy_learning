@@ -33,7 +33,7 @@ setuptools.setup(
     version='0.1.9',
     author='Gianni Francesco Balistreri',
     author_email='gbalistreri@gmx.de',
-    description='Toolbox for easy and effective developing of supervised machine learning models as proof-of-concept',
+    description='Toolbox for reinforced developing of supervised machine learning models (as proof-of-concept)',
     long_description=long_description,
     long_description_content_type='text/markdown',
     keywords='feature engineering feature selection genetic algorithm machine learning automl reinforcement shapley',
