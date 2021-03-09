@@ -30,6 +30,8 @@ class FeatureLearning:
                  engineer_categorical: bool = True,
                  engineer_continuous: bool = True,
                  engineer_text: bool = True,
+                 generate_categorical: bool = True,
+                 generate_continuous: bool = True,
                  output_path: str = None,
                  save_temp_data: bool = False,
                  **kwargs
@@ -65,6 +67,12 @@ class FeatureLearning:
         :param engineer_text: bool
             Whether to process text features or not
 
+        :param generate_categorical: bool
+            Whether to generate categorical features or not
+
+        :param generate_continuous: bool
+            Whether to generate continuous features or not
+
         :param output_path: str
             Complete path to write temporary data sets
 
@@ -85,6 +93,8 @@ class FeatureLearning:
         self.engineer_continuous: bool = engineer_continuous
         self.engineer_categorical: bool = engineer_categorical
         self.engineer_time_disparity: bool = engineer_time_disparity
+        self.generate_categorical: bool = generate_categorical
+        self.generate_continuous: bool = generate_continuous
         if output_path is None:
             self.output_path: str = ''
         else:
@@ -312,7 +322,8 @@ class FeatureLearning:
             FeatureEngineer object containing the hole feature engineering, meta data included
         """
         if self.engineer_continuous:
-            self._generate_continuous_features()
+            if self.generate_continuous:
+                self._generate_continuous_features()
             if len(self.feature_engineer.get_predictors()) >= 4:
                 if self.train_continuous_critic:
                     self._feature_critic()
@@ -322,6 +333,8 @@ class FeatureLearning:
             else:
                 Log(write=False, env='dev').log(msg='Not enough continuous or ordinal features to efficiently run reinforcement feature learning framework')
         if self.engineer_categorical:
+            if self.generate_categorical:
+                self._generate_categorical_features()
             if self.save_temp_data:
                 if self.output_path is None:
                     Log(write=False, level='info').log(msg='No output path found for writing temporary data for applying one-hot merging')
@@ -335,7 +348,6 @@ class FeatureLearning:
                     self.feature_engineer: FeatureEngineer = FeatureEngineer(feature_engineer_file_path='{}feature_learning.p'.format(self.output_path))
                     _continuous_features: List[str] = self.feature_engineer.get_feature_types().get('continuous')
                     self.feature_engineer.clean(markers=dict(features=_continuous_features))
-                    self._generate_categorical_features()
                     _remaining_non_categorical_features: List[str] = self.feature_engineer.get_feature_types().get('date')# + self.feature_engineer.get_feature_types().get('text')
                     self.feature_engineer.clean(markers=dict(features=_remaining_non_categorical_features))
                     if len(self.feature_engineer.get_predictors()) >= 4:
@@ -348,7 +360,6 @@ class FeatureLearning:
                     else:
                         Log(write=False, env='dev').log(msg='Not enough categorical features to efficiently run reinforcement feature learning framework')
             else:
-                self._generate_categorical_features()
                 if len(self.feature_engineer.get_predictors()) >= 4:
                     if self.train_categorical_critic:
                         self._feature_critic()
