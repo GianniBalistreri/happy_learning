@@ -10,22 +10,25 @@ from .evaluate_machine_learning import EvalClf, sml_score
 from .neural_network_generator_torch import HIDDEN_LAYER_CATEGORY_EVOLUTION, NetworkGenerator, NETWORK_TYPE, NETWORK_TYPE_CATEGORY
 from .sampler import MLSampler
 from .supervised_machine_learning import CLF_ALGORITHMS, ModelGeneratorClf, ModelGeneratorReg, REG_ALGORITHMS
+from .text_clustering_generator import CLUSTER_ALGORITHMS, ClusteringGenerator
 from .utils import HappyLearningUtils
 from datetime import datetime
 from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter
 from easyexplore.data_visualizer import DataVisualizer
 from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
-from typing import Dict, List
+from typing import Dict, List, Union
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 
 # TODO:
-#  Visualize:
+#  1) Visualize:
 #   -> Breeding Map & Graph
 #   -> Parameter Configuration
+#  2) Mode:
+#   -> model_sampler
 
 
 class GeneticAlgorithmException(Exception):
@@ -46,7 +49,7 @@ class GeneticAlgorithm:
                  train_data_file_path: str = None,
                  test_data_file_path: str = None,
                  valid_data_file_path: str = None,
-                 df: pd.DataFrame = None,
+                 df: Union[dd.DataFrame, pd.DataFrame] = None,
                  data_set: dict = None,
                  features: List[str] = None,
                  re_split_data: bool = False,
@@ -257,19 +260,30 @@ class GeneticAlgorithm:
             self.bucket_name: str = output_file_path.split("//")[1].split("/")[0]
         self.include_neural_networks: bool = include_neural_networks
         _neural_nets: List[str] = []
+        _clustering: List[str] = []
         if models is None:
+            self.text_clustering: bool = False
             self.deep_learning: bool = False
             self.models: List[str] = models
         else:
             for model in models:
                 if model in NETWORK_TYPE.keys():
                     _neural_nets.append(model)
+            for model in models:
+                if model in CLUSTER_ALGORITHMS.keys():
+                    _clustering.append(model)
             if len(_neural_nets) == 0:
                 self.deep_learning: bool = False
-                self.models: List[str] = copy.deepcopy(models)
+                if len(_clustering) == 0:
+                    self.text_clustering: bool = False
+                    self.models: List[str] = copy.deepcopy(models)
+                else:
+                    self.text_clustering: bool = True
+                    self.models: List[str] = _clustering
             else:
+                self.text_clustering: bool = False
                 self.deep_learning: bool = True
-                self.models = _neural_nets
+                self.models: List[str] = _neural_nets
         self.parents_ratio: float = parents_ratio
         self.pop_size: int = pop_size if pop_size >= 3 else 64
         if (self.pop_size * self.parents_ratio) % 2 != 1:
@@ -485,7 +499,6 @@ class GeneticAlgorithm:
 
         :param ml_metric: str
             Name of the machine learning metric
-                -> Unknown - profit: Profit by given probability and quota
                 -> Regression - rmse_norm: Root-Mean-Squared Error normalized by standard deviation
                 -> Classification Binary - auc: Area-Under-Curve (AUC)
                                            f1: F1-Score
@@ -493,16 +506,21 @@ class GeneticAlgorithm:
                                            accuracy: Accuracy
                 -> Classification Multi - auc: Area-Under-Curve (AUC) multi classes summarized
                                           auc_multi: Area-Under-Curve (AUC) multi classes separately
+                                          cohen_kappa: Cohen's Kappa
+                -> Clustering - nmi: Normalized Mutual Information
         """
         _best_score: float = 0.0 if ml_metric == 'rmse_norm' else 1.0
         _ml_metric: str = 'roc_auc' if ml_metric == 'auc' else ml_metric
         if self.fitness_function.__name__ == 'sml_score':
-            _scores: dict = sml_score(ml_metric=tuple([_best_score, individual.fitness['test'].get(_ml_metric)]),
-                                      train_test_metric=tuple([individual.fitness['train'].get(_ml_metric),
-                                                               individual.fitness['test'].get(_ml_metric)]
-                                                              ),
-                                      train_time_in_seconds=individual.train_time
-                                      )
+            if self.text_clustering:
+                _scores: dict = dict(train={_ml_metric: individual.nmi})
+            else:
+                _scores: dict = sml_score(ml_metric=tuple([_best_score, individual.fitness['test'].get(_ml_metric)]),
+                                          train_test_metric=tuple([individual.fitness['train'].get(_ml_metric),
+                                                                   individual.fitness['test'].get(_ml_metric)]
+                                                                  ),
+                                          train_time_in_seconds=individual.train_time
+                                          )
         else:
             _scores: dict = self.fitness_function(**dict(ml_metric=tuple([_best_score, individual.fitness['test'].get(_ml_metric)]),
                                                          train_test_metric=tuple([individual.fitness['train'].get(_ml_metric),
@@ -806,7 +824,7 @@ class GeneticAlgorithm:
 
     def _modeling(self, pop_idx: int):
         """
-        Generate, train and evaluate supervised machine learning model
+        Generate, train and evaluate supervised & unsupervised machine learning model
 
         :param pop_idx: int
             Population index number
@@ -838,12 +856,15 @@ class GeneticAlgorithm:
                 if self.deep_learning:
                     self.population[pop_idx].train()
                 else:
-                    self.population[pop_idx].train(x=copy.deepcopy(self.data_set.get('x_train').values),
-                                                   y=copy.deepcopy(self.data_set.get('y_train').values),
-                                                   validation=dict(x_val=copy.deepcopy(self.data_set.get('x_val').values),
-                                                                   y_val=copy.deepcopy(self.data_set.get('y_val').values)
-                                                                   )
-                                                   )
+                    if self.text_clustering:
+                        self.population[pop_idx].train(x=copy.deepcopy(self.data_set.get('x_train')))
+                    else:
+                        self.population[pop_idx].train(x=copy.deepcopy(self.data_set.get('x_train').values),
+                                                       y=copy.deepcopy(self.data_set.get('y_train').values),
+                                                       validation=dict(x_val=copy.deepcopy(self.data_set.get('x_val').values),
+                                                                       y_val=copy.deepcopy(self.data_set.get('y_val').values)
+                                                                       )
+                                                       )
                 _re = 0
                 break
             except Exception as e:
@@ -854,23 +875,26 @@ class GeneticAlgorithm:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Error while training model ({})\n{}'.format(self.population[pop_idx].model_name, e))
         if _re == _re_generate_max:
             raise GeneticAlgorithmException('Maximum number of errors occurred. Check last error message ...')
-        if self.target_type == 'reg':
-            if self.deep_learning:
-                self.population[pop_idx].predict()
-            else:
-                _pred: np.array = self.population[pop_idx].predict(x=self.data_set.get('x_test').values)
-                self.population[pop_idx].eval(obs=self.data_set.get('y_test').values, pred=_pred, eval_metric=None)
-            self._fitness(individual=self.population[pop_idx], ml_metric='rmse_norm')
+        if self.text_clustering:
+            self._fitness(individual=self.population[pop_idx], ml_metric='nmi')
         else:
-            if self.deep_learning:
-                self.population[pop_idx].predict()
+            if self.target_type == 'reg':
+                if self.deep_learning:
+                    self.population[pop_idx].predict()
+                else:
+                    _pred: np.array = self.population[pop_idx].predict(x=self.data_set.get('x_test').values)
+                    self.population[pop_idx].eval(obs=self.data_set.get('y_test').values, pred=_pred, eval_metric=None)
+                self._fitness(individual=self.population[pop_idx], ml_metric='rmse_norm')
             else:
-                _pred: np.array = self.population[pop_idx].predict(x=self.data_set.get('x_test').values, probability=False)
-                self.population[pop_idx].eval(obs=self.data_set.get('y_test').values, pred=_pred, eval_metric=None)
-            if self.target_type == 'clf_multi':
-                self._fitness(individual=self.population[pop_idx], ml_metric='cohen_kappa')
-            else:
-                self._fitness(individual=self.population[pop_idx], ml_metric='auc')
+                if self.deep_learning:
+                    self.population[pop_idx].predict()
+                else:
+                    _pred: np.array = self.population[pop_idx].predict(x=self.data_set.get('x_test').values, probability=False)
+                    self.population[pop_idx].eval(obs=self.data_set.get('y_test').values, pred=_pred, eval_metric=None)
+                if self.target_type == 'clf_multi':
+                    self._fitness(individual=self.population[pop_idx], ml_metric='cohen_kappa')
+                else:
+                    self._fitness(individual=self.population[pop_idx], ml_metric='auc')
         self._collect_meta_data(current_gen=True, idx=pop_idx)
 
     def _mutate(self, parent: int, child: int, force_param: dict = None):
@@ -959,8 +983,22 @@ class GeneticAlgorithm:
         """
         Populate generation zero with individuals
         """
-        if self.deep_learning:
-            self._populate_networks()
+        if self.text_clustering:
+            _warm_model: dict = {}
+            if self.warm_start:
+                _warm_model = ClusteringGenerator(models=self.models).get_model_parameter()
+            for p in range(0, self.pop_size, 1):
+                if self.evolution_continue:
+                    _params: dict = self.final_generation.get('param')
+                else:
+                    if len(_warm_model.keys()) > 0:
+                        if p + 1 > len(_warm_model.keys()):
+                            _params: dict = self.model_params
+                        else:
+                            _params: dict = _warm_model.get(list(_warm_model.keys())[p])
+                    else:
+                        _params: dict = self.model_params
+                self.population.append(ClusteringGenerator(cluster_params=_params, models=self.models).generate_model())
         else:
             _warm_model: dict = {}
             if self.warm_start:
@@ -1107,11 +1145,12 @@ class GeneticAlgorithm:
         if self.deep_learning:
             self._populate_networks()
         else:
-            if self.dask_client is None:
-                self.dask_client = HappyLearningUtils().dask_setup(client_name='genetic_algorithm',
-                                                                   client_address=self.kwargs.get('client_address'),
-                                                                   mode='threads' if self.kwargs.get('client_mode') is None else self.kwargs.get('client_mode')
-                                                                   )
+            if self.mode != 'text_clustering':
+                if self.dask_client is None:
+                    self.dask_client = HappyLearningUtils().dask_setup(client_name='genetic_algorithm',
+                                                                       client_address=self.kwargs.get('client_address'),
+                                                                       mode='threads' if self.kwargs.get('client_mode') is None else self.kwargs.get('client_mode')
+                                                                       )
             self._populate()
         while _evolve:
             Log(write=self.log, logger_file_path=self.output_file_path).log('Generation: {} / {}'.format(self.current_generation_meta_data['generation'], self.max_generations))
@@ -1161,7 +1200,8 @@ class GeneticAlgorithm:
                                  pred=self.population[self.best_individual_idx].pred
                                  )
         else:
-            self.data_set.update({'pred': self.population[self.best_individual_idx].predict(x=self.data_set.get('x_test'))})
+            if self.mode.find('model') >= 0:
+                self.data_set.update({'pred': self.population[self.best_individual_idx].predict(x=self.data_set.get('x_test'))})
         self.evolution: dict = dict(model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
                                     param=self.current_generation_meta_data['param'][self.best_individual_idx],
                                     param_mutated=self.current_generation_meta_data['param_mutated'][self.best_individual_idx],
