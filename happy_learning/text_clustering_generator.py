@@ -1,15 +1,20 @@
 import copy
 import numpy as np
+import torch
 
-from .text_clustering import GibbsSamplingDirichletMultinomialModeling, LatentDirichletAllocation, LatentSemanticIndexing, SelfTaughtShortTextClustering
+from .self_taught_short_text_clustering import get_sentence_embedding, STC
+from .text_clustering import GibbsSamplingDirichletMultinomialModeling, LatentDirichletAllocation, \
+    LatentSemanticIndexing, NonNegativeMatrixFactorization
 from datetime import datetime
 from gensim import corpora
+from torch.utils.data import TensorDataset, DataLoader
 from typing import List
 
 CLUSTER_ALGORITHMS: dict = dict(gsdmm='gibbs_sampling_dirichlet_multinomial_modeling',
                                 lda='latent_dirichlet_allocation',
                                 lsi='latent_semantic_indexing',
-                                stc='self_taught_short_text_clustering'
+                                nmf='non_negative_matrix_factorization',
+                                # stc='self_taught_short_text_clustering'
                                 )
 
 
@@ -24,6 +29,7 @@ class Clustering:
     """
     Class for handling clustering algorithms
     """
+
     def __init__(self, cluster_params: dict = None, seed: int = 1234):
         """
         :param cluster_params: dict
@@ -34,6 +40,9 @@ class Clustering:
         """
         self.cluster_params: dict = cluster_params
         self.seed: int = seed
+        self.vocab = None
+        self.vocab_size: int = 0
+        self.document_term_matrix: list = []
 
     def gibbs_sampling_dirichlet_multinomial_modeling(self) -> GibbsSamplingDirichletMultinomialModeling:
         """
@@ -42,11 +51,13 @@ class Clustering:
         :return GibbsSamplingDirichletMultinomialModeling:
             Model object
         """
-        return GibbsSamplingDirichletMultinomialModeling(n_clusters=10 if self.cluster_params.get('n_clusters') is None else self.cluster_params.get('n_clusters'),
-                                                         n_iterations=5 if self.cluster_params.get('n_iterations') is None else self.cluster_params.get('n_iterations'),
-                                                         alpha=0.1 if self.cluster_params.get('alpha') is None else self.cluster_params.get('alpha'),
-                                                         beta=0.5 if self.cluster_params.get('beta') is None else self.cluster_params.get('beta'),
-                                                         )
+        return GibbsSamplingDirichletMultinomialModeling(
+            n_clusters=10 if self.cluster_params.get('n_clusters') is None else self.cluster_params.get('n_clusters'),
+            n_iterations=5 if self.cluster_params.get('n_iterations') is None else self.cluster_params.get(
+                'n_iterations'),
+            alpha=0.1 if self.cluster_params.get('alpha') is None else self.cluster_params.get('alpha'),
+            beta=0.5 if self.cluster_params.get('beta') is None else self.cluster_params.get('beta'),
+            )
 
     @staticmethod
     def gibbs_sampling_dirichlet_multinomial_modeling_param():
@@ -56,7 +67,7 @@ class Clustering:
         :return: dict
             Parameter config
         """
-        return dict(n_clusters=np.random.randint(low=5, high=50),
+        return dict(n_clusters=np.random.randint(low=5, high=30),
                     n_iterations=np.random.randint(low=5, high=100),
                     alpha=np.random.uniform(low=0.05, high=0.95),
                     beta=np.random.uniform(low=0.05, high=0.95),
@@ -69,7 +80,27 @@ class Clustering:
         :return LatentDirichletAllocation:
             Model object
         """
-        return LatentDirichletAllocation()
+        return LatentDirichletAllocation(doc_term_matrix=self.document_term_matrix,
+                                         vocab=self.vocab,
+                                         n_clusters=10 if self.cluster_params.get(
+                                             'n_clusters') is None else self.cluster_params.get('n_clusters'),
+                                         n_iterations=5 if self.cluster_params.get(
+                                             'n_iterations') is None else self.cluster_params.get('n_iterations'),
+                                         decay=1.0 if self.cluster_params.get(
+                                             'decay') is None else self.cluster_params.get('decay'),
+                                         )
+
+    @staticmethod
+    def latent_dirichlet_allocation_param() -> dict:
+        """
+        Generate Latent Dirichlet Allocation clustering parameter configuration randomly
+
+        :return: dict
+        """
+        return dict(n_clusters=np.random.randint(low=5, high=30),
+                    n_iterations=np.random.randint(low=5, high=100),
+                    decay=np.random.uniform(low=0.1, high=1.0)
+                    )
 
     def latent_semantic_indexing(self) -> LatentSemanticIndexing:
         """
@@ -78,22 +109,109 @@ class Clustering:
         :return LatentSemanticIndexing:
             Model object
         """
-        return LatentSemanticIndexing()
+        return LatentSemanticIndexing(doc_term_matrix=self.document_term_matrix,
+                                      vocab=self.vocab,
+                                      n_clusters=10 if self.cluster_params.get(
+                                          'n_clusters') is None else self.cluster_params.get('n_clusters'),
+                                      n_iterations=5 if self.cluster_params.get(
+                                          'n_iterations') is None else self.cluster_params.get('n_iterations'),
+                                      decay=1.0 if self.cluster_params.get(
+                                          'decay') is None else self.cluster_params.get('decay'),
+                                      training_algorithm='multi_pass_stochastic' if self.cluster_params.get(
+                                          'training_algorithm') is None else self.cluster_params.get(
+                                          'training_algorithm'),
+                                      )
 
-    def self_taught_short_text_clustering(self) -> SelfTaughtShortTextClustering:
+    @staticmethod
+    def latent_semantic_indexing_param() -> dict:
+        """
+        Generate Latent Semantic Indexing clustering parameter configuration randomly
+
+        :return: dict
+        """
+        return dict(n_clusters=np.random.randint(low=5, high=30),
+                    n_iterations=np.random.randint(low=5, high=100),
+                    decay=np.random.uniform(low=0.1, high=1.0),
+                    training_algorithm=np.random.choice(a=['one_pass', 'multi_pass_stochastic'])
+                    )
+
+    def non_negative_matrix_factorization(self) -> NonNegativeMatrixFactorization:
+        """
+        Config Non-Negative Matrix Factorization algorithm
+
+        :return: NonNegativeMatrixFactorization
+            Model object
+        """
+        return NonNegativeMatrixFactorization(lang=self.cluster_params.get('lang'),
+                                              doc_term_matrix=self.document_term_matrix,
+                                              vocab=self.vocab,
+                                              n_clusters=10 if self.cluster_params.get(
+                                                  'n_clusters') is None else self.cluster_params.get('n_clusters'),
+                                              n_iterations=5 if self.cluster_params.get(
+                                                  'n_iterations') is None else self.cluster_params.get('n_iterations'),
+                                              )
+
+    @staticmethod
+    def non_negative_matrix_factorization_param() -> dict:
+        """
+        Generate Non-Negative Matrix Factorization clustering parameter configuration randomly
+
+        :return: dict
+        """
+        return dict(n_clusters=np.random.randint(low=5, high=30),
+                    n_iterations=np.random.randint(low=5, high=100)
+                    )
+
+    def self_taught_short_text_clustering(self) -> STC:
         """
         Config Self-Taught Short Text Clustering algorithm
 
         :return SelfTaughtShortTextClustering:
             Model object
         """
-        return SelfTaughtShortTextClustering()
+        return STC(dimensions=self.cluster_params.get('dimensions'),
+                   iterator=self.cluster_params.get('iterator'),
+                   encoder_hidden_layer=self.cluster_params.get('encoder_hidden_layer'),
+                   decoder_hidden_layer=self.cluster_params.get('decoder_hidden_layer'),
+                   batch_size=16 if self.cluster_params.get('batch_size') is None else self.cluster_params.get(
+                       'batch_size'),
+                   epoch=15 if self.cluster_params.get('epoch') is None else self.cluster_params.get('epoch'),
+                   optimizer='sgd' if self.cluster_params.get('optimizer') is None else self.cluster_params.get(
+                       'optimizer'),
+                   n_clusters=10 if self.cluster_params.get('n_clusters') is None else self.cluster_params.get(
+                       'n_clusters'),
+                   alpha=1.0 if self.cluster_params.get('alpha') is None else self.cluster_params.get('alpha'),
+                   n_iterations=100 if self.cluster_params.get('n_iterations') is None else self.cluster_params.get(
+                       'n_iterations'),
+                   max_iterations=1000 if self.cluster_params.get(
+                       'max_iterations') is None else self.cluster_params.get('max_iterations'),
+                   early_stopping=False if self.cluster_params.get(
+                       'early_stopping') is None else self.cluster_params.get('early_stopping'),
+                   tol=0.0001 if self.cluster_params.get('tol') is None else self.cluster_params.get('tol'),
+                   update_interval=500 if self.cluster_params.get(
+                       'update_interval') is None else self.cluster_params.get('update_interval')
+                   )
+
+    @staticmethod
+    def self_taught_short_text_clustering_param() -> dict:
+        """
+        Generate Self-Taught Short Text Clustering parameter configuration randomly
+
+        :return: dict
+        """
+        return dict(n_clusters=np.random.randint(low=5, high=30),
+                    n_iterations=np.random.randint(low=5, high=100),
+                    max_iterations=np.random.randint(low=1000, high=5000),
+                    update_interval=np.random.randint(low=50, high=1000),
+                    alpha=np.random.uniform(low=0.1, high=1.0),
+                    )
 
 
 class ClusteringGenerator(Clustering):
     """
-    Class for generating supervised learning classification models
+    Class for generating unsupervised learning clustering models
     """
+
     def __init__(self,
                  model_name: str = None,
                  cluster_params: dict = None,
@@ -122,9 +240,8 @@ class ClusteringGenerator(Clustering):
         self.models: List[str] = models
         self.model = None
         self.model_param: dict = {}
-        self.vocab: dict = {}
-        self.vocab_size: int = 0
-        self.document_term_matrix: list = []
+        self.stc = None
+        self.nmi: float = 0.0
         self.train_time: float = 0.0
         self.random: bool = random
         self.cluster_label: List[int] = []
@@ -150,6 +267,26 @@ class ClusteringGenerator(Clustering):
         """
         self.vocab = corpora.Dictionary(documents=x, prune_at=2000000)
         self.document_term_matrix = [self.vocab.doc2bow(doc) for doc in x]
+
+    def _eval(self, x: np.ndarray):
+        """
+        Internal cluster evaluation using semi-supervised Self-Taught Short Text Clustering algorithm to generate Normalized Mutual Information score
+
+        :param x: np.ndarray
+            Text data
+        """
+        _embedding: np.ndarray = get_sentence_embedding(text_data=x,
+                                                        lang_model_name='paraphrase-xlm-r-multilingual-v1' if self.cluster_params.get('lang_model_name') is None else self.cluster_params.get('lang_model_name')
+                                                        )
+        _embedding_tensor: torch.tensor = torch.tensor(_embedding.astype(np.float32))
+        _target_tensor: torch.tensor = torch.tensor(np.array(self.cluster_label).astype(np.float32))
+        _data_tensor: TensorDataset = TensorDataset(_embedding_tensor, _target_tensor)
+        _batch_size: int = 16 if self.cluster_params.get('batch_size') is None else self.cluster_params.get('batch_size')
+        _data_loader: DataLoader = DataLoader(dataset=_data_tensor, batch_size=_batch_size, shuffle=True)
+        self.cluster_params.update({'dimensions': [_embedding.shape[0], _embedding.shape[1]], 'iterator': _data_loader})
+        self.stc = self.self_taught_short_text_clustering()
+        self.stc.fit(x=_embedding_tensor)
+        self.nmi = self.stc.nmi_score
 
     def generate_model(self) -> object:
         """
@@ -195,6 +332,28 @@ class ClusteringGenerator(Clustering):
         """
         pass
 
+    def get_model_parameter(self) -> dict:
+        """
+        Get parameter "standard" config of given clustering models
+
+        :return dict:
+            Standard parameter config of given clustering models
+        """
+        _model_param: dict = {}
+        if self.models is None:
+            return _model_param
+        else:
+            for model in self.models:
+                if model in CLUSTER_ALGORITHMS.keys():
+                    _model = getattr(Clustering(), CLUSTER_ALGORITHMS.get(model))()
+                    _param: dict = getattr(Clustering(), '{}_param'.format(CLUSTER_ALGORITHMS.get(model)))()
+                    _model_random_param: dict = _model.__dict__.items()
+                    for param in _model_random_param:
+                        if param[0] in _param.keys():
+                            _param.update({param[0]: param[1]})
+                    _model_param.update({model: copy.deepcopy(_param)})
+        return _model_param
+
     def eval(self):
         pass
 
@@ -208,7 +367,9 @@ class ClusteringGenerator(Clustering):
         :param x: np.ndarray
             Text data
         """
-        self._build_vocab(x=x)
+        if self.model != 'gsdmm':
+            self._build_vocab(x=x)
         _t0: datetime = datetime.now()
         self.cluster_label = self.model.fit(documents=x, vocab_size=self.vocab_size)
         self.train_time = (datetime.now() - _t0).seconds
+        self._eval(x=x)
