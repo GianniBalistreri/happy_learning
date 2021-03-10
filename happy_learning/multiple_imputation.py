@@ -5,7 +5,7 @@ from .missing_data_analysis import MissingDataAnalysis
 from .supervised_machine_learning import CLF_ALGORITHMS, Classification, REG_ALGORITHMS, Regression
 from easyexplore.utils import EasyExploreUtils, Log, StatsUtils
 from sklearn.preprocessing import LabelEncoder
-from typing import List
+from typing import List, Union
 
 # TODO:
 #  1) Parallelize
@@ -24,7 +24,7 @@ class MultipleImputation:
     Class for replace missing data by multiple imputation technique
     """
     def __init__(self,
-                 df,
+                 df: Union[dd.DataFrame, pd.DataFrame],
                  n_chains: int = 3,
                  n_iter: int = 15,
                  n_burn_in_iter: int = 3,
