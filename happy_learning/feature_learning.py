@@ -1,8 +1,11 @@
+import dask.dataframe as dd
+import pandas as pd
+
 from .feature_engineer import FeatureEngineer
 from .feature_selector import FeatureSelector
 from .genetic_algorithm import GeneticAlgorithm
 from easyexplore.utils import Log
-from typing import Dict, List
+from typing import Dict, List, Union
 
 
 class FeatureLearningException(Exception):
@@ -18,7 +21,7 @@ class FeatureLearning:
     """
     def __init__(self,
                  feature_engineer: FeatureEngineer = None,
-                 df=None,
+                 df: Union[dd.DataFrame, pd.DataFrame] = None,
                  file_path: str = None,
                  target: str = None,
                  force_target_type: str = None,

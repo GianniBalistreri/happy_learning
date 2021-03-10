@@ -8,7 +8,7 @@ from .supervised_machine_learning import ModelGeneratorClf, ModelGeneratorReg
 from .utils import HappyLearningUtils
 from easyexplore.data_visualizer import DataVisualizer
 from sklearn.feature_selection import SelectFromModel
-from typing import Dict, List
+from typing import Dict, List, Union
 
 
 class FeatureSelectorException(Exception):
@@ -23,7 +23,7 @@ class FeatureSelector:
     Class for analyzing the importance of each feature in the data set
     """
     def __init__(self,
-                 df,
+                 df: Union[dd.DataFrame, pd.DataFrame],
                  target: str,
                  features: List[str] = None,
                  force_target_type: str = None,
