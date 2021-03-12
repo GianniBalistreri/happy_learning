@@ -82,6 +82,7 @@ class GeneticAlgorithm:
                  deep_learning_type: str = 'batch',
                  deep_learning_output_size: int = None,
                  cloud: str = None,
+                 deploy_model: bool = True,
                  multi_threading: bool = False,
                  multi_processing: bool = False,
                  log: bool = False,
@@ -227,6 +228,9 @@ class GeneticAlgorithm:
                 -> google: Google Cloud Storage
                 -> aws: AWS Cloud
 
+        :param deploy_model: bool
+            Whether to deploy (save) evolved model or not
+
         :param multi_threading: bool
             Whether to run genetic algorithm using multiple threads (of one cpu core) or single thread
 
@@ -247,9 +251,9 @@ class GeneticAlgorithm:
         self.mode = mode
         self.model = None
         self.model_params: dict = copy.deepcopy(model_params)
-        self.deploy_model: bool = False
+        self.deploy_model: bool = deploy_model
         self.n_training: int = 0
-        self.cloud: str = None
+        self.cloud: str = cloud
         if self.cloud is None:
             self.bucket_name: str = None
         else:
@@ -857,7 +861,7 @@ class GeneticAlgorithm:
                     self.population[pop_idx].train()
                 else:
                     if self.text_clustering:
-                        self.population[pop_idx].train(x=copy.deepcopy(self.data_set.get('x_train')))
+                        self.population[pop_idx].train(x=copy.deepcopy(self.data_set.get('x_train').values))
                     else:
                         self.population[pop_idx].train(x=copy.deepcopy(self.data_set.get('x_train').values),
                                                        y=copy.deepcopy(self.data_set.get('y_train').values),
@@ -927,20 +931,23 @@ class GeneticAlgorithm:
                 if feature in self.feature_pairs[parent]:
                     if self.mode == 'feature_engineer':
                         if np.random.uniform(low=0, high=1) <= self.mutation_prob:
-                            self.feature_engineer.act(actor=feature,
-                                                      inter_actors=_feature_pool,
-                                                      force_action=None,
-                                                      alternative_actions=None
-                                                      )
-                            _generated_feature: str = self.feature_engineer.get_last_generated_feature()
-                            if _generated_feature == '':
-                                _new_features.append(feature)
-                            else:
-                                _new_features.append(_generated_feature)
-                            self.mutated_features['parent'].append(feature)
-                            self.mutated_features['child'].append(_new_features[-1])
-                            self.mutated_features['generation'].append(feature)
-                            self.mutated_features['action'].append(self.feature_engineer.get_last_action())
+                            try:
+                                self.feature_engineer.act(actor=feature,
+                                                          inter_actors=_feature_pool,
+                                                          force_action=None,
+                                                          alternative_actions=None
+                                                          )
+                                _generated_feature: str = self.feature_engineer.get_last_generated_feature()
+                                if _generated_feature == '':
+                                    _new_features.append(feature)
+                                else:
+                                    _new_features.append(_generated_feature)
+                                self.mutated_features['parent'].append(feature)
+                                self.mutated_features['child'].append(_new_features[-1])
+                                self.mutated_features['generation'].append(feature)
+                                self.mutated_features['action'].append(self.feature_engineer.get_last_action())
+                            except:
+                                Log(write=False).log(msg='Error during feature engineering: actor={} interactors={}'.format(feature, _feature_pool))
                         else:
                             _new_features.append(feature)
                     elif self.mode == 'feature_selector':
@@ -1200,7 +1207,7 @@ class GeneticAlgorithm:
                                  pred=self.population[self.best_individual_idx].pred
                                  )
         else:
-            if self.mode.find('model') >= 0:
+            if self.mode.find('model') >= 0 and self.plot:
                 self.data_set.update({'pred': self.population[self.best_individual_idx].predict(x=self.data_set.get('x_test'))})
         self.evolution: dict = dict(model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
                                     param=self.current_generation_meta_data['param'][self.best_individual_idx],
@@ -1303,7 +1310,7 @@ class GeneticAlgorithm:
         if evolution_history:
             DataExporter(obj=self.evolution_history,
                          file_path=os.path.join(self.output_file_path, 'evolution_history.p'),
-                         create_dir=True,
+                         create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
                          bucket_name=self.bucket_name
@@ -1312,7 +1319,7 @@ class GeneticAlgorithm:
         if generation_history:
             DataExporter(obj=self.generation_history,
                          file_path=os.path.join(self.output_file_path, 'generation_history.p'),
-                         create_dir=True,
+                         create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
                          bucket_name=self.bucket_name
@@ -1332,7 +1339,7 @@ class GeneticAlgorithm:
             else:
                 DataExporter(obj=self.model,
                              file_path=os.path.join(self.output_file_path, 'model.p'),
-                             create_dir=True,
+                             create_dir=False,
                              overwrite=True,
                              cloud=self.cloud,
                              bucket_name=self.bucket_name
@@ -1353,7 +1360,7 @@ class GeneticAlgorithm:
                     self.dask_client = None
             DataExporter(obj=self,
                          file_path=os.path.join(self.output_file_path, 'genetic.p'),
-                         create_dir=True,
+                         create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
                          bucket_name=self.bucket_name
