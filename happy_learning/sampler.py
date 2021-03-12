@@ -4,7 +4,7 @@ import random
 
 from dask_ml.model_selection import KFold, train_test_split
 from sklearn.model_selection import StratifiedKFold
-from typing import Dict, List
+from typing import Dict, List, Union
 
 
 class MLSamplerException(Exception):
@@ -19,7 +19,7 @@ class MLSampler:
     Class for data sampling specialized for supervised machine learning
     """
     def __init__(self,
-                 df,
+                 df: Union[dd.DataFrame, pd.DataFrame],
                  target: str,
                  features: List[str] = None,
                  train_size: float = 0.8,

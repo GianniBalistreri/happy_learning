@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 
 from easyexplore.utils import INVALID_VALUES
-from typing import List
+from typing import List, Union
 
 
 class MissingDataAnalysisException(Exception):
@@ -18,7 +18,7 @@ class MissingDataAnalysis:
     Class for analyzing missing data
     """
     def __init__(self,
-                 df,
+                 df: Union[dd.DataFrame, pd.DataFrame],
                  features: List[str] = None,
                  other_mis: list = None,
                  conv_invalid: bool = True,

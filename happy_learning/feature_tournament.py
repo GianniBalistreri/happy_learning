@@ -10,7 +10,7 @@ from .supervised_machine_learning import ModelGeneratorClf, ModelGeneratorReg
 from .utils import HappyLearningUtils
 from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
-from typing import List
+from typing import List, Union
 
 
 class FeatureTournamentException(Exception):
@@ -25,7 +25,7 @@ class FeatureTournament:
     Class for calculating shapley values (shapley additive explanations) for feature importance evaluation
     """
     def __init__(self,
-                 df,
+                 df: Union[dd.DataFrame, pd.DataFrame],
                  features: List[str],
                  target: str,
                  force_target_type: str = None,

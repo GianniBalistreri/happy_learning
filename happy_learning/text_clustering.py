@@ -1,9 +1,7 @@
 import numpy as np
-import torch
 
 from gensim import corpora
 from gensim.models import LdaModel, LsiModel
-from sklearn.cluster import KMeans
 from sklearn.decomposition import NMF
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from typing import Dict, List
@@ -458,17 +456,3 @@ class NonNegativeMatrixFactorization:
         for doc in documents:
             _cluster_labels.append(_nmf.transform(_term_frequency_inverse_document_frequency(text_content=doc, lang=self.lang)).argsort(axis=1)[:, -1].tolist()[0])
         return _cluster_labels
-
-
-class SelfTaughtShortTextClustering:
-    """
-    Class for building Self-Taught Short Text Clustering model using PyTorch
-    """
-    def __init__(self):
-        pass
-
-    def _auto_encoder(self):
-        pass
-
-    def _k_means_clustering(self):
-        pass

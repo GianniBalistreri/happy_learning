@@ -1,3 +1,4 @@
+import dask.dataframe as dd
 import numpy as np
 import os
 import pandas as pd
@@ -12,11 +13,13 @@ from .utils import HappyLearningUtils
 from easyexplore.data_import_export import DataExporter
 from easyexplore.data_visualizer import DataVisualizer
 from easyexplore.utils import EasyExploreUtils, Log
-from typing import List
+from typing import List, Union
 
 # TODO:
-#  visualize parameter importance analysis for developing / evaluating genetic algorithm critic
-#  kfold cross-validation for using manual model development
+#   Visualization:
+#       -> visualize parameter importance analysis for developing / evaluating genetic algorithm critic
+#   Sampling:
+#       -> kfold cross-validation for using manual model development
 
 
 class DataMinerException(Exception):
@@ -31,7 +34,7 @@ class DataMiner:
     Class for running reinforced prototyping using structured (tabular) data
     """
     def __init__(self,
-                 df=None,
+                 df: Union[dd.DataFrame, pd.DataFrame] = None,
                  file_path: str = None,
                  target: str = None,
                  predictors: List[str] = None,

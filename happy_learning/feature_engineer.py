@@ -25,7 +25,7 @@ from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter, DataImp
 from easyexplore.utils import EasyExploreUtils, INVALID_VALUES, Log, StatsUtils
 from scipy.stats import boxcox
 from sklearn.preprocessing import Binarizer, MinMaxScaler, Normalizer, KBinsDiscretizer, RobustScaler, PolynomialFeatures, StandardScaler
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -788,7 +788,7 @@ class FeatureEngineer:
     Class for handling feature engineering
     """
     def __init__(self,
-                 df=None,
+                 df: Union[dd.DataFrame, pd.DataFrame] = None,
                  feature_engineer_file_path: str = None,
                  target_feature: str = None,
                  generate_new_feature: bool = True,
