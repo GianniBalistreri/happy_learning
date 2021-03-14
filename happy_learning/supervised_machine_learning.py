@@ -1570,8 +1570,6 @@ class ModelGeneratorClf(Classification):
             _param: str = np.random.choice(a=_param_choices)
             _new_model_params.update({_param: _params.get(_param)})
             self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update({_param: _params.get(_param)})
-        # print('old', self.model_param)
-        # print('new', _new_model_params)
         self.model_param_mutation = 'new_model'
         self.model_param = copy.deepcopy(_new_model_params)
         self.clf_params = self.model_param

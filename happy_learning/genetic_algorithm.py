@@ -861,7 +861,7 @@ class GeneticAlgorithm:
                     self.population[pop_idx].train()
                 else:
                     if self.text_clustering:
-                        self.population[pop_idx].train(x=copy.deepcopy(self.data_set.get('x_train').values))
+                        self.population[pop_idx].train()
                     else:
                         self.population[pop_idx].train(x=copy.deepcopy(self.data_set.get('x_train').values),
                                                        y=copy.deepcopy(self.data_set.get('y_train').values),
@@ -920,10 +920,26 @@ class GeneticAlgorithm:
                     self._sampling(features=self.population[child].features)
                 if self.deep_learning and self.warm_start_strategy == 'adaptive':
                     self.population[child].update_model_param(hidden_layer_size=self.population[child].hidden_layer_size + 1)
-                self.population[child] = ModelGeneratorReg(models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models).generate_model()
+                if self.text_clustering:
+                    self.population[child] = ClusteringGenerator(predictor=self.features[0],
+                                                                 models=self.models,
+                                                                 tokenize=False,
+                                                                 cloud=self.cloud
+                                                                 ).generate_model()
+                else:
+                    self.population[child] = ModelGeneratorReg(models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models).generate_model()
             else:
-                self.population[child] = ModelGeneratorReg(reg_params=self.population[parent].model_param, models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[parent].model_param, models=self.models).generate_model()
-                self.population[child].generate_params(param_rate=self.mutation_rate, force_param=force_param)
+                if self.text_clustering:
+                    self.population[child] = ClusteringGenerator(predictor=self.features[0],
+                                                                 models=self.models,
+                                                                 tokenize=False,
+                                                                 cloud=self.cloud
+                                                                 ).generate_params(param_rate=self.mutation_rate,
+                                                                                   force_param=force_param
+                                                                                   )
+                else:
+                    self.population[child] = ModelGeneratorReg(reg_params=self.population[parent].model_param, models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[parent].model_param, models=self.models).generate_model()
+                    self.population[child].generate_params(param_rate=self.mutation_rate, force_param=force_param)
         elif self.mode.find('feature') >= 0:
             _new_features: List[str] = []
             _feature_pool: List[str] = self.feature_pairs[np.random.choice(a=self.parents_idx)]
@@ -993,7 +1009,11 @@ class GeneticAlgorithm:
         if self.text_clustering:
             _warm_model: dict = {}
             if self.warm_start:
-                _warm_model = ClusteringGenerator(models=self.models).get_model_parameter()
+                _warm_model = ClusteringGenerator(predictor=self.features[0],
+                                                  models=self.models,
+                                                  tokenize=False,
+                                                  cloud=self.cloud
+                                                  ).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.evolution_continue:
                     _params: dict = self.final_generation.get('param')
@@ -1005,7 +1025,13 @@ class GeneticAlgorithm:
                             _params: dict = _warm_model.get(list(_warm_model.keys())[p])
                     else:
                         _params: dict = self.model_params
-                self.population.append(ClusteringGenerator(cluster_params=_params, models=self.models).generate_model())
+                self.population.append(ClusteringGenerator(predictor=self.features[0],
+                                                           models=self.models,
+                                                           cluster_params=_params,
+                                                           tokenize=False,
+                                                           cloud=self.cloud
+                                                           ).generate_model()
+                                       )
         else:
             _warm_model: dict = {}
             if self.warm_start:
