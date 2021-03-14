@@ -1,11 +1,14 @@
 import copy
 import numpy as np
+import re
+import pandas as pd
 import torch
 
 from .self_taught_short_text_clustering import get_sentence_embedding, STC
 from .text_clustering import GibbsSamplingDirichletMultinomialModeling, LatentDirichletAllocation, \
     LatentSemanticIndexing, NonNegativeMatrixFactorization
 from datetime import datetime
+from easyexplore.data_import_export import CLOUD_PROVIDER, DataImporter
 from gensim import corpora
 from torch.utils.data import TensorDataset, DataLoader
 from typing import List
@@ -29,20 +32,27 @@ class Clustering:
     """
     Class for handling clustering algorithms
     """
-
-    def __init__(self, cluster_params: dict = None, seed: int = 1234):
+    def __init__(self,
+                 cluster_params: dict = None,
+                 train_data_path: str = None,
+                 seed: int = 1234
+                 ):
         """
         :param cluster_params: dict
             Pre-configured clustering model parameter
 
+        :param train_data_path: str
+            Complete file path of the training data
+
         :param seed: int
             Seed
         """
-        self.cluster_params: dict = cluster_params
+        self.cluster_params: dict = {} if cluster_params is None else cluster_params
         self.seed: int = seed
         self.vocab = None
         self.vocab_size: int = 0
         self.document_term_matrix: list = []
+        self.train_data_path: str = train_data_path
 
     def gibbs_sampling_dirichlet_multinomial_modeling(self) -> GibbsSamplingDirichletMultinomialModeling:
         """
@@ -211,15 +221,21 @@ class ClusteringGenerator(Clustering):
     """
     Class for generating unsupervised learning clustering models
     """
-
     def __init__(self,
+                 predictor: str,
                  model_name: str = None,
                  cluster_params: dict = None,
                  models: List[str] = None,
+                 tokenize: bool = False,
                  random: bool = True,
+                 sep: str = '\t',
+                 cloud: str = None,
                  seed: int = 1234
                  ):
         """
+        :param predictor: str
+            Name of the text feature
+
         :param model_name: str
             Name of the clustering model
 
@@ -229,17 +245,30 @@ class ClusteringGenerator(Clustering):
         :param models: List[str]
             Names of the clustering models
 
+        :param tokenize: bool
+            Apply word tokenization to text data
+
         :param random: bool
             Draw clustering model randomly
+
+        :param sep: str
+            Separator
+
+        :param cloud: str
+            Name of the cloud provider
+                -> google: Google Cloud Storage
+                -> aws: AWS Cloud
 
         :param seed: int
             Seed
         """
         super(ClusteringGenerator, self).__init__(cluster_params=cluster_params, seed=seed)
+        self.predictor: str = predictor
         self.model_name: str = model_name
         self.models: List[str] = models
         self.model = None
         self.model_param: dict = {}
+        self.tokenize: bool = tokenize
         self.stc = None
         self.nmi: float = 0.0
         self.train_time: float = 0.0
@@ -247,35 +276,35 @@ class ClusteringGenerator(Clustering):
         self.cluster_label: List[int] = []
         self.model_param_mutation: str = ''
         self.model_param_mutated: dict = {}
+        self.sep: str = sep
+        self.x: np.ndarray = None
+        self.cloud: str = cloud
+        if self.cloud is None:
+            self.bucket_name: str = None
+        else:
+            if self.cloud not in CLOUD_PROVIDER:
+                raise ClusteringException('Cloud provider ({}) not supported'.format(cloud))
+            self.bucket_name: str = self.train_data_path.split("//")[1].split("/")[0]
 
-    def _build_vocab(self, x: np.ndarray):
+    def _build_vocab(self):
         """
         Build text vocabulary
-
-        :param x: np.ndarray
-            Text data
         """
-        self.vocab = set(d for doc in x for d in doc)
+        self.vocab = set(d for doc in self.x for d in doc)
         self.vocab_size = len(self.vocab)
 
-    def _doc_term_matrix(self, x: np.ndarray):
+    def _doc_term_matrix(self):
         """
         Generate document-term matrix
-
-        :param x: np.ndarray
-            Text data
         """
-        self.vocab = corpora.Dictionary(documents=x, prune_at=2000000)
-        self.document_term_matrix = [self.vocab.doc2bow(doc) for doc in x]
+        self.vocab = corpora.Dictionary(documents=self.x, prune_at=2000000)
+        self.document_term_matrix = [self.vocab.doc2bow(doc) for doc in self.x]
 
-    def _eval(self, x: np.ndarray):
+    def _eval(self):
         """
         Internal cluster evaluation using semi-supervised Self-Taught Short Text Clustering algorithm to generate Normalized Mutual Information score
-
-        :param x: np.ndarray
-            Text data
         """
-        _embedding: np.ndarray = get_sentence_embedding(text_data=x,
+        _embedding: np.ndarray = get_sentence_embedding(text_data=self.x,
                                                         lang_model_name='paraphrase-xlm-r-multilingual-v1' if self.cluster_params.get('lang_model_name') is None else self.cluster_params.get('lang_model_name')
                                                         )
         _embedding_tensor: torch.tensor = torch.tensor(_embedding.astype(np.float32))
@@ -287,6 +316,24 @@ class ClusteringGenerator(Clustering):
         self.stc = self.self_taught_short_text_clustering()
         self.stc.fit(x=_embedding_tensor)
         self.nmi = self.stc.nmi_score
+
+    def _import_data(self):
+        """
+        Import data set
+        """
+        _data_set: pd.DataFrame = DataImporter(file_path=self.train_data_path,
+                                               as_data_frame=True,
+                                               use_dask=False,
+                                               create_dir=False,
+                                               sep=self.sep,
+                                               cloud=self.cloud,
+                                               bucket_name=self.bucket_name
+                                               ).file(table_name=None)
+        if self.tokenize:
+            self.x = _data_set[self.predictor].apply(lambda x: re.split('\s', x)).values
+        else:
+            self.x = _data_set[self.predictor].values
+        del _data_set
 
     def generate_model(self) -> object:
         """
@@ -330,7 +377,34 @@ class ClusteringGenerator(Clustering):
         :return object
             Model object itself (self)
         """
-        pass
+        if param_rate > 1:
+            _rate: float = 1.0
+        else:
+            if param_rate > 0:
+                _rate: float = param_rate
+            else:
+                _rate: float = 0.1
+        _params: dict = getattr(Clustering(), '{}_param'.format(CLUSTER_ALGORITHMS.get(self.model_name)))()
+        _force_param: dict = {} if force_param is None else force_param
+        _param_choices: List[str] = [p for p in _params.keys() if p not in _force_param.keys()]
+        _gen_n_params: int = round(len(_params.keys()) * _rate)
+        if _gen_n_params == 0:
+            _gen_n_params = 1
+        self.model_param_mutated.update(
+            {len(self.model_param_mutated.keys()) + 1: {copy.deepcopy(self.model_name): {}}})
+        _new_model_params: dict = copy.deepcopy(self.model_param)
+        for param in _force_param.keys():
+            _new_model_params.update({param: _force_param.get(param)})
+        for _ in range(0, _gen_n_params, 1):
+            _param: str = np.random.choice(a=_param_choices)
+            _new_model_params.update({_param: _params.get(_param)})
+            self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update(
+                {_param: _params.get(_param)})
+        self.model_param_mutation = 'new_model'
+        self.model_param = copy.deepcopy(_new_model_params)
+        self.cluster_params = self.model_param
+        self.model = getattr(Clustering(cluster_params=self.cluster_params), CLUSTER_ALGORITHMS.get(self.model_name))()
+        return self
 
     def get_model_parameter(self) -> dict:
         """
@@ -360,16 +434,15 @@ class ClusteringGenerator(Clustering):
     def predict(self):
         pass
 
-    def train(self, x: np.ndarray):
+    def train(self):
         """
         Train or fit clustering model
-
-        :param x: np.ndarray
-            Text data
         """
+        self._import_data()
         if self.model != 'gsdmm':
-            self._build_vocab(x=x)
+            self._build_vocab()
         _t0: datetime = datetime.now()
-        self.cluster_label = self.model.fit(documents=x, vocab_size=self.vocab_size)
+        self.cluster_label = self.model.fit(documents=self.x, vocab_size=self.vocab_size)
         self.train_time = (datetime.now() - _t0).seconds
-        self._eval(x=x)
+        self._eval()
+        self.x = None
