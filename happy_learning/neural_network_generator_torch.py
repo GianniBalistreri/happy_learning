@@ -8,6 +8,7 @@ from .evaluate_machine_learning import EvalClf, EvalReg, ML_METRIC, SML_SCORE
 from .neural_network_torch import Attention, MLP, LSTM, RCNN, RNN, SelfAttention, Transformers
 from .utils import HappyLearningUtils
 from datetime import datetime
+from easyexplore.data_import_export import CLOUD_PROVIDER, DataImporter
 from torch.utils.data import DataLoader, TensorDataset
 from torchtext.data import BucketIterator, Field, TabularDataset
 from torchtext.vocab import FastText
@@ -169,10 +170,7 @@ class NeuralNetwork:
                 -> 2: Binary Classification
                 -> 3: Multi-Classification
 
-        :param target_type: str
-            Name of the supervised machine learning problem:
-                -> clf: Classification
-                -> reg: Regression
+        :param x_train: np.array
 
         :param predictors: List[str]
             Name of the predictor features
@@ -417,6 +415,7 @@ class NetworkGenerator(NeuralNetwork):
                  hidden_layer_size_category: str = None,
                  models: List[str] = None,
                  sep: str = '\t',
+                 cloud: str = None,
                  seed: int = 1234
                  ):
         """
@@ -439,8 +438,13 @@ class NetworkGenerator(NeuralNetwork):
         :param hidden_layer_size: int
             Number of hidden layers
 
-        :paramn sep: str
+        :param sep: str
             Separator
+
+        :param cloud: str
+            Name of the cloud provider
+                -> google: Google Cloud Storage
+                -> aws: AWS Cloud
 
         :param seed: int
             Seed
@@ -491,6 +495,13 @@ class NetworkGenerator(NeuralNetwork):
         self.obs: list = []
         self.pred: list = []
         self.sep: str = sep
+        self.cloud: str = cloud
+        if self.cloud is None:
+            self.bucket_name: str = None
+        else:
+            if self.cloud not in CLOUD_PROVIDER:
+                raise NeuralNetworkException('Cloud provider ({}) not supported'.format(cloud))
+            self.bucket_name: str = self.train_data_path.split("//")[1].split("/")[0]
         self.embedding_text = None
         self.embedding_label = None
         self.hidden_layer_size: int = hidden_layer_size
@@ -893,9 +904,30 @@ class NetworkGenerator(NeuralNetwork):
         Import data sets (Training, Testing, Validation) from file
         """
         if self.transformer:
-            self.train_data_df = pd.read_csv(filepath_or_buffer=self.train_data_path)
-            self.test_data_df = pd.read_csv(filepath_or_buffer=self.test_data_path)
-            self.val_data_df = pd.read_csv(filepath_or_buffer=self.validation_data_path)
+            self.train_data_df = DataImporter(file_path=self.train_data_path,
+                                              as_data_frame=True,
+                                              use_dask=False,
+                                              create_dir=False,
+                                              sep=self.sep,
+                                              cloud=self.cloud,
+                                              bucket_name=self.bucket_name
+                                              ).file(table_name=None)
+            self.test_data_df = DataImporter(file_path=self.test_data_path,
+                                             as_data_frame=True,
+                                             use_dask=False,
+                                             create_dir=False,
+                                             sep=self.sep,
+                                             cloud=self.cloud,
+                                             bucket_name=self.bucket_name
+                                             ).file(table_name=None)
+            self.val_data_df = DataImporter(file_path=self.validation_data_path,
+                                            as_data_frame=True,
+                                            use_dask=False,
+                                            create_dir=False,
+                                            sep=self.sep,
+                                            cloud=self.cloud,
+                                            bucket_name=self.bucket_name
+                                            ).file(table_name=None)
         else:
             if self.learning_type == 'batch':
                 if self.sequential_type == 'text':
