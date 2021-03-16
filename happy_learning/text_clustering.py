@@ -31,39 +31,6 @@ def _rank_clusters(model, text_data: List[str], vocab: corpora.Dictionary) -> tu
     return _top_topic, _distribution
 
 
-def _term_frequency_inverse_document_frequency(text_content: np.ndarray, lang: str) -> np.ndarray:
-    """
-    Apply term-frequency inverse document frequency
-
-    :param text_content: np.ndarray
-        Text data
-
-    :param lang: str
-        Abbreviated name for the stopwords language
-
-    :return: np.ndarray
-        Transformed text content using term-frequency inverse document frequency vectorizer
-    """
-    _tfidf = TfidfVectorizer(input='content',
-                             encoding='uft-8',
-                             decode_error='strict',
-                             strip_accents=None,
-                             lowercase=True,
-                             preprocessor=None,
-                             tokenizer=None,
-                             analyzer='word',
-                             stop_words=lang,
-                             ngram_range=(1, 1),
-                             vocabulary=None,
-                             binary=False,
-                             norm='l2',
-                             use_idf=True,
-                             smooth_idf=True,
-                             sublinear_tf=False
-                             )
-    return _tfidf.fit_transform(raw_documents=text_content)
-
-
 class GibbsSamplingDirichletMultinomialModeling:
     """
     Class for building Gibbs Sampling Dirichlet Multinomial Modeling model
@@ -225,12 +192,9 @@ class GibbsSamplingDirichletMultinomialModeling:
             _topic_allocations['cluster'].append(_topic_label)
         return _topic_allocations
 
-    def get_top_words_each_cluster(self, top_clusters: List[int], top_n_words: int = 5) -> dict:
+    def get_top_words_each_cluster(self, top_n_words: int = 5) -> dict:
         """
         Get top n words of each cluster
-
-        :param top_clusters: List[int]
-            Cluster indices
 
         :param top_n_words: int
             Number of top n words of each cluster
@@ -239,8 +203,11 @@ class GibbsSamplingDirichletMultinomialModeling:
             Top n words of each cluster
         """
         _top_n_words_each_cluster: dict = {}
-        for cluster in top_clusters:
-            _sorted_words_current_cluster = sorted(self.cluster_word_distribution[cluster].items(), key=lambda c: c[1], reverse=True)[:top_n_words]
+        for cluster in range(0, self.n_clusters, 1):
+            _sorted_words_current_cluster = sorted(self.cluster_word_distribution[cluster].items(),
+                                                   key=lambda c: c[1],
+                                                   reverse=True
+                                                   )[:top_n_words]
             _top_n_words_each_cluster.update({str(cluster): _sorted_words_current_cluster})
         return _top_n_words_each_cluster
 
@@ -250,7 +217,7 @@ class GibbsSamplingDirichletMultinomialModeling:
         the word importance for that particular cluster;
         phi[i][w] would be the importance of word w in topic i.
         """
-        _phi: List[dict] = [{} for i in range(0, self.n_clusters, 1)]
+        _phi: List[dict] = [{} for _ in range(0, self.n_clusters, 1)]
         for c in range(0, self.n_clusters, 1):
             for w in self.cluster_word_distribution[c]:
                 _phi[c][w] = (self.cluster_word_distribution[c][w] + self.beta) / (sum(self.cluster_word_distribution[c].values()) + self.vocab_size * self.beta)
@@ -407,26 +374,56 @@ class NonNegativeMatrixFactorization:
     """
     def __init__(self,
                  lang: str,
-                 doc_term_matrix: list,
-                 vocab: corpora.Dictionary,
                  n_clusters: int = 200,
                  n_iterations: int = 10
                  ):
         """
         :param lang: str
-            Abbreviated language name
+            Full language name
 
-        :param doc_term_matrix:
-        :param vocab:
-        :param n_clusters:
-        :param n_iterations:
+        :param n_clusters: int
+            Number of clusters
+
+        :param n_iterations: int
+            Number of iterations
         """
         self.model = None
+        self.tfidf = None
         self.lang: str = lang
         self.n_clusters: int = n_clusters
         self.n_iterations: int = n_iterations
-        self.vocab: corpora.Dictionary = vocab
-        self.document_term_matrix: list = doc_term_matrix
+
+    def _term_frequency_inverse_document_frequency(self, text_content: np.ndarray, lang: str) -> np.ndarray:
+        """
+        Apply term-frequency inverse document frequency
+
+        :param text_content: np.ndarray
+            Text data
+
+        :param lang: str
+            Abbreviated name for the stopwords language
+
+        :return: np.ndarray
+            Transformed text content using term-frequency inverse document frequency vectorizer
+        """
+        self.tfidf = TfidfVectorizer(input='content',
+                                     encoding='uft-8',
+                                     decode_error='strict',
+                                     strip_accents=None,
+                                     lowercase=True,
+                                     preprocessor=None,
+                                     tokenizer=None,
+                                     analyzer='word',
+                                     stop_words=lang,
+                                     ngram_range=(1, 1),
+                                     vocabulary=None,
+                                     binary=False,
+                                     norm='l2',
+                                     use_idf=True,
+                                     smooth_idf=True,
+                                     sublinear_tf=False
+                                     )
+        return self.tfidf.fit_transform(raw_documents=text_content)
 
     def fit(self, documents: np.ndarray) -> List[int]:
         """
@@ -438,21 +435,37 @@ class NonNegativeMatrixFactorization:
         :return: List[int]
             Cluster labels
         """
-        _tfidf = _term_frequency_inverse_document_frequency(text_content=documents, lang=self.lang)
-        _nmf: NMF = NMF(n_components=self.n_clusters,
-                        init=None,
-                        solver='cd',
-                        beta_loss='frobenius',
-                        tol=0.0004,
-                        max_iter=self.n_iterations,
-                        random_state=1234,
-                        alpha=0,
-                        l1_ratio=0,
-                        verbose=0,
-                        shuffle=False
-                        )
-        _nmf.fit(X=_tfidf, y=None)
-        _cluster_labels: List[int] = []
-        for doc in documents:
-            _cluster_labels.append(_nmf.transform(_term_frequency_inverse_document_frequency(text_content=doc, lang=self.lang)).argsort(axis=1)[:, -1].tolist()[0])
+        _tfidf = self._term_frequency_inverse_document_frequency(text_content=documents, lang=self.lang)
+        self.model: NMF = NMF(n_components=self.n_clusters,
+                              init=None,
+                              solver='cd',
+                              beta_loss='frobenius',
+                              tol=0.0004,
+                              max_iter=self.n_iterations,
+                              random_state=1234,
+                              alpha=0,
+                              l1_ratio=0,
+                              verbose=0,
+                              shuffle=False
+                              )
+        self.model.fit(X=_tfidf, y=None)
+        _cluster_labels: List[int] = self.model.transform(self._term_frequency_inverse_document_frequency(text_content=documents,
+                                                                                                          lang=self.lang
+                                                                                                          )
+                                                          ).argmax(axis=1).tolist()
         return _cluster_labels
+
+    def get_top_words_each_cluster(self, top_n_words: int = 5) -> dict:
+        """
+        Get top n words of each cluster
+
+        :param top_n_words: int
+            Number of top n words of each cluster
+
+        :return: dict
+            Top n words of each cluster
+        """
+        _top_n_words_each_cluster: dict = {}
+        for cluster, topic in enumerate(self.model.components_):
+            _top_n_words_each_cluster.update({str(cluster): [self.tfidf.get_feature_names()[i] for i in topic.argsort()[-top_n_words:]]})
+        return _top_n_words_each_cluster
