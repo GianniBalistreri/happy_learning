@@ -1,7 +1,6 @@
 import copy
 import unittest
 
-from gensim import corpora
 from happy_learning.text_clustering import GibbsSamplingDirichletMultinomialModeling, LatentDirichletAllocation, LatentSemanticIndexing, NonNegativeMatrixFactorization
 from happy_learning.text_clustering_generator import CLUSTER_ALGORITHMS, Clustering, ClusteringGenerator
 
@@ -14,12 +13,7 @@ class ClusteringTest(unittest.TestCase):
     Class for testing class Clustering
     """
     def test_gibbs_sampling_dirichlet_multinomial_model(self):
-        self.assertTrue(expr=isinstance(GibbsSamplingDirichletMultinomialModeling(vocab_size=0,
-                                                                                  n_clusters=8,
-                                                                                  n_iterations=30,
-                                                                                  alpha=0.1,
-                                                                                  beta=0.1
-                                                                                  ),
+        self.assertTrue(expr=isinstance(Clustering(cluster_params=None, train_data_path=None).gibbs_sampling_dirichlet_multinomial_modeling(),
                                         GibbsSamplingDirichletMultinomialModeling
                                         )
                         )
@@ -31,11 +25,7 @@ class ClusteringTest(unittest.TestCase):
                                                                                           ).gibbs_sampling_dirichlet_multinomial_modeling_param().get(list(_gsdmm_param.keys())[0]))
 
     def test_latent_dirichlet_allocation(self):
-        self.assertTrue(expr=isinstance(LatentDirichletAllocation(doc_term_matrix=[],
-                                                                  vocab=corpora.Dictionary(documents=[], prune_at=2000000),
-                                                                  n_clusters=10,
-                                                                  n_iterations=200,
-                                                                  ),
+        self.assertTrue(expr=isinstance(Clustering(cluster_params=None, train_data_path=None).latent_dirichlet_allocation(),
                                         LatentDirichletAllocation
                                         )
                         )
@@ -47,11 +37,7 @@ class ClusteringTest(unittest.TestCase):
                                                                                       ).latent_dirichlet_allocation_param().get(list(_lda_param.keys())[0]))
 
     def test_latent_semantic_indexing(self):
-        self.assertTrue(expr=isinstance(LatentSemanticIndexing(doc_term_matrix=[],
-                                                               vocab=corpora.Dictionary(documents=[], prune_at=2000000),
-                                                               n_clusters=10,
-                                                               n_iterations=200,
-                                                               ),
+        self.assertTrue(expr=isinstance(Clustering(cluster_params=None, train_data_path=None).latent_semantic_indexing(),
                                         LatentSemanticIndexing
                                         )
                         )
@@ -63,10 +49,7 @@ class ClusteringTest(unittest.TestCase):
                                                                                       ).latent_semantic_indexing_param().get(list(_lsi_param.keys())[0]))
 
     def test_non_negative_matrix_factorization(self):
-        self.assertTrue(expr=isinstance(NonNegativeMatrixFactorization(lang='en',
-                                                                       n_clusters=10,
-                                                                       n_iterations=200
-                                                                       ),
+        self.assertTrue(expr=isinstance(Clustering(cluster_params=None, train_data_path=None).non_negative_matrix_factorization(),
                                         NonNegativeMatrixFactorization
                                         )
                         )
