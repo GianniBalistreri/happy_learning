@@ -3,7 +3,7 @@ import numpy as np
 from gensim import corpora
 from gensim.models import LdaModel, LsiModel
 from sklearn.decomposition import NMF
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from typing import Dict, List
 
 
@@ -36,12 +36,16 @@ class GibbsSamplingDirichletMultinomialModeling:
     Class for building Gibbs Sampling Dirichlet Multinomial Modeling model
     """
     def __init__(self,
+                 vocab_size: int,
                  n_clusters: int = 8,
                  n_iterations: int = 30,
                  alpha: float = 0.1,
                  beta: float = 0.1
                  ):
         """
+        :param vocab_size: int
+            Size of the vocabulary
+
         :param n_clusters: int
             Number of pre-defined clusters
 
@@ -59,7 +63,7 @@ class GibbsSamplingDirichletMultinomialModeling:
         self.n_clusters: int = n_clusters
         self.n_iterations: int = n_iterations if n_iterations > 5 else 30
         self.n_documents: int = 0
-        self.vocab_size: int = 0
+        self.vocab_size: int = vocab_size
         self.probability_vector: List[float] = []
         self.cluster_word_count: List[int] = [0 for _ in range(0, self.n_clusters, 1)]
         self.cluster_document_count: List[int] = [0 for _ in range(0, self.n_clusters, 1)]
@@ -120,20 +124,16 @@ class GibbsSamplingDirichletMultinomialModeling:
         _probability_vector = self._document_scoring(documents=documents)
         return np.argmax(_probability_vector), max(_probability_vector)
 
-    def fit(self, documents: List[List[str]], vocab_size: int) -> List[int]:
+    def fit(self, documents: List[List[str]]) -> List[int]:
         """
         Fitting GSDMM clustering algorithm
 
         :param documents: List[List[str]]
             The document token stream
 
-        :param vocab_size: int
-            Size of the vocabulary
-
         :return: List[int]
             Cluster labels
         """
-        self.vocab_size = vocab_size
         self.n_documents = len(documents)
         _document_cluster: List[int] = [_ for _ in range(0, self.n_documents, 1)]
         # initialize the clusters
