@@ -1264,7 +1264,12 @@ class GeneticAlgorithm:
                     _model_gen = ModelGeneratorClf(clf_params=self.current_generation_meta_data['param'][self.best_individual_idx],
                                                    model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx]
                                                    ).generate_model()
-                _model_gen.train()
+                _model_gen.train(x=copy.deepcopy(self.data_set.get('x_train').values),
+                                 y=copy.deepcopy(self.data_set.get('y_train').values),
+                                 validation=dict(x_val=copy.deepcopy(self.data_set.get('x_val').values),
+                                                 y_val=copy.deepcopy(self.data_set.get('y_val').values)
+                                                 )
+                                 )
                 self.model = _model_gen.model
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Best model: {}'.format(self.model))
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness score: {}'.format(self.current_generation_meta_data['fitness_score'][self.best_individual_idx]))
