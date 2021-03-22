@@ -679,7 +679,7 @@ class Transformers:
                                eval_all_checkpoints=True,
                                use_tensorboard=True,
                                overwrite_output_dir=True,
-                               reprocess_input_data=False,
+                               reprocess_input_data=True,
                                do_lower_case=True,
                                no_save=True,
                                best_model_dir=BEST_MODEL_DIR,

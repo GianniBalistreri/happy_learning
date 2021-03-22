@@ -368,8 +368,7 @@ class GeneticAlgorithm:
                                                        model_name=[],
                                                        param=[],
                                                        param_mutated=[],
-                                                       features=[],
-                                                       trained_model=[]
+                                                       features=[]
                                                        )
         self.generation_history: dict = dict(population={},
                                              inheritance={},
@@ -425,7 +424,6 @@ class GeneticAlgorithm:
                 self.current_generation_meta_data.get('model_name').append(copy.deepcopy(self.population[idx].model_name))
                 self.current_generation_meta_data.get('param').append(copy.deepcopy(self.population[idx].model_param))
                 self.current_generation_meta_data.get('param_mutated').append(copy.deepcopy(self.population[idx].model_param_mutated))
-                self.current_generation_meta_data.get('trained_model').append(self.population[idx].model)
                 self.current_generation_meta_data.get('fitness_metric').append(copy.deepcopy(self.population[idx].fitness))
                 self.current_generation_meta_data.get('fitness_score').append(copy.deepcopy(self.population[idx].fitness_score))
             else:
@@ -434,7 +432,6 @@ class GeneticAlgorithm:
                 self.current_generation_meta_data['model_name'][idx] = copy.deepcopy(self.population[idx].model_name)
                 self.current_generation_meta_data['param'][idx] = copy.deepcopy(self.population[idx].model_param)
                 self.current_generation_meta_data['param_mutated'][idx] = copy.deepcopy(self.population[idx].model_param_mutated)
-                self.current_generation_meta_data['trained_model'][idx] = self.population[idx].model
                 self.current_generation_meta_data['fitness_metric'][idx] = copy.deepcopy(self.population[idx].fitness)
                 self.current_generation_meta_data['fitness_score'][idx] = copy.deepcopy(self.population[idx].fitness_score)
         else:
@@ -1267,9 +1264,13 @@ class GeneticAlgorithm:
                     _model_gen = ModelGeneratorClf(clf_params=self.current_generation_meta_data['param'][self.best_individual_idx],
                                                    model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx]
                                                    ).generate_model()
-                _model_gen.train()
+                _model_gen.train(x=copy.deepcopy(self.data_set.get('x_train').values),
+                                 y=copy.deepcopy(self.data_set.get('y_train').values),
+                                 validation=dict(x_val=copy.deepcopy(self.data_set.get('x_val').values),
+                                                 y_val=copy.deepcopy(self.data_set.get('y_val').values)
+                                                 )
+                                 )
                 self.model = _model_gen.model
-        #self.model = self.current_generation_meta_data['trained_model'][self.best_individual_idx]
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Best model: {}'.format(self.model))
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness score: {}'.format(self.current_generation_meta_data['fitness_score'][self.best_individual_idx]))
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness metric: {}'.format(self.current_generation_meta_data['fitness_metric'][self.best_individual_idx]))
