@@ -1250,8 +1250,8 @@ class GeneticAlgorithm:
         else:
             if self.text_clustering:
                 _cluster_gen = ClusteringGenerator(predictor=self.features[0],
-                                                   model_name=self.current_generation_meta_data['model_name'],
-                                                   cluster_params=self.current_generation_meta_data['param'],
+                                                   model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
+                                                   cluster_params=self.current_generation_meta_data['param'][self.best_individual_idx],
                                                    tokenize=False,
                                                    cloud=self.cloud,
                                                    train_data_path=self.train_data_file_path
@@ -1260,12 +1260,12 @@ class GeneticAlgorithm:
                 self.model = _cluster_gen.model
             else:
                 if self.target_type == 'reg':
-                    _model_gen = ModelGeneratorReg(reg_params=self.current_generation_meta_data['param'],
-                                                   model_name=self.current_generation_meta_data['model_name']
+                    _model_gen = ModelGeneratorReg(reg_params=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                                   model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx]
                                                    ).generate_model()
                 else:
-                    _model_gen = ModelGeneratorClf(clf_params=self.current_generation_meta_data['param'],
-                                                   model_name=self.current_generation_meta_data['model_name']
+                    _model_gen = ModelGeneratorClf(clf_params=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                                   model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx]
                                                    ).generate_model()
                 _model_gen.train()
                 self.model = _model_gen.model
