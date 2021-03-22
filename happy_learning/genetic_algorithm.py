@@ -40,7 +40,7 @@ class GeneticAlgorithmException(Exception):
 
 class GeneticAlgorithm:
     """
-    Class for optimizing supervised machine learning algorithms using Genetic Algorithm
+    Class for reinforced optimizing machine learning algorithms and feature engineering using Genetic Algorithm
     """
     def __init__(self,
                  mode: str,
@@ -420,30 +420,30 @@ class GeneticAlgorithm:
             if not self.deep_learning:
                 setattr(self.population[idx], 'features', list(self.data_set.get('x_train').columns))
             if self.current_generation_meta_data['generation'] == 0:
-                self.current_generation_meta_data.get('id').append(idx)
-                self.current_generation_meta_data.get('features').append(self.population[idx].features)
-                self.current_generation_meta_data.get('model_name').append(self.population[idx].model_name)
-                self.current_generation_meta_data.get('param').append(self.population[idx].model_param)
-                self.current_generation_meta_data.get('param_mutated').append(self.population[idx].model_param_mutated)
+                self.current_generation_meta_data.get('id').append(copy.deepcopy(idx))
+                self.current_generation_meta_data.get('features').append(copy.deepcopy(self.population[idx].features))
+                self.current_generation_meta_data.get('model_name').append(copy.deepcopy(self.population[idx].model_name))
+                self.current_generation_meta_data.get('param').append(copy.deepcopy(self.population[idx].model_param))
+                self.current_generation_meta_data.get('param_mutated').append(copy.deepcopy(self.population[idx].model_param_mutated))
                 self.current_generation_meta_data.get('trained_model').append(self.population[idx].model)
-                self.current_generation_meta_data.get('fitness_metric').append(self.population[idx].fitness)
-                self.current_generation_meta_data.get('fitness_score').append(self.population[idx].fitness_score)
+                self.current_generation_meta_data.get('fitness_metric').append(copy.deepcopy(self.population[idx].fitness))
+                self.current_generation_meta_data.get('fitness_score').append(copy.deepcopy(self.population[idx].fitness_score))
             else:
-                self.current_generation_meta_data['id'][idx] = self.population[idx].id
-                self.current_generation_meta_data['features'][idx] = self.population[idx].features
-                self.current_generation_meta_data['model_name'][idx] = self.population[idx].model_name
-                self.current_generation_meta_data['param'][idx] = self.population[idx].model_param
-                self.current_generation_meta_data['param_mutated'][idx] = self.population[idx].model_param_mutated
+                self.current_generation_meta_data['id'][idx] = copy.deepcopy(self.population[idx].id)
+                self.current_generation_meta_data['features'][idx] = copy.deepcopy(self.population[idx].features)
+                self.current_generation_meta_data['model_name'][idx] = copy.deepcopy(self.population[idx].model_name)
+                self.current_generation_meta_data['param'][idx] = copy.deepcopy(self.population[idx].model_param)
+                self.current_generation_meta_data['param_mutated'][idx] = copy.deepcopy(self.population[idx].model_param_mutated)
                 self.current_generation_meta_data['trained_model'][idx] = self.population[idx].model
-                self.current_generation_meta_data['fitness_metric'][idx] = self.population[idx].fitness
-                self.current_generation_meta_data['fitness_score'][idx] = self.population[idx].fitness_score
+                self.current_generation_meta_data['fitness_metric'][idx] = copy.deepcopy(self.population[idx].fitness)
+                self.current_generation_meta_data['fitness_score'][idx] = copy.deepcopy(self.population[idx].fitness_score)
         else:
             if idx is None:
-                self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['fitness'] = self.current_generation_meta_data.get('fitness')
-                self.evolution_gradient.get('min').append(min(self.current_generation_meta_data.get('fitness_score')))
-                self.evolution_gradient.get('median').append(np.median(self.current_generation_meta_data.get('fitness_score')))
-                self.evolution_gradient.get('mean').append(np.mean(self.current_generation_meta_data.get('fitness_score')))
-                self.evolution_gradient.get('max').append(max(self.current_generation_meta_data.get('fitness_score')))
+                self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['fitness'] = copy.deepcopy(self.current_generation_meta_data.get('fitness'))
+                self.evolution_gradient.get('min').append(copy.deepcopy(min(self.current_generation_meta_data.get('fitness_score'))))
+                self.evolution_gradient.get('median').append(copy.deepcopy(np.median(self.current_generation_meta_data.get('fitness_score'))))
+                self.evolution_gradient.get('mean').append(copy.deepcopy(np.mean(self.current_generation_meta_data.get('fitness_score'))))
+                self.evolution_gradient.get('max').append(copy.deepcopy(max(self.current_generation_meta_data.get('fitness_score'))))
                 Log(write=self.log, logger_file_path=self.output_file_path).log(
                     'Fitness: Max -> {}'.format(self.evolution_gradient.get('max')[-1]))
                 Log(write=self.log, logger_file_path=self.output_file_path).log(
@@ -456,19 +456,19 @@ class GeneticAlgorithm:
                 if self.current_generation_meta_data['generation'] == 0:
                     self.evolution_history.get('parent').append(-1)
                 else:
-                    self.evolution_history.get('parent').append(self.population[idx].id)
+                    self.evolution_history.get('parent').append(copy.deepcopy(self.population[idx].id))
                 self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])][
-                    'parent'].append(self.evolution_history.get('parent')[-1])
+                    'parent'].append(copy.deepcopy(self.evolution_history.get('parent')[-1]))
                 self.n_individuals += 1
                 setattr(self.population[idx], 'id', self.n_individuals)
                 setattr(self.population[idx], 'target', self.target)
-                self.evolution_history.get('id').append(self.population[idx].id)
-                self.evolution_history.get('generation').append(self.current_generation_meta_data['generation'])
-                self.evolution_history.get('model').append(self.population[idx].model_name)
-                self.evolution_history.get('mutation_type').append(self.population[idx].model_param_mutation)
-                self.evolution_history.get('training').append(self.n_training)
-                self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['id'].append(self.population[idx].id)
-                self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['model'].append(self.population[idx].model_name)
+                self.evolution_history.get('id').append(copy.deepcopy(self.population[idx].id))
+                self.evolution_history.get('generation').append(copy.deepcopy(self.current_generation_meta_data['generation']))
+                self.evolution_history.get('model').append(copy.deepcopy(self.population[idx].model_name))
+                self.evolution_history.get('mutation_type').append(copy.deepcopy(self.population[idx].model_param_mutation))
+                self.evolution_history.get('training').append(copy.deepcopy(self.n_training))
+                self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['id'].append(copy.deepcopy(self.population[idx].id))
+                self.generation_history['population']['gen_{}'.format(self.current_generation_meta_data['generation'])]['model'].append(copy.deepcopy(self.population[idx].model_name))
 
     def _crossover(self, parent: int, child: int):
         """
@@ -1012,7 +1012,8 @@ class GeneticAlgorithm:
                 _warm_model = ClusteringGenerator(predictor=self.features[0],
                                                   models=self.models,
                                                   tokenize=False,
-                                                  cloud=self.cloud
+                                                  cloud=self.cloud,
+                                                  train_data_path=self.train_data_file_path
                                                   ).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.evolution_continue:
@@ -1029,7 +1030,8 @@ class GeneticAlgorithm:
                                                            models=self.models,
                                                            cluster_params=_params,
                                                            tokenize=False,
-                                                           cloud=self.cloud
+                                                           cloud=self.cloud,
+                                                           train_data_path=self.train_data_file_path
                                                            ).generate_model()
                                        )
         else:
@@ -1223,7 +1225,51 @@ class GeneticAlgorithm:
                 self.evolved_features.extend(self.feature_pairs[parent])
             self.evolved_features = list(set(self.evolved_features))
         self.best_individual_idx = np.array(self.current_generation_meta_data['fitness_score']).argmax()
-        self.model = self.current_generation_meta_data['trained_model'][self.best_individual_idx]
+        if self.deep_learning:
+            _net_gen = NetworkGenerator(target=self.target,
+                                        predictors=self.features,
+                                        output_layer_size=self.deep_learning_output_size,
+                                        x_train=self.data_set.get('x_train').values if self.data_set is not None else self.data_set,
+                                        y_train=self.data_set.get('y_train').values if self.data_set is not None else self.data_set,
+                                        x_test=self.data_set.get('x_test').values if self.data_set is not None else self.data_set,
+                                        y_test=self.data_set.get('y_test').values if self.data_set is not None else self.data_set,
+                                        x_val=self.data_set.get('x_val').values if self.data_set is not None else self.data_set,
+                                        y_val=self.data_set.get('y_val').values if self.data_set is not None else self.data_set,
+                                        train_data_path=self.train_data_file_path,
+                                        test_data_path=self.test_data_file_path,
+                                        validation_data_path=self.valid_data_file_path,
+                                        model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
+                                        input_param=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                        model_param=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                        hidden_layer_size=self.warm_start_constant_hidden_layers,
+                                        hidden_layer_size_category=self.warm_start_constant_category,
+                                        cloud=self.cloud
+                                        ).generate_model()
+            _net_gen.train()
+            self.model = _net_gen.model
+        else:
+            if self.text_clustering:
+                _cluster_gen = ClusteringGenerator(predictor=self.features[0],
+                                                   model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
+                                                   cluster_params=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                                   tokenize=False,
+                                                   cloud=self.cloud,
+                                                   train_data_path=self.train_data_file_path
+                                                   ).generate_model()
+                _cluster_gen.train()
+                self.model = _cluster_gen.model
+            else:
+                if self.target_type == 'reg':
+                    _model_gen = ModelGeneratorReg(reg_params=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                                   model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx]
+                                                   ).generate_model()
+                else:
+                    _model_gen = ModelGeneratorClf(clf_params=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                                   model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx]
+                                                   ).generate_model()
+                _model_gen.train()
+                self.model = _model_gen.model
+        #self.model = self.current_generation_meta_data['trained_model'][self.best_individual_idx]
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Best model: {}'.format(self.model))
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness score: {}'.format(self.current_generation_meta_data['fitness_score'][self.best_individual_idx]))
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness metric: {}'.format(self.current_generation_meta_data['fitness_metric'][self.best_individual_idx]))

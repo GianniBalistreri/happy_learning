@@ -863,7 +863,7 @@ class TextMiner:
                 _phrase: List[str] = []
                 _emoji: Dict[str, List[str]] = dict(emoji=[], label=[])
                 for token in _nlp:
-                    if token in emoji.UNICODE_EMOJI:
+                    if token in emoji.UNICODE_EMOJI.get('en'):
                         _emoji['emoji'].append(token)
                         _emoji['label'].append(emoji.demojize(string=token, use_aliases=False))
                     _pos['pos'].append(token.pos_)

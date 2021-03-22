@@ -17,7 +17,7 @@ CLUSTER_ALGORITHMS: dict = dict(gsdmm='gibbs_sampling_dirichlet_multinomial_mode
                                 lda='latent_dirichlet_allocation',
                                 lsi='latent_semantic_indexing',
                                 nmf='non_negative_matrix_factorization',
-                                # stc='self_taught_short_text_clustering'
+                                #stc='self_taught_short_text_clustering'
                                 )
 
 
@@ -62,6 +62,7 @@ class Clustering:
             Model object
         """
         return GibbsSamplingDirichletMultinomialModeling(
+            vocab_size=self.vocab_size,
             n_clusters=10 if self.cluster_params.get('n_clusters') is None else self.cluster_params.get('n_clusters'),
             n_iterations=5 if self.cluster_params.get('n_iterations') is None else self.cluster_params.get(
                 'n_iterations'),
@@ -153,8 +154,6 @@ class Clustering:
             Model object
         """
         return NonNegativeMatrixFactorization(lang=self.cluster_params.get('lang'),
-                                              doc_term_matrix=self.document_term_matrix,
-                                              vocab=self.vocab,
                                               n_clusters=10 if self.cluster_params.get(
                                                   'n_clusters') is None else self.cluster_params.get('n_clusters'),
                                               n_iterations=5 if self.cluster_params.get(
@@ -230,6 +229,7 @@ class ClusteringGenerator(Clustering):
                  random: bool = True,
                  sep: str = '\t',
                  cloud: str = None,
+                 train_data_path: str = None,
                  seed: int = 1234
                  ):
         """
@@ -259,10 +259,16 @@ class ClusteringGenerator(Clustering):
                 -> google: Google Cloud Storage
                 -> aws: AWS Cloud
 
+        :param train_data_path: str
+            Complete file path of the training data
+
         :param seed: int
             Seed
         """
-        super(ClusteringGenerator, self).__init__(cluster_params=cluster_params, seed=seed)
+        super(ClusteringGenerator, self).__init__(cluster_params=cluster_params,
+                                                  train_data_path=train_data_path,
+                                                  seed=seed
+                                                  )
         self.predictor: str = predictor
         self.model_name: str = model_name
         self.models: List[str] = models
@@ -439,10 +445,10 @@ class ClusteringGenerator(Clustering):
         Train or fit clustering model
         """
         self._import_data()
-        if self.model != 'gsdmm':
+        if self.model in ['gsdmm', 'lda', 'lsi']:
             self._build_vocab()
         _t0: datetime = datetime.now()
-        self.cluster_label = self.model.fit(documents=self.x, vocab_size=self.vocab_size)
+        self.cluster_label = self.model.fit(documents=self.x)
         self.train_time = (datetime.now() - _t0).seconds
         self._eval()
         self.x = None
