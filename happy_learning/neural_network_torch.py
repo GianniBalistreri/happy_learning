@@ -107,6 +107,7 @@ class Attention(nn.Module):
         self.hidden_size: int = self.params.get('hidden_states')
         self.vocab_size: int = self.params.get('vocab_size')
         self.embedding_length: int = self.params.get('embedding_len')
+        self.word_embeddings: torch.nn.Embedding = torch.nn.Embedding(self.vocab_size, self.embedding_length)
         self.word_embeddings.weights = nn.Parameter(self.params.get('weights'), requires_grad=False)
         self.lstm_layer = nn.LSTM(self.embedding_length, self.hidden_size)
         self.output_layer = nn.Linear(in_features=self.hidden_size, out_features=output_size)
@@ -171,6 +172,7 @@ class GRU(nn.Module):
         self.hidden_size: int = self.params.get('hidden_states')
         self.vocab_size: int = self.params.get('vocab_size')
         self.embedding_length: int = self.params.get('embedding_len')
+        self.word_embeddings: torch.nn.Embedding = torch.nn.Embedding(self.vocab_size, self.embedding_length)
         self.word_embeddings.weights = nn.Parameter(self.params.get('weights'), requires_grad=False)
         self.gru_layer = nn.GRU(self.embedding_length, self.hidden_size)
         self.output_layer = nn.Linear(in_features=self.hidden_size, out_features=output_size)
@@ -310,6 +312,7 @@ class LSTM(nn.Module):
         self.hidden_size: int = self.params.get('hidden_states')
         self.vocab_size: int = self.params.get('vocab_size')
         self.embedding_length: int = self.params.get('embedding_len')
+        self.word_embeddings: torch.nn.Embedding = torch.nn.Embedding(self.vocab_size, self.embedding_length)
         self.word_embeddings.weights = nn.Parameter(self.params.get('weights'), requires_grad=False)
         self.lstm_layer = nn.LSTM(self.embedding_length, self.hidden_size)
         self.output_layer = nn.Linear(in_features=self.hidden_size, out_features=output_size)
@@ -354,8 +357,8 @@ class RCNN(torch.nn.Module):
         self.hidden_size: int = self.params.get('hidden_states')
         self.vocab_size: int = self.params.get('vocab_size')
         self.embedding_length: int = self.params.get('embedding_len')
-        self.word_embeddings: torch.nn.Embedding = torch.nn.Embedding(self.vocab_size, self.embedding_length)  # Initializing the look-up table.
-        self.word_embeddings.weight = torch.nn.Parameter(self.params.get('weights'), requires_grad=False) # Assigning the look-up table to the pre-trained GloVe word embedding.
+        self.word_embeddings: torch.nn.Embedding = torch.nn.Embedding(self.vocab_size, self.embedding_length)
+        self.word_embeddings.weight = torch.nn.Parameter(self.params.get('weights'), requires_grad=False)
         self.dropout: float = self.params.get('dropout')
         self.use_alpha_dropout: bool = False
         self.recurrent_network_type: str = 'lstm' if self.params.get('recurrent_network_type') is None else self.params.get('recurrent_network_type')
@@ -507,6 +510,7 @@ class RNN(nn.Module):
         self.hidden_size: int = self.params.get('hidden_states')
         self.vocab_size: int = self.params.get('vocab_size')
         self.embedding_length: int = self.params.get('embedding_len')
+        self.word_embeddings: torch.nn.Embedding = torch.nn.Embedding(self.vocab_size, self.embedding_length)
         self.word_embeddings.weights = nn.Parameter(self.params.get('weights'), requires_grad=False)
         self.rnn = nn.RNN(self.embedding_length, self.hidden_size, num_layers=1, bidirectional=True)
         self.output_layer = nn.Linear(in_features=4 * self.hidden_size, out_features=output_size)
@@ -550,6 +554,7 @@ class SelfAttention(nn.Module):
         self.hidden_size: int = self.params.get('hidden_states')
         self.vocab_size: int = self.params.get('vocab_size')
         self.embedding_length: int = self.params.get('embedding_len')
+        self.word_embeddings: torch.nn.Embedding = torch.nn.Embedding(self.vocab_size, self.embedding_length)
         self.word_embeddings.weights = nn.Parameter(self.params.get('weights'), requires_grad=False)
         self.dropout = 0.5
         self.lstm_layer = nn.LSTM(self.embedding_length, self.hidden_size, dropout=self.dropout, bidirectional=True)
@@ -660,14 +665,14 @@ class Transformers:
                                manual_seed=1234,
                                warmup_ratio=parameters.get('warmup_ratio'),
                                warmup_step=parameters.get('warmup_step'),
-                               config=dict(attention_probs_dropout_prob=parameters.get('attention_probs_dropout_prob'),
-                                           hidden_size=parameters.get('hidden_size'),
-                                           hidden_dropout_prob=parameters.get('hidden_dropout_prob'),
-                                           initializer_range=parameters.get('initializer_range'),
-                                           layer_norm_eps=parameters.get('layer_norm_eps'),
-                                           num_attention_heads=parameters.get('num_attention_heads'),
-                                           num_hidden_layers=parameters.get('num_hidden_layers')
-                                           ),
+                               #config=dict(attention_probs_dropout_prob=parameters.get('attention_probs_dropout_prob'),
+                               #            hidden_size=parameters.get('hidden_size'),
+                               #            hidden_dropout_prob=parameters.get('hidden_dropout_prob'),
+                               #            initializer_range=parameters.get('initializer_range'),
+                               #            layer_norm_eps=parameters.get('layer_norm_eps'),
+                               #            num_attention_heads=parameters.get('num_attention_heads'),
+                               #            num_hidden_layers=parameters.get('num_hidden_layers')
+                               #            ),
                                save_steps=2000,
                                logging_steps=100,
                                evaluate_during_training=True,
@@ -684,7 +689,7 @@ class Transformers:
                                fp16_opt_level=parameters.get('fp16_opt_level')
                                )
         self.model = ClassificationModel(model_type=parameters.get('model_type'),
-                                         model_name=parameters.get('model_model'),
+                                         model_name=parameters.get('model_name'),
                                          tokenizer_type=None,
                                          tokenizer_name=None,
                                          num_labels=output_size,

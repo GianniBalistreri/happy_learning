@@ -5,7 +5,7 @@ import torch
 import torch.nn.functional
 
 from .evaluate_machine_learning import EvalClf, EvalReg, ML_METRIC, SML_SCORE
-from .neural_network_torch import Attention, MLP, LSTM, RCNN, RNN, SelfAttention, Transformers
+from .neural_network_torch import Attention, GRU, MLP, LSTM, RCNN, RNN, SelfAttention, Transformers
 from .utils import HappyLearningUtils
 from datetime import datetime
 from easyexplore.data_import_export import CLOUD_PROVIDER, DataImporter
@@ -17,13 +17,14 @@ from typing import Dict, List, Tuple
 
 MAX_HIDDEN_LAYERS: int = 50
 NETWORK_TYPE: Dict[str, str] = dict(att='attention_network',
-                                    cnn='convolutional_neural_network',
+                                    #cnn='convolutional_neural_network',
+                                    gru='gated_recurrent_unit_network',
                                     lstm='long_short_term_memory_network',
                                     mlp='multi_layer_perceptron',
                                     rnn='recurrent_neural_network',
                                     rcnn='recurrent_convolutional_neural_network',
                                     self='self_attention_network',
-                                    trans='transformers'
+                                    trans='transformer'
                                     )
 NETWORK_TYPE_CATEGORY: Dict[str, List[str]] = dict(tabular=['mlp'],
                                                    seq=['att', 'cnn', 'lstm', 'rnn', 'rcnn', 'lstm', 'self', 'trans']
@@ -84,10 +85,10 @@ OPTIMIZER: dict = dict(adam=torch.optim.Adam,
                        sgd=torch.optim.SGD
                        )
 EMBEDDING: dict = dict(fast_text=FastText)
-TRANSFORMER: dict = dict(roberta='roberta-large',
-                         xlm='xlm-mlm-100-1280',
-                         xlm_roberta='xlm-roberta-large'
-                         )
+TRANSFORMER: dict = {'roberta': 'roberta-large',
+                     'xlm': 'xlm-mlm-100-1280',
+                     #'xlm-roberta': 'xlm-roberta-large'
+                     }
 IGNORE_PARAM_FOR_OPTIMIZATION: List[str] = ['embedding_len',
                                             'weights',
                                             'vocab_size',
@@ -263,6 +264,25 @@ class NeuralNetwork:
                     stride=np.random.choice(a=HappyLearningUtils().geometric_progression())
                     )
 
+    def gated_recurrent_unit_network(self) -> GRU:
+        """
+        Config GRU Network
+
+        :return: LSTM
+            Model object
+        """
+        return GRU(parameters=self.model_param, output_size=self.output_size)
+
+    @staticmethod
+    def gated_recurrent_unit_network_param() -> dict:
+        """
+        Generate Gated Recurrent Unit Network (GRU) classifier parameter randomly
+
+        :return: dict
+            Parameter config
+        """
+        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()))
+
     def multi_layer_perceptron(self) -> MLP:
         """
         Generate Multi-Layer Perceptron (MLP) classifier parameter configuration randomly
@@ -379,13 +399,36 @@ class NeuralNetwork:
         :return: dict
             Parameter config
         """
-        return dict(attention_probs_dropout_prob=np.random.uniform(low=0.05, high=0.95),
-                    hidden_size=np.random.randint(low=100, high=1000),
+        _model_type: str = np.random.choice(a=list(TRANSFORMER.keys()))
+        _num_attention_heads: int = np.random.randint(low=2, high=20)
+        _hidden_size: int = _num_attention_heads * np.random.randint(low=100, high=1000)
+        return dict(model_type=_model_type,
+                    model_name=TRANSFORMER.get(_model_type),
+                    adafactor_beta1=np.random.uniform(low=0.0, high=1),
+                    adafactor_clip_threshold=np.random.uniform(low=0.001, high=1),
+                    adafactor_decay_rate=np.random.uniform(low=-0.001, high=0.999),
+                    adafactor_eps=(np.random.uniform(low=1e-50, high=1e-10), np.random.uniform(low=1e-50, high=1e-10)),
+                    adafactor_relative_step=np.random.choice(a=[False, True]),
+                    adafactor_scale_parameter=np.random.choice(a=[False, True]),
+                    adafactor_warmup_init=np.random.choice(a=[False, True]),
+                    adam_epsilon=np.random.uniform(low=1e-10, high=1e-5),
+                    cosine_schedule_num_cycles=np.random.uniform(low=0.3, high=0.7),
+                    dynamic_quantize=np.random.choice(a=[False, True]),
+                    early_stopping_consider_epochs=np.random.choice(a=[False, True]),
+                    use_early_stopping=np.random.choice(a=[False, True]),
+                    early_stopping_delta=np.random.uniform(low=0, high=0.3),
+                    early_stopping_patience=np.random.randint(low=3, high=10),
+                    attention_probs_dropout_prob=np.random.uniform(low=0.05, high=0.95),
+                    hidden_size=_hidden_size,
                     hidden_dropout_prob=np.random.uniform(low=0.05, high=0.95),
                     initializer_range=np.random.uniform(low=0.05, high=0.95),
                     layer_norm_eps=np.random.uniform(low=0.05, high=0.5),
-                    num_attention_heads=np.random.randint(low=2, high=20),
-                    num_hidden_layers=np.random.randint(low=2, high=20)
+                    num_attention_heads=_num_attention_heads,
+                    num_hidden_layers=np.random.randint(low=2, high=20),
+                    optimizer=np.random.choice(a=['AdamW', 'Adafactor']),
+                    scheduler=np.random.choice(a=['constant_schedule', 'constant_schedule_with_warmup', 'linear_schedule_with_warmup', 'cosine_schedule_with_warmup', 'cosine_with_hard_restarts_schedule_with_warmup', 'polynomial_decay_schedule_with_warmup']),
+                    polynomial_decay_schedule_lr_end=np.random.uniform(low=1e-8, high=1e-4),
+                    polynomial_decay_schedule_power=np.random.uniform(low=0.5, high=1.0)
                     )
 
 
@@ -523,7 +566,7 @@ class NetworkGenerator(NeuralNetwork):
                                                           total_batch_metric=0
                                                           )
                                                 )
-        self.epoch_eval: Dict[str, dict] = dict(train=dict(), val=dict())
+        self.epoch_eval: Dict[str, dict] = dict(train=dict(), val=dict(), test=dict())
 
     def _batch_evaluation(self, iter_type: str, loss_value: float, metric_value: float):
         """
@@ -791,7 +834,6 @@ class NetworkGenerator(NeuralNetwork):
         if natural_language:
             _special_settings: dict = self._get_param_space(general=False)
             self.model_param.update(_special_settings['embedding'])
-            self.model_param.update(dict(transformer=_special_settings['transformer']))
 
     def _epoch_eval(self, iter_types: List[str]):
         """
@@ -838,7 +880,6 @@ class NetworkGenerator(NeuralNetwork):
                 _eval_metric: List[str] = ML_METRIC.get('clf_multi')
             for metric in _eval_metric:
                 self.fitness[iter_type].update({metric: copy.deepcopy(getattr(EvalClf(obs=obs, pred=pred), metric)())})
-        print(iter_type, '\n', self.fitness[iter_type])
 
     def _get_param_space(self, general: bool = True) -> dict:
         """
@@ -864,37 +905,7 @@ class NetworkGenerator(NeuralNetwork):
                         optimizer=np.random.choice(a=list(OPTIMIZER.keys()))
                         )
         else:
-            _model_type: str = np.random.choice(a=list(TRANSFORMER.keys()))
-            _model_name: str = TRANSFORMER.get(_model_type)
-            return dict(transformer=dict(model_type=_model_type,
-                                         model_name=_model_name,
-                                         adafactor_beta1=np.random.uniform(low=0.0, high=1),
-                                         adafactor_clip_threshold=np.random.uniform(low=0.001, high=1),
-                                         adafactor_decay_rate=np.random.uniform(low=-0.001, high=0.999),
-                                         adafactor_eps=(np.random.uniform(low=1e-50, high=1e-10), np.random.uniform(low=1e-50, high=1e-10)),
-                                         adafactor_relative_step=np.random.choice(a=[False, True]),
-                                         adafactor_scale_parameter=np.random.choice(a=[False, True]),
-                                         adafactor_warmup_init=np.random.choice(a=[False, True]),
-                                         adam_epsilon=np.random.uniform(low=1e-10, high=1e-5),
-                                         cosine_schedule_num_cycles=np.random.uniform(low=0.3, high=0.7),
-                                         dynamic_quantize=np.random.choice(a=[False, True]),
-                                         early_stopping_consider_epochs=np.random.choice(a=[False, True]),
-                                         use_early_stopping=np.random.choice(a=[False, True]),
-                                         early_stopping_delta=np.random.uniform(low=0, high=0.3),
-                                         early_stopping_patience=np.random.randint(low=3, high=10),
-                                         attention_probs_dropout_prob=np.random.uniform(low=0.05, high=0.95),
-                                         hidden_size=np.random.randint(low=100, high=1000),
-                                         hidden_dropout_prob=np.random.uniform(low=0.05, high=0.95),
-                                         initializer_range=np.random.uniform(low=0.05, high=0.95),
-                                         layer_norm_eps=np.random.uniform(low=0.05, high=0.5),
-                                         num_attention_heads=np.random.randint(low=2, high=20),
-                                         num_hidden_layers=np.random.randint(low=2, high=20),
-                                         optimizer=np.random.choice(a=['AdamW', 'Adafactor']),
-                                         scheduler=np.random.choice(a=['constant_schedule', 'constant_schedule_with_warmup', 'linear_schedule_with_warmup', 'cosine_schedule_with_warmup', 'cosine_with_hard_restarts_schedule_with_warmup', 'polynomial_decay_schedule_with_warmup']),
-                                         polynomial_decay_schedule_lr_end=np.random.uniform(low=1e-8, high=1e-4),
-                                         polynomial_decay_schedule_power=np.random.uniform(low=0.5, high=1.0)
-                                         ),
-                        embedding=dict(embedding_len=300,
+            return dict(embedding=dict(embedding_len=300,
                                        embedding_model=np.random.choice(a=list(EMBEDDING.keys()))
                                        )
                         )
@@ -912,6 +923,7 @@ class NetworkGenerator(NeuralNetwork):
                                               cloud=self.cloud,
                                               bucket_name=self.bucket_name
                                               ).file(table_name=None)
+            self.train_data_df[self.target] = pd.to_numeric(self.train_data_df[self.target])
             self.test_data_df = DataImporter(file_path=self.test_data_path,
                                              as_data_frame=True,
                                              use_dask=False,
@@ -920,6 +932,7 @@ class NetworkGenerator(NeuralNetwork):
                                              cloud=self.cloud,
                                              bucket_name=self.bucket_name
                                              ).file(table_name=None)
+            self.test_data_df[self.target] = pd.to_numeric(self.test_data_df[self.target])
             self.val_data_df = DataImporter(file_path=self.validation_data_path,
                                             as_data_frame=True,
                                             use_dask=False,
@@ -928,6 +941,7 @@ class NetworkGenerator(NeuralNetwork):
                                             cloud=self.cloud,
                                             bucket_name=self.bucket_name
                                             ).file(table_name=None)
+            self.val_data_df[self.target] = pd.to_numeric(self.val_data_df[self.target])
         else:
             if self.learning_type == 'batch':
                 if self.sequential_type == 'text':
@@ -966,6 +980,7 @@ class NetworkGenerator(NeuralNetwork):
                         self.embedding_text.build_vocab(_train_data,
                                                         vectors=EMBEDDING[self.model_param.get('embedding_model')](language='de' if self.model_param.get('lang') is None else self.model_param.get('lang'))
                                                         )
+                    self.embedding_label.build_vocab()
                     if 0 in _unique_labels:
                         for label in _unique_labels:
                             self.embedding_label.vocab.stoi.update({str(label): label})
@@ -989,14 +1004,51 @@ class NetworkGenerator(NeuralNetwork):
                                                                                                       shuffle=True
                                                                                                       )
                 else:
-                    _train_data: TensorDataset = TensorDataset(torch.from_numpy(self.x_train), torch.from_numpy(self.y_train))
-                    _test_data: TensorDataset = TensorDataset(torch.from_numpy(self.x_test), torch.from_numpy(self.y_test))
-                    _validation_data: TensorDataset = TensorDataset(torch.from_numpy(self.x_val), torch.from_numpy(self.y_val))
-                    self.train_iter = DataLoader(dataset=_train_data, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
-                    self.test_iter = DataLoader(dataset=_test_data, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
-                    self.validation_iter = DataLoader(dataset=_validation_data, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
+                    self.train_data_df = DataImporter(file_path=self.train_data_path,
+                                                      as_data_frame=True,
+                                                      use_dask=False,
+                                                      create_dir=False,
+                                                      sep=self.sep,
+                                                      cloud=self.cloud,
+                                                      bucket_name=self.bucket_name
+                                                      ).file(table_name=None)
+                    self.test_data_df = DataImporter(file_path=self.test_data_path,
+                                                     as_data_frame=True,
+                                                     use_dask=False,
+                                                     create_dir=False,
+                                                     sep=self.sep,
+                                                     cloud=self.cloud,
+                                                     bucket_name=self.bucket_name
+                                                     ).file(table_name=None)
+                    self.val_data_df = DataImporter(file_path=self.validation_data_path,
+                                                    as_data_frame=True,
+                                                    use_dask=False,
+                                                    create_dir=False,
+                                                    sep=self.sep,
+                                                    cloud=self.cloud,
+                                                    bucket_name=self.bucket_name
+                                                    ).file(table_name=None)
+                    _train_predictor_tensor: torch.tensor = torch.tensor(data=self.train_data_df['text'].values)
+                    _test_predictor_tensor: torch.tensor = torch.tensor(data=self.test_data_df['text'].values)
+                    _val_predictor_tensor: torch.tensor = torch.tensor(data=self.val_data_df['text'].values)
+                    _train_target_tensor: torch.tensor = torch.tensor(data=self.train_data_df['label'].values.astype(np.float32))
+                    _test_target_tensor: torch.tensor = torch.tensor(data=self.test_data_df['label'].values.astype(np.float32))
+                    _val_target_tensor: torch.tensor = torch.tensor(data=self.val_data_df['label'].values.astype(np.float32))
+                    _train_data_tensor: TensorDataset = TensorDataset(_train_predictor_tensor, _train_target_tensor)
+                    _test_data_tensor: TensorDataset = TensorDataset(_test_predictor_tensor, _test_target_tensor)
+                    _val_data_tensor: TensorDataset = TensorDataset(_val_predictor_tensor, _val_target_tensor)
+                    self.train_iter = DataLoader(dataset=_train_data_tensor, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
+                    self.test_iter = DataLoader(dataset=_test_data_tensor, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
+                    self.validation_iter = DataLoader(dataset=_val_data_tensor, shuffle=True, batch_size=int(self.model_param.get('batch_size')))
+                    self.train_data_df = None
+                    self.test_data_df = None
+                    self.val_data_df = None
+                    del _train_predictor_tensor, _train_target_tensor
+                    del _test_predictor_tensor, _test_target_tensor
+                    del _val_predictor_tensor, _val_target_tensor
+                    del _train_data_tensor, _test_data_tensor, _val_data_tensor
             elif self.learning_type == 'stochastic':
-                pass
+                raise NeuralNetworkException('Importing data set for stochastic learning not implemented yet')
             else:
                 raise NeuralNetworkException('Learning type ({}) not supported'.format(self.learning_type))
             self.x_train = None
@@ -1106,13 +1158,13 @@ class NetworkGenerator(NeuralNetwork):
         """
         Train neural network using deep learning framework 'PyTorch' (transformer only)
         """
-        self.model.train_model(train_df=self.train_data_df,
-                               multi_label=False if self.output_size <= 2 else True,
-                               output_dir=None,
-                               show_running_loss=True,
-                               eval_df=self.val_data_df,
-                               verbose=True
-                               )
+        self.model.model.train_model(train_df=self.train_data_df,
+                                     multi_label=False if self.output_size == 2 else True,
+                                     output_dir=None,
+                                     show_running_loss=True,
+                                     eval_df=self.val_data_df,
+                                     verbose=True
+                                     )
         _result, _predictions, _wrong_predictions = self.model.eval_model(self.train_data_df)
         self._eval(iter_type='train', obs=self.train_data_df.values.tolist(), pred=_predictions)
         del _result
@@ -1134,7 +1186,7 @@ class NetworkGenerator(NeuralNetwork):
             _model = copy.deepcopy(NETWORK_TYPE.get(self.model_name))
         else:
             _model = copy.deepcopy(NETWORK_TYPE.get(self.model_name))
-        self.transformer = True if self.model_name == 'transformer' else False
+        self.transformer = True if self.model_name == 'trans' else False
         if len(self.input_param.keys()) == 0:
             self.model_param = getattr(NeuralNetwork(target=self.target,
                                                      predictors=self.predictors,
@@ -1152,10 +1204,11 @@ class NetworkGenerator(NeuralNetwork):
                                                      ),
                                        '{}_param'.format(_model)
                                        )()
-            self.model_param.update(self._get_param_space(general=True))
-            self._config_params(hidden_layers=True)
-            if self.sequential_type == 'text':
-                self._config_params(natural_language=True)
+            if not self.transformer:
+                self.model_param.update(self._get_param_space(general=True))
+                self._config_params(hidden_layers=True)
+                if self.sequential_type == 'text':
+                    self._config_params(natural_language=True)
         else:
             self.model_param = copy.deepcopy(self.input_param)
         _idx: int = 0 if len(self.model_param_mutated.keys()) == 0 else len(self.model_param_mutated.keys()) + 1
@@ -1208,7 +1261,25 @@ class NetworkGenerator(NeuralNetwork):
                 _rate: float = param_rate
             else:
                 _rate: float = 0.1
-        _params: dict = copy.deepcopy(self.model_param)
+        _params: dict = getattr(NeuralNetwork(target=self.target,
+                                              predictors=self.predictors,
+                                              output_layer_size=self.output_size,
+                                              x_train=self.x_train,
+                                              y_train=self.y_train,
+                                              x_test=self.x_test,
+                                              y_test=self.y_test,
+                                              x_val=self.x_val,
+                                              y_val=self.y_val,
+                                              train_data_path=self.train_data_path,
+                                              test_data_path=self.test_data_path,
+                                              validation_data_path=self.validation_data_path,
+                                              sequential_type=self.sequential_type,
+                                              input_param=self.input_param,
+                                              model_param=self.model_param,
+                                              seed=self.seed
+                                              ),
+                                '{}_param'.format(NETWORK_TYPE.get(self.model_name))
+                                )()
         for fixed in ['hidden_layers', 'hidden_layer_size_category']:
             if fixed in list(self.model_param.keys()):
                 del _params[fixed]
@@ -1245,7 +1316,6 @@ class NetworkGenerator(NeuralNetwork):
                 elif _param in self._get_param_space(general=False).keys():
                     self.model_param.update({_param: copy.deepcopy(self._get_param_space(general=False).get(_param))})
             self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update({_param: self.model_param.get(_param)})
-        #print('new', self.model_param)
         self.model_param_mutation = 'new_model'
         if len(self.predictors) > 0:
             if self.target != '':
@@ -1341,10 +1411,10 @@ class NetworkGenerator(NeuralNetwork):
         """
         if self.transformer:
             if validation:
-                _result, _predictions, _wrong_predictions = self.model.eval_model(self.val_data_df)
+                _result, _predictions, _wrong_predictions = self.model.model.eval_model(self.val_data_df)
                 self._eval(iter_type='val', obs=self.val_data_df.values.tolist(), pred=_predictions)
             else:
-                _result, _predictions, _wrong_predictions = self.model.eval_model(self.test_data_df)
+                _result, _predictions, _wrong_predictions = self.model.model.eval_model(self.test_data_df)
                 self._eval(iter_type='test', obs=self.test_data_df.values.tolist(), pred=_predictions)
             del _result
             del _predictions
@@ -1381,12 +1451,12 @@ class NetworkGenerator(NeuralNetwork):
         else:
             torch.save(obj=self.model, f=file_path)
 
-    def train(self, transformer: bool = True):
+    def train(self):
         """
         Train neural network using deep learning framework 'PyTorch'
         """
         _t0: datetime = datetime.now()
-        if transformer:
+        if self.transformer:
             self._train_transformer()
             self.train_time = (datetime.now() - _t0).seconds
             self.eval(validation=True)
