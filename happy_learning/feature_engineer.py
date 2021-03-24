@@ -5077,6 +5077,16 @@ class FeatureEngineer:
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Level of feature processing not supported "{}". It should be greater than 0'.format(level))
 
     @staticmethod
+    def set_partitions(n_partitions: int):
+        """
+        Set dask partitions
+
+        :param n_partitions: int
+            Number of partitions to reset
+        """
+        DATA_PROCESSING['df'] = DATA_PROCESSING['df'].repartition(n_partitions)
+
+    @staticmethod
     @FeatureOrchestra(meth='set_predictors', feature_types=['categorical', 'continuous', 'ordinal'])
     def set_predictors(features: List[str], exclude: List[str] = None, exclude_original_data: bool = True):
         """
