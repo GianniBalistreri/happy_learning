@@ -30,7 +30,7 @@ requires = [r.strip() for r in requires.split('\n') if ((r.strip()[0] != "#") an
 
 setuptools.setup(
     name='happy_learning',
-    version='0.2.9',
+    version='0.3.0',
     author='Gianni Francesco Balistreri',
     author_email='gbalistreri@gmx.de',
     description='Toolbox for reinforced developing of supervised and unsupervised machine learning models (as proof-of-concept)',
@@ -63,7 +63,10 @@ setuptools.setup(
                          'test/test_neural_network_generator_torch.py',
                          'test/test_neural_network_torch.py',
                          'test/test_sampler.py',
+                         'test/test_self_taught_short_clustering.py',
                          'test/test_supervised_machine_learning.py',
+                         'test/test_text_clustering.py',
+                         'test/test_text_clustering_generator.py',
                          'test/test_text_miner.py',
                          'test/test_utils.py'
                          ]
