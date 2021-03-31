@@ -290,7 +290,8 @@ class HappyLearningUtils:
                             ordinal: List[str] = None,
                             date: List[str] = None,
                             id_text: List[str] = None,
-                            date_edges: Tuple[str, str] = None
+                            date_edges: Tuple[str, str] = None,
+                            max_categories: int = 100
                             ) -> Dict[str, str]:
         """
         Get analytical data type of feature using dask for parallel computing
@@ -319,6 +320,9 @@ class HappyLearningUtils:
         :param id_text: List[str]
             Name of the identifier or text features
 
+        :param max_categories: int
+            Maximum number of categories for identifying feature as categorical
+
         :return Dict[str, str]:
             Analytical data type and feature name
         """
@@ -339,7 +343,7 @@ class HappyLearningUtils:
                 return {'id_text': feature}
         _feature_data = df.loc[~df[feature].isnull(), feature]
         if str(dtype).find('float') >= 0:
-            _unique = _feature_data.unique().values
+            _unique = _feature_data.unique()
             if any(_feature_data.isnull()):
                 if any(_unique[~pd.isnull(_unique)] % 1) != 0:
                     return {'continuous': feature}
@@ -358,7 +362,10 @@ class HappyLearningUtils:
                         except (TypeError, ValueError):
                             return {'id_text': feature}
                     else:
-                        return {'categorical': feature}
+                        if len(_unique) > max_categories:
+                            return {'ordinal': feature}
+                        else:
+                            return {'categorical': feature}
             else:
                 if any(_unique % 1) != 0:
                     return {'continuous': feature}
@@ -377,14 +384,22 @@ class HappyLearningUtils:
                         except (TypeError, ValueError):
                             return {'id_text': feature}
                     else:
-                        return {'categorical': feature}
+                        if len(_feature_data) == len(_feature_data.unique()):
+                            return {'id_text': feature}
+                        if len(_unique) > max_categories:
+                            return {'ordinal': feature}
+                        else:
+                            return {'categorical': feature}
         elif str(dtype).find('int') >= 0:
-            if len(_feature_data) == len(_feature_data.unique().values):
+            if len(_feature_data) == len(_feature_data.unique()):
                 return {'id_text': feature}
             else:
-                return {'categorical': feature}
+                if len(_feature_data.unique()) > max_categories:
+                    return {'ordinal': feature}
+                else:
+                    return {'categorical': feature}
         elif str(dtype).find('object') >= 0:
-            _unique: np.array = _feature_data.unique().values
+            _unique: np.array = _feature_data.unique()
             _digits: int = 0
             _dot: bool = False
             _max_dots: int = 0
@@ -415,16 +430,19 @@ class HappyLearningUtils:
                         else:
                             return {'id_text': feature}
                 else:
-                    if len(_feature_data) == len(_feature_data.unique().values):
+                    if len(_feature_data) == len(_feature_data.unique()):
                         return {'id_text': feature}
                     _len_of_feature = pd.DataFrame()
-                    _len_of_feature[feature] = _feature_data[~_feature_data.isnull()].values
+                    _len_of_feature[feature] = _feature_data[~_feature_data.isnull()]
                     _len_of_feature['len'] = _len_of_feature[feature].str.len()
                     _unique_values: np.array = _len_of_feature['len'].unique()
                     if len(_feature_data.unique()) >= (len(_feature_data) * 0.5):
                         return {'id_text': feature}
                     else:
-                        return {'categorical': feature}
+                        if len(_feature_data.unique()) > max_categories:
+                            return {'ordinal': feature}
+                        else:
+                            return {'categorical': feature}
             else:
                 try:
                     _potential_date = _feature_data[~_feature_data.isnull()]
@@ -435,13 +453,13 @@ class HappyLearningUtils:
                     if _unique_cats > 4:
                         return {'date': feature}
                     else:
-                        if len(_feature_data) == len(_feature_data.unique().values):
+                        if len(_feature_data) == len(_feature_data.unique()):
                             return {'id_text': feature}
                         if len(_feature_data.unique().values) <= 3:
                             return {'categorical': feature}
                         else:
                             _len_of_feature = pd.DataFrame()
-                            _len_of_feature[feature] = _feature_data[~_feature_data.isnull()].values
+                            _len_of_feature[feature] = _feature_data[~_feature_data.isnull()]
                             _len_of_feature['len'] = _len_of_feature[feature].str.len()
                             _unique_values: np.array = _len_of_feature['len'].unique()
                             for val in _unique_values:
@@ -454,24 +472,30 @@ class HappyLearningUtils:
                                 if len(_feature_data.unique()) >= (len(_feature_data) * 0.5):
                                     return {'id_text': feature}
                                 else:
-                                    return {'categorical': feature}
+                                    if len(_feature_data.unique().values) > max_categories:
+                                        return {'ordinal': feature}
+                                    else:
+                                        return {'categorical': feature}
                             else:
                                 return {'categorical': feature}
                 except (TypeError, ValueError):
                     if len(_feature_data) == len(_unique):
                         return {'id_text': feature}
-                    if len(_feature_data.unique().values) <= 3:
+                    if len(_feature_data.unique()) <= 3:
                         return {'categorical': feature}
                     else:
                         _len_of_feature = _feature_data[~_feature_data.isnull()]
                         _len_of_feature['len'] = _len_of_feature.str.len()
                         _unique_values: np.array = _len_of_feature['len'].unique()
-                        for val in _feature_data.unique().values:
+                        for val in _feature_data.unique():
                             if len(re.findall(pattern=r'[a-zA-Z]', string=str(val))) > 0:
                                 if len(_feature_data.unique()) >= (len(_feature_data) * 0.5):
                                     return {'id_text': feature}
                                 else:
-                                    return {'categorical': feature}
+                                    if len(_feature_data.unique()) > max_categories:
+                                        return {'ordinal': feature}
+                                    else:
+                                        return {'categorical': feature}
                         for ch in SPECIAL_CHARACTERS:
                             if any(_len_of_feature.str.find(ch) > 0):
                                 if len(_feature_data.unique()) >= (len(_feature_data) * 0.5):
