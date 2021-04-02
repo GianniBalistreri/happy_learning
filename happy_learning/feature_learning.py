@@ -20,6 +20,7 @@ class FeatureLearning:
     Class for reinforcement feature engineering using supervised machine learning
     """
     def __init__(self,
+                 temp_dir: str = None,
                  feature_engineer: FeatureEngineer = None,
                  df: Union[dd.DataFrame, pd.DataFrame] = None,
                  file_path: str = None,
@@ -40,6 +41,9 @@ class FeatureLearning:
                  **kwargs
                  ):
         """
+        :param temp_dir: str
+            Path for the temporary feature files directory
+
         :param feature_engineer: FeatureEngineer
             Pre-defined FeatureEngineer object
 
@@ -85,6 +89,7 @@ class FeatureLearning:
         :param kwargs: dict
             Key-word arguments
         """
+        self.temp_dir: str = temp_dir
         self.imp_features: List[str] = []
         self.max_features: int = -1
         self.user_defined_max_features: int = max_features
@@ -106,7 +111,8 @@ class FeatureLearning:
                 self.output_path = '{}/'.format(self.output_path)
         self.save_temp_data: bool = save_temp_data
         if feature_engineer is None:
-            self.feature_engineer = FeatureEngineer(df=df,
+            self.feature_engineer = FeatureEngineer(temp_dir=temp_dir,
+                                                    df=df,
                                                     target_feature=target,
                                                     generate_new_feature=True,
                                                     id_features=kwargs.get('id_features'),
