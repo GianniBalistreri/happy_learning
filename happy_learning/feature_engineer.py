@@ -3180,11 +3180,7 @@ class FeatureEngineer:
             Names of features
         """
         if feature_type is None:
-            _features: List[str] = []
-            for ft in FEATURE_TYPES.keys():
-                for feature in FEATURE_TYPES.get(ft):
-                    _features.append(feature)
-            return _features
+            return ALL_FEATURES
         else:
             if feature_type in FEATURE_TYPES.keys():
                 return FEATURE_TYPES.get(feature_type)
