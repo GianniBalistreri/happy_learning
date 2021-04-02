@@ -134,7 +134,8 @@ class FeatureLearning:
                                                     )
         else:
             self.feature_engineer = feature_engineer
-        self.feature_engineer.impute(multiple=True, multiple_meth='random', m=25, convergence_threshold=0.99)
+        if engineer_continuous:
+            self.feature_engineer.impute(multiple=True, multiple_meth='random', m=25, convergence_threshold=0.99)
         self.feature_engineer.reset_multi_threading()
         if self.engineer_time_disparity:
             self.feature_engineer.disparity(years=True if kwargs.get('years') is None else kwargs.get('years'),
@@ -265,7 +266,7 @@ class FeatureLearning:
         """
         self.feature_engineer.label_encoder(encode=True)
         self.feature_engineer.date_categorizer()
-        self.feature_engineer.binning(supervised=True, optimal=True, optimal_meth='bayesian_blocks')
+        #self.feature_engineer.binning(supervised=True, optimal=True, optimal_meth='bayesian_blocks')
         self.feature_engineer.one_hot_encoder(threshold=self.kwargs.get('threshold'))
         _features: List[str] = self.feature_engineer.get_features(feature_type='ordinal') + self.feature_engineer.get_features(feature_type='categorical')
         self.feature_engineer.set_predictors(features=_features, exclude_original_data=True)
