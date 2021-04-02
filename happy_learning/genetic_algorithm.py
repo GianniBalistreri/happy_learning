@@ -944,23 +944,20 @@ class GeneticAlgorithm:
                 if feature in self.feature_pairs[parent]:
                     if self.mode == 'feature_engineer':
                         if np.random.uniform(low=0, high=1) <= self.mutation_prob:
-                            try:
-                                self.feature_engineer.act(actor=feature,
-                                                          inter_actors=_feature_pool,
-                                                          force_action=None,
-                                                          alternative_actions=None
-                                                          )
-                                _generated_feature: str = self.feature_engineer.get_last_generated_feature()
-                                if _generated_feature == '':
-                                    _new_features.append(feature)
-                                else:
-                                    _new_features.append(_generated_feature)
-                                self.mutated_features['parent'].append(feature)
-                                self.mutated_features['child'].append(_new_features[-1])
-                                self.mutated_features['generation'].append(feature)
-                                self.mutated_features['action'].append(self.feature_engineer.get_last_action())
-                            except:
-                                Log(write=False).log(msg='Error during feature engineering: actor={} interactors={}'.format(feature, _feature_pool))
+                            self.feature_engineer.act(actor=feature,
+                                                      inter_actors=_feature_pool,
+                                                      force_action=None,
+                                                      alternative_actions=None
+                                                      )
+                            _generated_feature: str = self.feature_engineer.get_last_generated_feature()
+                            if _generated_feature == '':
+                                _new_features.append(feature)
+                            else:
+                                _new_features.append(_generated_feature)
+                            self.mutated_features['parent'].append(feature)
+                            self.mutated_features['child'].append(_new_features[-1])
+                            self.mutated_features['generation'].append(feature)
+                            self.mutated_features['action'].append(self.feature_engineer.get_last_action())
                         else:
                             _new_features.append(feature)
                     elif self.mode == 'feature_selector':
