@@ -1252,6 +1252,7 @@ class FeatureEngineer:
         :param features: List[str]
             Name of the one-hot encoded features to merge together
         """
+        _load_temp_files(features=features)
         _data: np.array = np.zeros(shape=len(DATA_PROCESSING['df']))
         for feature in features:
             _data = _data + DATA_PROCESSING['df'][feature].values
@@ -1382,20 +1383,20 @@ class FeatureEngineer:
                 break
             if DATA_PROCESSING.get('act_trials') < _max_trials:
                 if _force_action is None:
-                    if (_actor in DATA_PROCESSING['df'].columns) and (_actor in _compatible_actors):
+                    if (_actor in ALL_FEATURES) and (_actor in _compatible_actors):
                         _action: str = np.random.choice(a=list(PROCESSING_ACTION_SPACE['continuous'].keys()))
                         if (actor in FEATURE_TYPES.get('ordinal')) or (_action in ['interaction', 'self_interaction']):
                             if len(inter_actors) > 0:
                                 while True:
                                     _supporting_actor: str = np.random.choice(a=inter_actors)
-                                    if (_supporting_actor in DATA_PROCESSING['df'].columns) and (
+                                    if (_supporting_actor in ALL_FEATURES) and (
                                             _supporting_actor in _compatible_actors):
                                         break
                                     if _trial == _max_trials:
                                         _stop = True
                                         break
                                 if _stop:
-                                    if _supporting_actor not in DATA_PROCESSING['df'].columns:
+                                    if _supporting_actor not in ALL_FEATURES:
                                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='No interaction feature found in data set'.format(_actor))
                                         break
                                     if _supporting_actor not in _compatible_actors:
@@ -1503,14 +1504,14 @@ class FeatureEngineer:
                                     DATA_PROCESSING['actor_memory']['action_config']['unstable'].append(0)
                                     break
                     else:
-                        if _actor not in DATA_PROCESSING['df'].columns:
+                        if _actor not in ALL_FEATURES:
                             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Feature ({}) not found in data set'.format(_actor))
                             break
                         if _actor not in _compatible_actors:
                             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Feature ({}) is not numeric'.format(_actor))
                             break
                 else:
-                    if _actor in DATA_PROCESSING['df'].columns:
+                    if _actor in ALL_FEATURES:
                         _alternative_actions: List[str] = alternative_actions
                         if _alternative_actions is not None:
                             if len(_alternative_actions) == 0:
@@ -1624,7 +1625,8 @@ class FeatureEngineer:
                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Maximum of action re-trials ({}) exceeded. No feature generated'.format(_max_trials))
                 break
         _last_generated_feature: str = self.get_last_generated_feature()
-        if actor in _compatible_actors and _last_generated_feature != '' and _last_generated_feature in DATA_PROCESSING.get('df').columns:
+        if actor in _compatible_actors and _last_generated_feature != '' and _last_generated_feature in ALL_FEATURES:
+            _load_temp_files(features=[actor, _last_generated_feature])
             if MissingDataAnalysis(df=DATA_PROCESSING.get('df')[[_actor, _last_generated_feature]]).has_nan():
                 _invariant_features: List[str] = EasyExploreUtils().get_invariant_features(df=DATA_PROCESSING.get('df')[[_actor, _last_generated_feature]])
                 _duplicate_features: dict = EasyExploreUtils().get_duplicates(df=DATA_PROCESSING.get('df')[[_actor, _last_generated_feature]], cases=False, features=True)
@@ -3850,7 +3852,7 @@ class FeatureEngineer:
                             # TODO: Prevent IndexError -> std_theta list and imputation set
                             _best_imputation: list = _m[_std_theta.index(min(_std_theta))]
                             _imp_data: pd.DataFrame = pd.DataFrame()
-                            _imp_data[feature] = DATA_PROCESSING['df'][feature].values.compute()
+                            _imp_data[feature] = DATA_PROCESSING['df'][feature].values
                             for i, idx in enumerate(DATA_PROCESSING['mapper']['mis']['features'][feature]):
                                 _imp_data.loc[idx, feature] = _best_imputation[i]
                                 #DATA_PROCESSING['df'].loc[idx, feature] = _best_imputation[i]
