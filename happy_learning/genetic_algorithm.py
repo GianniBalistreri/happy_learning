@@ -556,7 +556,7 @@ class GeneticAlgorithm:
             if self.mode.find('feature') >= 0:
                 if self.target not in self.feature_engineer.get_features():
                     raise GeneticAlgorithmException('Target feature ({}) not found in data set'.format(self.target))
-                self.target_values: np.array = self.feature_engineer.get_feature_values(feature=self.target, unique=True)
+                self.target_values: np.array = self.feature_engineer.get_target_values()
                 if self.mode == 'feature_engineer':
                     if self.feature_engineer is None:
                         raise GeneticAlgorithmException('FeatureEngineer object not found')
@@ -591,7 +591,7 @@ class GeneticAlgorithm:
                     else:
                         self.df = self.feature_engineer.get_training_data()
                         self.target = self.feature_engineer.get_target()
-                        self.target_values = self.feature_engineer.get_feature_values(feature=self.target, unique=True)
+                        self.target_values = self.feature_engineer.get_target_values()
                         self.features = self.feature_engineer.get_predictors()
                         self.n_cases = self.feature_engineer.get_n_cases()
                         self.n_test_cases: int = round(self.n_cases * (1 - _train_size))
@@ -603,7 +603,7 @@ class GeneticAlgorithm:
                         self.features = list(self.df.columns)
                         del self.features[self.features.index(self.target)]
                     self.df = self.df[self.features + [self.target]]
-                    self.target_values: np.array = self.df[self.target].unique().values.compute()
+                    self.target_values: np.array = self.df[self.target].unique()
                     self.feature_pairs = None
                     self.n_cases = len(self.df)
                     self.n_test_cases: int = round(self.n_cases * (1 - _train_size))
