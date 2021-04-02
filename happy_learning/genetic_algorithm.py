@@ -771,57 +771,21 @@ class GeneticAlgorithm:
             _parent_child_combination.append(tuple([self.parents_idx[c], self.child_idx[c]]))
         return _parent_child_combination
 
-    def _mating_pool(self):
+    def _mating_pool(self, crossover: bool = False):
         """
-        Selecting best individuals in the current generation as parents for reducing the offspring of the next generation
+        Mutate genes of chosen parents
+
+        :param crossover: bool
+            Allow individuals to include crossover before mutating single genes as additional mutation strategy
         """
-        _trials: int = 0
-        while True:
-            if self.re_split_data or self.re_sample_cases or self.re_sample_features:
-                _features: List[str] = self.features
-                if self.re_sample_features:
-                    _features: List[str] = random.sample(self.features, self.max_features)
-                _sample_trials: int = 0
-                __i = 0
-                while True:
-                    __i += 1
-                    self._sampling(features=_features)
-                    _s: int = copy.deepcopy(_sample_trials)
-                    for s in self.data_set.keys():
-                        if s.find('x_') >= 0 and len(self.data_set[s].shape) != 2:
-                            _sample_trials += 1
-                            break
-                    if _s == _sample_trials:
-                        break
-                    else:
-                        self.data_set = None
-                    if _sample_trials == self.max_trials:
-                        break
-            _threads: dict = {}
-            _thread_pool: ThreadPool = ThreadPool(processes=self.n_threads) if self.multi_threading else None
-            for i in range(0, self.pop_size, 1):
-                if i not in self.parents_idx:
-                    if self.multi_threading:
-                        _threads.update({i: _thread_pool.apply_async(func=self._modeling, args=[i])})
-                    else:
-                        self._modeling(pop_idx=i)
-            if self.multi_threading:
-                for thread in _threads.keys():
-                    _threads.get(thread).get()
-            self._collect_meta_data(current_gen=False, idx=None)
-            if self.current_generation_meta_data.get('generation') == 0:
-                if self.re_populate:
-                    if _trials == 1: #self.max_trials:
-                        break
-                    if self.evolution_gradient.get('min')[0] == self.evolution_gradient.get('max')[0] and self.evolution_gradient.get('max')[0] < 1:
-                        _trials += 1
-                        self._re_populate()
-                    else:
-                        break
-                else:
-                    break
+        for parent, child in self._inherit():
+            if crossover:
+                # Mutation including crossover strategy (used for optimizing feature engineering and selection)
+                self._crossover(parent=parent, child=child)
+                self._mutate(parent=parent, child=child)
             else:
-                break
+                # Mutation without crossover strategy (used for optimizing ml models / parameters)
+                self._mutate(parent=parent, child=child)
 
     def _modeling(self, pop_idx: int):
         """
@@ -966,22 +930,6 @@ class GeneticAlgorithm:
                     _new_features.append(feature)
             self.feature_pairs[child] = copy.deepcopy(_new_features)
             #print('mutated new child', self.feature_pairs[child])
-
-    def _mutation(self, crossover: bool = False):
-        """
-        Mutate genes of chosen parents
-
-        :param crossover: bool
-            Allow individuals to include crossover before mutating single genes as additional mutation strategy
-        """
-        for parent, child in self._inherit():
-            if crossover:
-                # Mutation including crossover strategy (used for optimizing feature engineering and selection)
-                self._crossover(parent=parent, child=child)
-                self._mutate(parent=parent, child=child)
-            else:
-                # Mutation without crossover strategy (used for optimizing ml models / parameters)
-                self._mutate(parent=parent, child=child)
 
     def _natural_selection(self):
         """
@@ -1144,6 +1092,58 @@ class GeneticAlgorithm:
         else:
             self.data_set = self.sampling_function()
 
+    def _trainer(self):
+        """
+        Selecting best individuals in the current generation as parents for reducing the offspring of the next generation
+        """
+        _trials: int = 0
+        while True:
+            if self.re_split_data or self.re_sample_cases or self.re_sample_features:
+                _features: List[str] = self.features
+                if self.re_sample_features:
+                    _features: List[str] = random.sample(self.features, self.max_features)
+                _sample_trials: int = 0
+                __i = 0
+                while True:
+                    __i += 1
+                    self._sampling(features=_features)
+                    _s: int = copy.deepcopy(_sample_trials)
+                    for s in self.data_set.keys():
+                        if s.find('x_') >= 0 and len(self.data_set[s].shape) != 2:
+                            _sample_trials += 1
+                            break
+                    if _s == _sample_trials:
+                        break
+                    else:
+                        self.data_set = None
+                    if _sample_trials == self.max_trials:
+                        break
+            _threads: dict = {}
+            _thread_pool: ThreadPool = ThreadPool(processes=self.n_threads) if self.multi_threading else None
+            for i in range(0, self.pop_size, 1):
+                if i not in self.parents_idx:
+                    if self.multi_threading:
+                        _threads.update({i: _thread_pool.apply_async(func=self._modeling, args=[i])})
+                    else:
+                        self._modeling(pop_idx=i)
+            if self.multi_threading:
+                for thread in _threads.keys():
+                    _threads.get(thread).get()
+            self._collect_meta_data(current_gen=False, idx=None)
+            if self.current_generation_meta_data.get('generation') == 0:
+                if self.re_populate:
+                    if _trials == 1: #self.max_trials:
+                        break
+                    if self.evolution_gradient.get('min')[0] == self.evolution_gradient.get('max')[0] and self.evolution_gradient.get('max')[0] < 1:
+                        _trials += 1
+                        self._re_populate()
+                    else:
+                        break
+                else:
+                    break
+            else:
+                break
+
     @staticmethod
     def get_models() -> dict:
         """
@@ -1189,7 +1189,7 @@ class GeneticAlgorithm:
                 if self.warm_start:
                     if self.warm_start_strategy == 'monotone':
                         self.warm_start_constant_hidden_layers += 1
-            self._mating_pool()
+            self._trainer()
             if (self.mode.find('model') >= 0) and (self.current_generation_meta_data['generation'] > self.burn_in_generations):
                 if self.convergence:
                     if self._is_gradient_converged(compare=self.convergence_measure, threshold=0.05):
@@ -1207,7 +1207,7 @@ class GeneticAlgorithm:
                 Log(write=self.log).log('Time exceeded:{}'.format(self.timer))
             if _evolve:
                 self._natural_selection()
-                self._mutation(crossover=False if self.mode == 'model' else True)
+                self._mating_pool(crossover=False if self.mode == 'model' else True)
             self.current_generation_meta_data['generation'] += 1
             if self.current_generation_meta_data['generation'] > self.max_generations:
                 _evolve = False
@@ -1362,7 +1362,7 @@ class GeneticAlgorithm:
         Save evolution meta data generated by genetic algorithm to local hard drive as pickle file
 
         :param ga: bool
-            Save Genetic class object (required for continuing evolution / optimization)
+            Save GeneticAlgorithm class object (required for continuing evolution / optimization)
 
         :param model: bool
             Save evolved model
@@ -1414,7 +1414,7 @@ class GeneticAlgorithm:
                              cloud=self.cloud,
                              bucket_name=self.bucket_name
                              ).file()
-        # Export Genetic class object:
+        # Export GeneticAlgorithm class object:
         if ga:
             self.df = None
             self.model = None
