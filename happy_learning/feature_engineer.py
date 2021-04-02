@@ -45,6 +45,7 @@ SPECIAL_JOBS: Dict[str, str] = dict(disparity='pair',
                                     set_predictors='all'
                                     )
 SUPPORTED_TYPES: Dict[str, List[str]] = {}
+ALL_FEATURES: List[str] = []
 FEATURE_TYPES: Dict[str, List[str]] = dict(continuous=[], ordinal=[], categorical=[], date=[], id_text=[])
 DATA_PROCESSING: dict = dict(processing=dict(process={},
                                              features=dict(raw={},
@@ -554,6 +555,7 @@ def _save_temp_files(feature: str):
     """
     Save temporary feature files
     """
+    global ALL_FEATURES
     if isinstance(DATA_PROCESSING['df'], dd.DataFrame):
         _data: list = DATA_PROCESSING['df'][feature].values.compute().tolist()
     else:
@@ -565,6 +567,8 @@ def _save_temp_files(feature: str):
                  cloud=None,
                  bucket_name=None
                  ).file()
+    if feature not in ALL_FEATURES:
+        ALL_FEATURES.append(feature)
 
 
 def _set_feature_relations(feature: str, new_feature: str):
@@ -3057,7 +3061,7 @@ class FeatureEngineer:
         return DATA_PROCESSING.get('cleaned_features')
 
     @staticmethod
-    def get_data(dask_df: bool = True):
+    def get_data(dask_df: bool = False):
         """
         Get active data set
 
@@ -3076,7 +3080,7 @@ class FeatureEngineer:
         _load_temp_files(features=_features)
         del DATA_PROCESSING['df'][list(TEMP_INDEXER.keys())[0]]
         if dask_df:
-            return dd.from_pandas(data=DATA_PROCESSING.get('df'))
+            return dd.from_pandas(data=DATA_PROCESSING.get('df'), npartitions=4)
         else:
             return DATA_PROCESSING.get('df')
 
@@ -3507,7 +3511,7 @@ class FeatureEngineer:
         return TEXT_MINER.get('obj')
 
     @staticmethod
-    def get_training_data(output: str = 'df_dask'):
+    def get_training_data(output: str = 'df_pandas'):
         """
         Get training data set (containing predictors and target feature only)
 
@@ -3524,7 +3528,7 @@ class FeatureEngineer:
         _load_temp_files(features=_features)
         if len(_features) > 1:
             if output == 'df_dask':
-                return dd.from_pandas(data=DATA_PROCESSING['df'][_features])
+                return dd.from_pandas(data=DATA_PROCESSING['df'][_features], npartitions=4)
             elif output == 'df_pandas':
                 return DATA_PROCESSING['df'][_features]
             elif output == 'array':
@@ -5300,8 +5304,9 @@ class FeatureEngineer:
             for feature in DATA_PROCESSING.get('original_features'):
                 if feature in _predictors:
                     if feature not in FEATURE_TYPES.get('continuous'):
-                        del _predictors[_predictors.index(feature)]
-                        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Exclude original (non-numeric) feature "{}"'.format(feature))
+                        if feature not in FEATURE_TYPES.get('ordinal'):
+                            del _predictors[_predictors.index(feature)]
+                            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Exclude original (non-numeric) feature "{}"'.format(feature))
         DATA_PROCESSING['predictors'] = _predictors
         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Set {} predictors'.format(len(_predictors)))
 
@@ -5342,7 +5347,7 @@ class FeatureEngineer:
         :param feature: str
             Name of the feature used as target
         """
-        if feature in DATA_PROCESSING['df'].columns:
+        if feature in ALL_FEATURES:
             if DATA_PROCESSING.get('target') is None:
                 DATA_PROCESSING.update({'target': feature})
             else:
