@@ -6,7 +6,8 @@ from happy_learning.feature_engineer import FeatureEngineer
 from happy_learning.genetic_algorithm import GeneticAlgorithm
 from typing import List
 
-DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/avocado.csv')
+DATA_DIR: str = 'data/'
+DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='{}avocado.csv'.format(DATA_DIR))
 
 
 class GeneticAlgorithmTest(unittest.TestCase):
@@ -14,7 +15,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
     Class for testing class GeneticAlgorithm
     """
     def test_optimize_modeling(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice')
+        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice', temp_dir=DATA_DIR)
         _feature_engineer.set_predictors(exclude_original_data=False)
         _ga: GeneticAlgorithm = GeneticAlgorithm(mode='model',
                                                  target=_feature_engineer.get_target(),
@@ -42,7 +43,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  max_generations=10,
                                                  pop_size=64,
                                                  mutation_rate=0.1,
-                                                 mutation_prob=0.15,
+                                                 mutation_prob=0.85,
                                                  parents_ratio=0.5,
                                                  early_stopping=0,
                                                  convergence=True,
@@ -61,7 +62,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
         self.assertTrue(expr=_ga.evolution_gradient.get('max')[0] <= _ga.evolution_gradient.get('max')[-1])
 
     def test_optimize_feature_engineering(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice')
+        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice', temp_dir=DATA_DIR)
         _feature_engineer.set_predictors(exclude_original_data=False)
         _ga: GeneticAlgorithm = GeneticAlgorithm(mode='feature_engineer',
                                                  target=_feature_engineer.get_target(),
@@ -89,7 +90,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  max_generations=5,
                                                  pop_size=64,
                                                  mutation_rate=0.1,
-                                                 mutation_prob=0.15,
+                                                 mutation_prob=0.85,
                                                  parents_ratio=0.5,
                                                  early_stopping=0,
                                                  convergence=True,
@@ -111,7 +112,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
         pass
 
     def test_optimize_continue(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice')
+        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice', temp_dir=DATA_DIR)
         _feature_engineer.set_predictors(exclude_original_data=False)
         _max_generations: int = 5
         _ga: GeneticAlgorithm = GeneticAlgorithm(mode='model',
@@ -140,7 +141,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  max_generations=_max_generations,
                                                  pop_size=64,
                                                  mutation_rate=0.1,
-                                                 mutation_prob=0.15,
+                                                 mutation_prob=0.85,
                                                  parents_ratio=0.5,
                                                  early_stopping=0,
                                                  convergence=True,
@@ -159,7 +160,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
         self.assertTrue(expr=_ga.evolution_gradient.get('max')[0] <= _ga.evolution_gradient.get('max')[-1] and len(_ga.evolution_gradient.get('max')) > _max_generations)
 
     def test_visualize_clf(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='type')
+        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='type', temp_dir=DATA_DIR)
         _feature_engineer.set_predictors(exclude_original_data=False)
         _ga: GeneticAlgorithm = GeneticAlgorithm(mode='model',
                                                  target=_feature_engineer.get_target(),
@@ -187,7 +188,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  max_generations=1,
                                                  pop_size=64,
                                                  mutation_rate=0.1,
-                                                 mutation_prob=0.15,
+                                                 mutation_prob=0.85,
                                                  parents_ratio=0.5,
                                                  early_stopping=0,
                                                  convergence=False,
@@ -239,7 +240,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
         self.assertTrue(expr=all(_found_plot))
 
     def test_visualize_reg(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice')
+        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice', temp_dir=DATA_DIR)
         _feature_engineer.set_predictors(exclude_original_data=False)
         _ga: GeneticAlgorithm = GeneticAlgorithm(mode='model',
                                                  target=_feature_engineer.get_target(),
@@ -267,7 +268,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  max_generations=5,
                                                  pop_size=4,
                                                  mutation_rate=0.1,
-                                                 mutation_prob=0.15,
+                                                 mutation_prob=0.85,
                                                  parents_ratio=0.5,
                                                  early_stopping=0,
                                                  convergence=True,
@@ -318,7 +319,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
         self.assertTrue(expr=all(_found_plot))
 
     def test_save_evolution(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice')
+        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice', temp_dir=DATA_DIR)
         _feature_engineer.set_predictors(exclude_original_data=False)
         _ga: GeneticAlgorithm = GeneticAlgorithm(mode='model',
                                                  target=_feature_engineer.get_target(),
@@ -346,7 +347,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  max_generations=5,
                                                  pop_size=64,
                                                  mutation_rate=0.1,
-                                                 mutation_prob=0.15,
+                                                 mutation_prob=0.85,
                                                  parents_ratio=0.5,
                                                  early_stopping=0,
                                                  convergence=True,
