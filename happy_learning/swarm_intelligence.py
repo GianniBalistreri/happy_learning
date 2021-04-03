@@ -867,7 +867,7 @@ class SwarmIntelligence:
                     _params: dict = self.final_adjustment.get('param')
                 else:
                     if self.initial_population is not None:
-                        if p <= len(self.initial_population):
+                        if p < len(self.initial_population):
                             self.population.append(self.initial_population[p])
                             continue
                     if len(_warm_model.keys()) > 0:
@@ -899,7 +899,7 @@ class SwarmIntelligence:
                     _params: dict = self.final_adjustment.get('param')
                 else:
                     if self.initial_population is not None:
-                        if p <= len(self.initial_population):
+                        if p < len(self.initial_population):
                             self.population.append(self.initial_population[p])
                             continue
                     if len(_warm_model.keys()) > 0:
@@ -953,7 +953,7 @@ class SwarmIntelligence:
                 _model_param: dict = self.final_adjustment[str(p + len(self.population))].get('param')
             else:
                 if self.initial_population is not None:
-                    if p <= len(self.initial_population):
+                    if p < len(self.initial_population):
                         self.population.append(self.initial_population[p])
                         continue
             if self.mode.find('feature') >= 0:

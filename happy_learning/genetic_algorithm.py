@@ -970,7 +970,7 @@ class GeneticAlgorithm:
                     _params: dict = self.final_generation.get('param')
                 else:
                     if self.generation_zero is not None:
-                        if p <= len(self.generation_zero):
+                        if p < len(self.generation_zero):
                             self.population.append(self.generation_zero[p])
                             continue
                     if len(_warm_model.keys()) > 0:
@@ -1002,7 +1002,7 @@ class GeneticAlgorithm:
                     _params: dict = self.final_generation.get('param')
                 else:
                     if self.generation_zero is not None:
-                        if p <= len(self.generation_zero):
+                        if p < len(self.generation_zero):
                             self.population.append(self.generation_zero[p])
                             continue
                     if len(_warm_model.keys()) > 0:
@@ -1056,7 +1056,7 @@ class GeneticAlgorithm:
                 _model_param: dict = self.final_generation[str(p + len(self.population))].get('param')
             else:
                 if self.generation_zero is not None:
-                    if p <= len(self.generation_zero):
+                    if p < len(self.generation_zero):
                         self.population.append(self.generation_zero[p])
                         continue
             if self.mode.find('feature') >= 0:
