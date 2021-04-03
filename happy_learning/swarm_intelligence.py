@@ -61,12 +61,12 @@ class SwarmIntelligence:
                  labels: List[str] = None,
                  models: List[str] = None,
                  model_params: Dict[str, str] = None,
-                 burn_in_movements: int = -1,
+                 burn_in_adjustments: int = -1,
                  warm_start: bool = True,
                  warm_start_strategy: str = 'monotone',
                  warm_start_constant_hidden_layers: int = 0,
                  warm_start_constant_category: str = 'very_small',
-                 max_movements: int = 50,
+                 max_adjustments: int = 50,
                  pop_size: int = 64,
                  adjustment_rate: float = 0.1,
                  adjustment_prob: float = 0.85,
@@ -82,6 +82,7 @@ class SwarmIntelligence:
                  deep_learning_output_size: int = None,
                  cloud: str = None,
                  deploy_model: bool = True,
+                 initial_population: list = None,
                  multi_threading: bool = False,
                  multi_processing: bool = False,
                  log: bool = False,
@@ -117,16 +118,16 @@ class SwarmIntelligence:
             Name of the features used as predictors
 
         :param re_split_data: bool
-            Whether to re-split data set into train & test data every movement or not
+            Whether to re-split data set into train & test data every adjustment or not
 
         :param re_sample_cases: bool
-            Whether to re-sample cases set every movement or not
+            Whether to re-sample cases set every adjustment or not
 
         :param re_sample_features: bool
-            Whether to re-sample features set every movement or not
+            Whether to re-sample features set every adjustment or not
 
         :param re_populate: bool
-            Whether to re-populate movement 0 if all models achieve poor fitness results
+            Whether to re-populate adjustment 0 if all models achieve poor fitness results
 
         :param max_trials: int
             Maximum number of re-population trials for avoiding bad starts
@@ -152,11 +153,11 @@ class SwarmIntelligence:
         :param genes: dict
             Attributes of the individuals (genes)
 
-        :param max_movements: int
-            Maximum number of movements
+        :param max_adjustments: int
+            Maximum number of adjustments
 
         :param pop_size: int
-            Population size of each movement
+            Population size of each adjustment
 
         :param adjustment_rate: float
             Adjustment rate
@@ -165,13 +166,13 @@ class SwarmIntelligence:
             Adjustment probability
 
         :param warm_start: bool
-            Whether to start evolution (movement 0) using standard parameter config for each model type once
+            Whether to start evolution (adjustment 0) using standard parameter config for each model type once
 
         :param warm_start_strategy: str
             Name of the warm start strategy (deep learning only)
             -> random: Draw size of hidden layers randomly
             -> constant: Use constant size of hidden layers only
-            -> monotone: Increase the range of hidden layers each movement by one category
+            -> monotone: Increase the range of hidden layers each adjustment by one category
             -> adaptive: Increase the range of hidden layers each strong individual mutation by one layer
 
         :param warm_start_constant_hidden_layers: int
@@ -186,7 +187,7 @@ class SwarmIntelligence:
                 -> very_big: 11+ hidden layers
 
         :param early_stopping: int
-            Number of movements for starting early stopping condition checks
+            Number of adjustments for starting early stopping condition checks
 
         :param convergence: bool
             Whether to check convergence conditions for early stopping or not
@@ -229,6 +230,9 @@ class SwarmIntelligence:
 
         :param deploy_model: bool
             Whether to deploy (save) evolved model or not
+
+        :param adjustment_zero: list
+            Pre-defined models for initial population
 
         :param multi_threading: bool
             Whether to run genetic algorithm using multiple threads (of one cpu core) or single thread
@@ -331,14 +335,15 @@ class SwarmIntelligence:
         self.warm_start_constant_category: str = warm_start_constant_category if warm_start_constant_category in list(NETWORK_TYPE_CATEGORY.keys()) else 'very_small'
         self.re_populate: bool = re_populate
         self.max_trials: int = max_trials
-        self.max_movements: int = max_movements if max_movements >= 0 else 50
-        self.burn_in_movements: int = burn_in_movements if burn_in_movements >= 0 else round(0.1 * self.max_movements)
+        self.max_adjustments: int = max_adjustments if max_adjustments >= 0 else 50
+        self.burn_in_adjustments: int = burn_in_adjustments if burn_in_adjustments >= 0 else round(0.1 * self.max_adjustments)
         self.population: List[object] = []
         self.adjustment_rate: float = adjustment_rate if adjustment_rate <= 0 or adjustment_rate >= 1 else 0.1
-        self.adjustment_prob: float = adjustment_prob if adjustment_prob < 0 or adjustment_prob >= 1 else 0.15
+        self.adjustment_prob: float = adjustment_prob if adjustment_prob < 0 or adjustment_prob >= 1 else 0.85
         self.plot: bool = plot
         self.fitness_function = fitness_function
         self.deep_learning_type: str = deep_learning_type
+        self.initial_population: list = initial_population
         self.dask_client = None
         self.n_threads: int = self.pop_size
         self.multi_threading: bool = multi_threading
@@ -346,11 +351,11 @@ class SwarmIntelligence:
         self.n_individuals: int = -1
         self.best_global_idx: int = -1
         self.best_local_idx: int = -1
-        self.final_movement: dict = {}
+        self.final_adjustment: dict = {}
         self.evolution: dict = {}
         self.evolved_features: List[str] = []
-        self.moved_features: dict = dict(best=[], to=[], fitness=[], movement=[], action=[])
-        self.current_movement_meta_data: dict = dict(movement=0,
+        self.moved_features: dict = dict(best=[], to=[], fitness=[], adjustment=[], action=[])
+        self.current_adjustment_meta_data: dict = dict(adjustment=0,
                                                      id=[],
                                                      fitness_metric=[],
                                                      fitness_score=[],
@@ -359,10 +364,10 @@ class SwarmIntelligence:
                                                      param_moved=[],
                                                      features=[]
                                                      )
-        self.movement_history: dict = dict(population={}, inheritance={}, time=[])
+        self.adjustment_history: dict = dict(population={}, inheritance={}, time=[])
         self.evolution_history: dict = dict(id=[],
                                             model=[],
-                                            movement=[],
+                                            adjustment=[],
                                             training=[],
                                             parent=[],
                                             fitness_score=[],
@@ -381,51 +386,110 @@ class SwarmIntelligence:
         self._intro()
         self.start_time: datetime = datetime.now()
 
-    def _collect_meta_data(self, current_movement: bool, idx: int = None):
+    def _adjust(self):
+        """
+        Adjust population towards best global and local individual
+        """
+        for idx in range(0, self.pop_size, 1):
+            if idx != self.best_global_idx and idx != self.best_local_idx:
+                if self.mode.find('model') >= 0:
+                    if np.random.uniform(low=0, high=1) > self.adjustment_prob:
+                        if self.mode == 'model_sampler':
+                            self._sampling(features=self.population[idx].features)
+                        if self.deep_learning and self.warm_start_strategy == 'adaptive':
+                            self.population[idx].update_model_param(hidden_layer_size=self.population[idx].hidden_layer_size + 1)
+                        if self.text_clustering:
+                            self.population[idx] = ClusteringGenerator(predictor=self.features[0],
+                                                                       models=self.models,
+                                                                       tokenize=False,
+                                                                       cloud=self.cloud
+                                                                       ).generate_model()
+                        else:
+                            self.population[idx] = ModelGeneratorReg(models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models).generate_model()
+                    else:
+                        if self.text_clustering:
+                            self.population[idx] = ClusteringGenerator(predictor=self.features[0],
+                                                                       models=self.models,
+                                                                       tokenize=False,
+                                                                       cloud=self.cloud
+                                                                       ).generate_params(param_rate=self.adjustment_rate)
+                        else:
+                            self.population[idx] = ModelGeneratorReg(reg_params=self.population[self.best_global_idx].model_param,
+                                                                     models=self.models
+                                                                     ).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[self.best_global_idx].model_param, models=self.models).generate_model()
+                            self.population[idx].generate_params(param_rate=self.adjustment_rate)
+                elif self.mode.find('feature') >= 0:
+                    _new_features: List[str] = []
+                    _feature_pool: List[str] = list(set(self.feature_pairs[np.random.choice(a=[self.best_global_idx, self.best_local_idx])]))
+                    for feature in self.feature_pairs[idx]:
+                        if self.mode == 'feature_engineer':
+                            if np.random.uniform(low=0, high=1) > self.adjustment_prob:
+                                self.feature_engineer.act(actor=feature,
+                                                          inter_actors=_feature_pool,
+                                                          force_action=None,
+                                                          alternative_actions=None
+                                                          )
+                                _generated_feature: str = self.feature_engineer.get_last_generated_feature()
+                                if _generated_feature == '':
+                                    _new_features.append(feature)
+                                else:
+                                    _new_features.append(_generated_feature)
+                                self.moved_features['best'].append(feature)
+                                self.moved_features['to'].append(_new_features[-1])
+                                self.moved_features['adjustment'].append(feature)
+                                self.moved_features['action'].append(self.feature_engineer.get_last_action())
+                            else:
+                                _new_features.append(feature)
+                        elif self.mode == 'feature_selector':
+                            _new_features.append(feature)
+                    self.feature_pairs[idx] = copy.deepcopy(_new_features)
+                    # print('mutated new child', self.feature_pairs[child])
+
+    def _collect_meta_data(self, current_adjustment: bool, idx: int = None):
         """
         Collect evolution meta data
 
-        :param current_movement: bool
-            Whether to write evolution meta data of each individual of current movement or not
+        :param current_adjustment: bool
+            Whether to write evolution meta data of each individual of current adjustment or not
 
         :param idx: int
             Index number of individual within population
         """
-        if self.movement_history['population'].get('gen_{}'.format(self.current_movement_meta_data['movement'])) is None:
-            self.movement_history['population'].update(
-                {'gen_{}'.format(self.current_movement_meta_data['movement']): dict(id=[],
-                                                                                        model=[],
-                                                                                        parent=[],
-                                                                                        fitness=[]
-                                                                                        )
+        if self.adjustment_history['population'].get('gen_{}'.format(self.current_adjustment_meta_data['adjustment'])) is None:
+            self.adjustment_history['population'].update(
+                {'gen_{}'.format(self.current_adjustment_meta_data['adjustment']): dict(id=[],
+                                                                                    model=[],
+                                                                                    parent=[],
+                                                                                    fitness=[]
+                                                                                    )
                  })
-        if current_movement:
+        if current_adjustment:
             setattr(self.population[idx], 'fitness_score', self.evolution_history.get('fitness_score')[self.population[idx].id])
             if not self.deep_learning:
                 setattr(self.population[idx], 'features', list(self.data_set.get('x_train').columns))
-            if self.current_movement_meta_data['movement'] == 0:
-                self.current_movement_meta_data.get('id').append(copy.deepcopy(idx))
-                self.current_movement_meta_data.get('features').append(copy.deepcopy(self.population[idx].features))
-                self.current_movement_meta_data.get('model_name').append(copy.deepcopy(self.population[idx].model_name))
-                self.current_movement_meta_data.get('param').append(copy.deepcopy(self.population[idx].model_param))
-                self.current_movement_meta_data.get('param_moved').append(copy.deepcopy(self.population[idx].model_param_mutated))
-                self.current_movement_meta_data.get('fitness_metric').append(copy.deepcopy(self.population[idx].fitness))
-                self.current_movement_meta_data.get('fitness_score').append(copy.deepcopy(self.population[idx].fitness_score))
+            if self.current_adjustment_meta_data['adjustment'] == 0:
+                self.current_adjustment_meta_data.get('id').append(copy.deepcopy(idx))
+                self.current_adjustment_meta_data.get('features').append(copy.deepcopy(self.population[idx].features))
+                self.current_adjustment_meta_data.get('model_name').append(copy.deepcopy(self.population[idx].model_name))
+                self.current_adjustment_meta_data.get('param').append(copy.deepcopy(self.population[idx].model_param))
+                self.current_adjustment_meta_data.get('param_moved').append(copy.deepcopy(self.population[idx].model_param_mutated))
+                self.current_adjustment_meta_data.get('fitness_metric').append(copy.deepcopy(self.population[idx].fitness))
+                self.current_adjustment_meta_data.get('fitness_score').append(copy.deepcopy(self.population[idx].fitness_score))
             else:
-                self.current_movement_meta_data['id'][idx] = copy.deepcopy(self.population[idx].id)
-                self.current_movement_meta_data['features'][idx] = copy.deepcopy(self.population[idx].features)
-                self.current_movement_meta_data['model_name'][idx] = copy.deepcopy(self.population[idx].model_name)
-                self.current_movement_meta_data['param'][idx] = copy.deepcopy(self.population[idx].model_param)
-                self.current_movement_meta_data['param_moved'][idx] = copy.deepcopy(self.population[idx].model_param_mutated)
-                self.current_movement_meta_data['fitness_metric'][idx] = copy.deepcopy(self.population[idx].fitness)
-                self.current_movement_meta_data['fitness_score'][idx] = copy.deepcopy(self.population[idx].fitness_score)
+                self.current_adjustment_meta_data['id'][idx] = copy.deepcopy(self.population[idx].id)
+                self.current_adjustment_meta_data['features'][idx] = copy.deepcopy(self.population[idx].features)
+                self.current_adjustment_meta_data['model_name'][idx] = copy.deepcopy(self.population[idx].model_name)
+                self.current_adjustment_meta_data['param'][idx] = copy.deepcopy(self.population[idx].model_param)
+                self.current_adjustment_meta_data['param_moved'][idx] = copy.deepcopy(self.population[idx].model_param_mutated)
+                self.current_adjustment_meta_data['fitness_metric'][idx] = copy.deepcopy(self.population[idx].fitness)
+                self.current_adjustment_meta_data['fitness_score'][idx] = copy.deepcopy(self.population[idx].fitness_score)
         else:
             if idx is None:
-                self.movement_history['population']['gen_{}'.format(self.current_movement_meta_data['movement'])]['fitness'] = copy.deepcopy(self.current_movement_meta_data.get('fitness'))
-                self.evolution_gradient.get('min').append(copy.deepcopy(min(self.current_movement_meta_data.get('fitness_score'))))
-                self.evolution_gradient.get('median').append(copy.deepcopy(np.median(self.current_movement_meta_data.get('fitness_score'))))
-                self.evolution_gradient.get('mean').append(copy.deepcopy(np.mean(self.current_movement_meta_data.get('fitness_score'))))
-                self.evolution_gradient.get('max').append(copy.deepcopy(max(self.current_movement_meta_data.get('fitness_score'))))
+                self.adjustment_history['population']['gen_{}'.format(self.current_adjustment_meta_data['adjustment'])]['fitness'] = copy.deepcopy(self.current_adjustment_meta_data.get('fitness'))
+                self.evolution_gradient.get('min').append(copy.deepcopy(min(self.current_adjustment_meta_data.get('fitness_score'))))
+                self.evolution_gradient.get('median').append(copy.deepcopy(np.median(self.current_adjustment_meta_data.get('fitness_score'))))
+                self.evolution_gradient.get('mean').append(copy.deepcopy(np.mean(self.current_adjustment_meta_data.get('fitness_score'))))
+                self.evolution_gradient.get('max').append(copy.deepcopy(max(self.current_adjustment_meta_data.get('fitness_score'))))
                 Log(write=self.log, logger_file_path=self.output_file_path).log(
                     'Fitness: Max -> {}'.format(self.evolution_gradient.get('max')[-1]))
                 Log(write=self.log, logger_file_path=self.output_file_path).log(
@@ -435,21 +499,21 @@ class SwarmIntelligence:
                 Log(write=self.log, logger_file_path=self.output_file_path).log(
                     'Fitness: Min -> {}'.format(self.evolution_gradient.get('min')[-1]))
             else:
-                if self.current_movement_meta_data['movement'] == 0:
+                if self.current_adjustment_meta_data['adjustment'] == 0:
                     self.evolution_history.get('parent').append(-1)
                 else:
                     self.evolution_history.get('parent').append(copy.deepcopy(self.population[idx].id))
-                self.movement_history['population']['gen_{}'.format(self.current_movement_meta_data['movement'])][
+                self.adjustment_history['population']['gen_{}'.format(self.current_adjustment_meta_data['adjustment'])][
                     'parent'].append(copy.deepcopy(self.evolution_history.get('parent')[-1]))
                 self.n_individuals += 1
                 setattr(self.population[idx], 'id', self.n_individuals)
                 setattr(self.population[idx], 'target', self.target)
                 self.evolution_history.get('id').append(copy.deepcopy(self.population[idx].id))
-                self.evolution_history.get('movement').append(copy.deepcopy(self.current_movement_meta_data['movement']))
+                self.evolution_history.get('adjustment').append(copy.deepcopy(self.current_adjustment_meta_data['adjustment']))
                 self.evolution_history.get('model').append(copy.deepcopy(self.population[idx].model_name))
                 self.evolution_history.get('training').append(copy.deepcopy(self.n_training))
-                self.movement_history['population']['gen_{}'.format(self.current_movement_meta_data['movement'])]['id'].append(copy.deepcopy(self.population[idx].id))
-                self.movement_history['population']['gen_{}'.format(self.current_movement_meta_data['movement'])]['model'].append(copy.deepcopy(self.population[idx].model_name))
+                self.adjustment_history['population']['gen_{}'.format(self.current_adjustment_meta_data['adjustment'])]['id'].append(copy.deepcopy(self.population[idx].id))
+                self.adjustment_history['population']['gen_{}'.format(self.current_adjustment_meta_data['adjustment'])]['model'].append(copy.deepcopy(self.population[idx].model_name))
 
     def _fitness(self, individual: object, ml_metric: str):
         """
@@ -493,12 +557,12 @@ class SwarmIntelligence:
         for score in _scores.keys():
             self.evolution_history.get(score).append(copy.deepcopy(_scores.get(score)))
 
-    def _gather_final_movement(self):
+    def _gather_final_adjustment(self):
         """
-        Gather information about each individual of final movement
+        Gather information about each individual of final adjustment
         """
         for i, individual in enumerate(self.population):
-            self.final_movement.update({i: dict(id=copy.deepcopy(individual.id),
+            self.final_adjustment.update({i: dict(id=copy.deepcopy(individual.id),
                                                 model_name=copy.deepcopy(individual.model_name),
                                                 param=copy.deepcopy(individual.model_param),
                                                 fitness=copy.deepcopy(individual.fitness),
@@ -639,15 +703,15 @@ class SwarmIntelligence:
 
         :param compare: str
             Measurement to compare maximum fitness score with:
-                -> min: Compare maximum and minimum fitness score of movement
-                -> median: Compare maximum and median fitness score of movement
-                -> mean: Compare maximum and mean fitness score of movement
+                -> min: Compare maximum and minimum fitness score of adjustment
+                -> median: Compare maximum and median fitness score of adjustment
+                -> mean: Compare maximum and mean fitness score of adjustment
 
         :param threshold: float
             Conversion threshold of relative difference between maximum fitness score and comparison fitness score
 
         :return bool
-            Whether to stop evolution because the hole movement achieve very similar gradient score or not
+            Whether to stop evolution because the hole adjustment achieve very similar gradient score or not
         """
         _threshold: float = threshold if threshold > 0 else 0.05
         _threshold_score: float = self.evolution_gradient.get('max')[-1] - (self.evolution_gradient.get('max')[-1] * _threshold)
@@ -674,19 +738,19 @@ class SwarmIntelligence:
                                 max_fitness: bool = True
                                 ) -> bool:
         """
-        Check whether evolutionary gradient (best fitness metric of movement) has not increased a certain amount of movements
+        Check whether evolutionary gradient (best fitness metric of adjustment) has not increased a certain amount of adjustments
 
         :param min_fitness: bool
-            Use minimum fitness score each movement to evaluate stagnation
+            Use minimum fitness score each adjustment to evaluate stagnation
 
         :param median_fitness: bool
-            Use median fitness score each movement to evaluate stagnation
+            Use median fitness score each adjustment to evaluate stagnation
 
         :param mean_fitness: bool
-            Use mean fitness score each movement to evaluate stagnation
+            Use mean fitness score each adjustment to evaluate stagnation
 
         :param max_fitness: bool
-            Use maximum fitness score each movement to evaluate stagnation
+            Use maximum fitness score each adjustment to evaluate stagnation
 
         :return bool
             Whether to stop evolution early because of the stagnation of gradient or not
@@ -717,7 +781,7 @@ class SwarmIntelligence:
         :param pop_idx: int
             Population index number
         """
-        self._collect_meta_data(current_movement=False, idx=pop_idx)
+        self._collect_meta_data(current_adjustment=False, idx=pop_idx)
         _re: int = 0
         _re_generate: bool = False
         _re_generate_max: int = 50
@@ -731,7 +795,7 @@ class SwarmIntelligence:
                         else:
                             self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_params(param_rate=self.adjustment_rate))
                 elif self.mode == 'feature_engineer':
-                    #if self.current_movement_meta_data['movement'] > 0:
+                    #if self.current_adjustment_meta_data['adjustment'] > 0:
                     self._sampling(features=self.feature_pairs[pop_idx])
                     if self.deep_learning:
                         self.population[pop_idx].update_data(x_train=self.data_set.get('x_train'),
@@ -783,70 +847,11 @@ class SwarmIntelligence:
                     self._fitness(individual=self.population[pop_idx], ml_metric='cohen_kappa')
                 else:
                     self._fitness(individual=self.population[pop_idx], ml_metric='auc')
-        self._collect_meta_data(current_movement=True, idx=pop_idx)
-
-    def _move(self):
-        """
-        Move population towards best global and local individual
-        """
-        for idx in range(0, self.pop_size, 1):
-            if idx != self.best_global_idx and idx != self.best_local_idx:
-                if self.mode.find('model') >= 0:
-                    if np.random.uniform(low=0, high=1) > self.adjustment_prob:
-                        if self.mode == 'model_sampler':
-                            self._sampling(features=self.population[idx].features)
-                        if self.deep_learning and self.warm_start_strategy == 'adaptive':
-                            self.population[idx].update_model_param(hidden_layer_size=self.population[idx].hidden_layer_size + 1)
-                        if self.text_clustering:
-                            self.population[idx] = ClusteringGenerator(predictor=self.features[0],
-                                                                       models=self.models,
-                                                                       tokenize=False,
-                                                                       cloud=self.cloud
-                                                                       ).generate_model()
-                        else:
-                            self.population[idx] = ModelGeneratorReg(models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models).generate_model()
-                    else:
-                        if self.text_clustering:
-                            self.population[idx] = ClusteringGenerator(predictor=self.features[0],
-                                                                       models=self.models,
-                                                                       tokenize=False,
-                                                                       cloud=self.cloud
-                                                                       ).generate_params(param_rate=self.adjustment_rate)
-                        else:
-                            self.population[idx] = ModelGeneratorReg(reg_params=self.population[self.best_global_idx].model_param,
-                                                                     models=self.models
-                                                                     ).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[self.best_global_idx].model_param, models=self.models).generate_model()
-                            self.population[idx].generate_params(param_rate=self.adjustment_rate)
-                elif self.mode.find('feature') >= 0:
-                    _new_features: List[str] = []
-                    _feature_pool: List[str] = list(set(self.feature_pairs[np.random.choice(a=[self.best_global_idx, self.best_local_idx])]))
-                    for feature in self.feature_pairs[idx]:
-                        if self.mode == 'feature_engineer':
-                            if np.random.uniform(low=0, high=1) > self.adjustment_prob:
-                                self.feature_engineer.act(actor=feature,
-                                                          inter_actors=_feature_pool,
-                                                          force_action=None,
-                                                          alternative_actions=None
-                                                          )
-                                _generated_feature: str = self.feature_engineer.get_last_generated_feature()
-                                if _generated_feature == '':
-                                    _new_features.append(feature)
-                                else:
-                                    _new_features.append(_generated_feature)
-                                self.moved_features['best'].append(feature)
-                                self.moved_features['to'].append(_new_features[-1])
-                                self.moved_features['movement'].append(feature)
-                                self.moved_features['action'].append(self.feature_engineer.get_last_action())
-                            else:
-                                _new_features.append(feature)
-                        elif self.mode == 'feature_selector':
-                            _new_features.append(feature)
-                    self.feature_pairs[idx] = copy.deepcopy(_new_features)
-                    # print('mutated new child', self.feature_pairs[child])
+        self._collect_meta_data(current_adjustment=True, idx=pop_idx)
 
     def _populate(self):
         """
-        Populate movement zero with individuals
+        Populate adjustment zero with individuals
         """
         if self.text_clustering:
             _warm_model: dict = {}
@@ -859,8 +864,12 @@ class SwarmIntelligence:
                                                   ).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.evolution_continue:
-                    _params: dict = self.final_movement.get('param')
+                    _params: dict = self.final_adjustment.get('param')
                 else:
+                    if self.initial_population is not None:
+                        if p <= len(self.initial_population):
+                            self.population.append(self.initial_population[p])
+                            continue
                     if len(_warm_model.keys()) > 0:
                         if p + 1 > len(_warm_model.keys()):
                             _params: dict = self.model_params
@@ -887,8 +896,12 @@ class SwarmIntelligence:
                 if self.mode.find('feature') >= 0:
                     self._sampling(features=self.feature_pairs[p])
                 if self.evolution_continue:
-                    _params: dict = self.final_movement.get('param')
+                    _params: dict = self.final_adjustment.get('param')
                 else:
+                    if self.initial_population is not None:
+                        if p <= len(self.initial_population):
+                            self.population.append(self.initial_population[p])
+                            continue
                     if len(_warm_model.keys()) > 0:
                         if p + 1 > len(_warm_model.keys()):
                             _params: dict = self.model_params
@@ -903,7 +916,7 @@ class SwarmIntelligence:
 
     def _populate_networks(self):
         """
-        Populate movement zero (with neural networks only)
+        Populate adjustment zero (with neural networks only)
         """
         _model_param = None
         if self.warm_start:
@@ -913,7 +926,7 @@ class SwarmIntelligence:
                 _p: int = 0
                 while _p <= _n_vanilla_networks_per_model:
                     if self.evolution_continue:
-                        _model_param: dict = self.final_movement[str(_p)].get('param')
+                        _model_param: dict = self.final_adjustment[str(_p)].get('param')
                     _p += 1
                     self.population.append(NetworkGenerator(target=self.target,
                                                             predictors=self.features,
@@ -937,7 +950,12 @@ class SwarmIntelligence:
             _n_vanilla_networks: int = 0
         for p in range(0, self.pop_size - _n_vanilla_networks - 1, 1):
             if self.evolution_continue:
-                _model_param: dict = self.final_movement[str(p + len(self.population))].get('param')
+                _model_param: dict = self.final_adjustment[str(p + len(self.population))].get('param')
+            else:
+                if self.initial_population is not None:
+                    if p <= len(self.initial_population):
+                        self.population.append(self.initial_population[p])
+                        continue
             if self.mode.find('feature') >= 0:
                 self._sampling(features=self.feature_pairs[p])
             _net_gen: NetworkGenerator = NetworkGenerator(target=self.target,
@@ -961,19 +979,19 @@ class SwarmIntelligence:
 
     def _re_populate(self):
         """
-        Re-populate movement 0 to increase likelihood for a good evolution start
+        Re-populate adjustment 0 to increase likelihood for a good evolution start
         """
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Re-populate movement 0 because of the poor fitness scoring of all individuals')
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Re-populate adjustment 0 because of the poor fitness scoring of all individuals')
         self.n_individuals = -1
-        for gen_history in self.movement_history.keys():
-            self.movement_history[gen_history] = {}
+        for gen_history in self.adjustment_history.keys():
+            self.adjustment_history[gen_history] = {}
         for evo_history in self.evolution_history.keys():
             self.evolution_history[evo_history] = []
-        for gen_cur in self.current_movement_meta_data.keys():
-            if isinstance(self.current_movement_meta_data[gen_cur], list):
-                self.current_movement_meta_data[gen_cur] = []
-            elif isinstance(self.current_movement_meta_data[gen_cur], int):
-                self.current_movement_meta_data[gen_cur] = 0
+        for gen_cur in self.current_adjustment_meta_data.keys():
+            if isinstance(self.current_adjustment_meta_data[gen_cur], list):
+                self.current_adjustment_meta_data[gen_cur] = []
+            elif isinstance(self.current_adjustment_meta_data[gen_cur], int):
+                self.current_adjustment_meta_data[gen_cur] = 0
         for evo_gradient in self.evolution_gradient.keys():
             self.evolution_gradient[evo_gradient] = []
         self._populate()
@@ -996,8 +1014,8 @@ class SwarmIntelligence:
         """
         Select current best global and local individual
         """
-        self.best_global_idx = np.array(self.current_movement_meta_data['fitness_score']).argmax()
-        _other_idx: List[float] = copy.deepcopy(self.current_movement_meta_data['fitness_score'])
+        self.best_global_idx = np.array(self.current_adjustment_meta_data['fitness_score']).argmax()
+        _other_idx: List[float] = copy.deepcopy(self.current_adjustment_meta_data['fitness_score'])
         del _other_idx[self.best_global_idx]
         self.best_local_idx = np.array(_other_idx).argmax()
         if self.best_global_idx <= self.best_local_idx:
@@ -1040,8 +1058,8 @@ class SwarmIntelligence:
             if self.multi_threading:
                 for thread in _threads.keys():
                     _threads.get(thread).get()
-            self._collect_meta_data(current_movement=False, idx=None)
-            if self.current_movement_meta_data.get('movement') == 0:
+            self._collect_meta_data(current_adjustment=False, idx=None)
+            if self.current_adjustment_meta_data.get('adjustment') == 0:
                 if self.re_populate:
                     if _trials == 1: #self.max_trials:
                         break
@@ -1077,9 +1095,9 @@ class SwarmIntelligence:
         """
         self.n_training += 1
         if self.evolution_continue:
-            self.current_movement_meta_data['movement'] += 1
+            self.current_adjustment_meta_data['adjustment'] += 1
         else:
-            self.current_movement_meta_data['movement'] = 0
+            self.current_adjustment_meta_data['adjustment'] = 0
         _evolve: bool = True
         _stopping_reason: str = ''
         if self.deep_learning:
@@ -1093,40 +1111,40 @@ class SwarmIntelligence:
                                                                        )
             self._populate()
         while _evolve:
-            Log(write=self.log, logger_file_path=self.output_file_path).log('Movement: {} / {}'.format(self.current_movement_meta_data['movement'], self.max_movements))
-            if self.current_movement_meta_data['movement'] > 0:
-                self.n_threads = self.max_movements - 1
+            Log(write=self.log, logger_file_path=self.output_file_path).log('Adjustment: {} / {}'.format(self.current_adjustment_meta_data['adjustment'], self.max_adjustments))
+            if self.current_adjustment_meta_data['adjustment'] > 0:
+                self.n_threads = self.max_adjustments - 1
             if self.deep_learning:
                 if self.warm_start:
                     if self.warm_start_strategy == 'monotone':
                         self.warm_start_constant_hidden_layers += 1
             self._trainer()
-            if (self.mode.find('model') >= 0) and (self.current_movement_meta_data['movement'] > self.burn_in_movements):
+            if (self.mode.find('model') >= 0) and (self.current_adjustment_meta_data['adjustment'] > self.burn_in_adjustments):
                 if self.convergence:
                     if self._is_gradient_converged(compare=self.convergence_measure, threshold=0.05):
                         _evolve = False
                         _stopping_reason = 'gradient_converged'
-                        Log(write=self.log).log('Fitness metric (gradient) has converged. Therefore the evolution stops at movement {}'.format(self.current_movement_meta_data.get('movement')))
+                        Log(write=self.log).log('Fitness metric (gradient) has converged. Therefore the evolution stops at adjustment {}'.format(self.current_adjustment_meta_data.get('adjustment')))
                 if self.early_stopping > 0:
                     if self._is_gradient_stagnating(min_fitness=True, median_fitness=True, mean_fitness=True, max_fitness=True):
                         _evolve = False
                         _stopping_reason = 'gradient_stagnating'
-                        Log(write=self.log).log('Fitness metric (gradient) per movement has not increased a certain amount of movements ({}). Therefore the evolution stops early at movement {}'.format(self.early_stopping, self.current_movement_meta_data.get('movement')))
+                        Log(write=self.log).log('Fitness metric (gradient) per adjustment has not increased a certain amount of adjustments ({}). Therefore the evolution stops early at adjustment {}'.format(self.early_stopping, self.current_adjustment_meta_data.get('adjustment')))
             if (datetime.now() - self.start_time).seconds >= self.timer:
                 _evolve = False
                 _stopping_reason = 'time_exceeded'
                 Log(write=self.log).log('Time exceeded:{}'.format(self.timer))
             if _evolve:
                 self._select_best_individual()
-                self._move()
-            self.current_movement_meta_data['movement'] += 1
-            if self.current_movement_meta_data['movement'] > self.max_movements:
+                self._adjust()
+            self.current_adjustment_meta_data['adjustment'] += 1
+            if self.current_adjustment_meta_data['adjustment'] > self.max_adjustments:
                 _evolve = False
-                _stopping_reason = 'max_movement_evolved'
-                Log(write=self.log).log('Maximum number of movements reached: {}'.format(self.max_movements))
+                _stopping_reason = 'max_adjustment_evolved'
+                Log(write=self.log).log('Maximum number of adjustments reached: {}'.format(self.max_adjustments))
         if self.mode.find('feature') >= 0:
             self._select_best_individual()
-            self._move()
+            self._adjust()
             for idx in [self.best_global_idx, self.best_local_idx]:
                 self.evolved_features.extend(self.feature_pairs[idx])
             self.evolved_features = list(set(self.evolved_features))
@@ -1143,9 +1161,9 @@ class SwarmIntelligence:
                                         train_data_path=self.train_data_file_path,
                                         test_data_path=self.test_data_file_path,
                                         validation_data_path=self.valid_data_file_path,
-                                        model_name=self.current_movement_meta_data['model_name'][self.best_global_idx],
-                                        input_param=self.current_movement_meta_data['param'][self.best_global_idx],
-                                        model_param=self.current_movement_meta_data['param'][self.best_global_idx],
+                                        model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
+                                        input_param=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                        model_param=self.current_adjustment_meta_data['param'][self.best_global_idx],
                                         hidden_layer_size=self.warm_start_constant_hidden_layers,
                                         hidden_layer_size_category=self.warm_start_constant_category,
                                         cloud=self.cloud
@@ -1155,8 +1173,8 @@ class SwarmIntelligence:
         else:
             if self.text_clustering:
                 _cluster_gen = ClusteringGenerator(predictor=self.features[0],
-                                                   model_name=self.current_movement_meta_data['model_name'][self.best_global_idx],
-                                                   cluster_params=self.current_movement_meta_data['param'][self.best_global_idx],
+                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
+                                                   cluster_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
                                                    tokenize=False,
                                                    cloud=self.cloud,
                                                    train_data_path=self.train_data_file_path
@@ -1165,12 +1183,12 @@ class SwarmIntelligence:
                 self.model = _cluster_gen.model
             else:
                 if self.target_type == 'reg':
-                    _model_gen = ModelGeneratorReg(reg_params=self.current_movement_meta_data['param'][self.best_global_idx],
-                                                   model_name=self.current_movement_meta_data['model_name'][self.best_global_idx]
+                    _model_gen = ModelGeneratorReg(reg_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx]
                                                    ).generate_model()
                 else:
-                    _model_gen = ModelGeneratorClf(clf_params=self.current_movement_meta_data['param'][self.best_global_idx],
-                                                   model_name=self.current_movement_meta_data['model_name'][self.best_global_idx]
+                    _model_gen = ModelGeneratorClf(clf_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx]
                                                    ).generate_model()
                 _model_gen.train(x=copy.deepcopy(self.data_set.get('x_train').values),
                                  y=copy.deepcopy(self.data_set.get('y_train').values),
@@ -1180,9 +1198,9 @@ class SwarmIntelligence:
                                  )
                 self.model = _model_gen.model
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Best model: {}'.format(self.model))
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness score: {}'.format(self.current_movement_meta_data['fitness_score'][self.best_global_idx]))
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness metric: {}'.format(self.current_movement_meta_data['fitness_metric'][self.best_global_idx]))
-        self._gather_final_movement()
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness score: {}'.format(self.current_adjustment_meta_data['fitness_score'][self.best_global_idx]))
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness metric: {}'.format(self.current_adjustment_meta_data['fitness_metric'][self.best_global_idx]))
+        self._gather_final_adjustment()
         if self.deep_learning:
             self.data_set = dict(y_test=self.population[self.best_global_idx].obs,
                                  pred=self.population[self.best_global_idx].pred
@@ -1190,26 +1208,25 @@ class SwarmIntelligence:
         else:
             if self.mode.find('model') >= 0 and self.plot:
                 self.data_set.update({'pred': self.population[self.best_global_idx].predict(x=self.data_set.get('x_test'))})
-        self.evolution: dict = dict(model_name=self.current_movement_meta_data['model_name'][self.best_global_idx],
-                                    param=self.current_movement_meta_data['param'][self.best_global_idx],
-                                    param_moved=self.current_movement_meta_data['param_moved'][self.best_global_idx],
-                                    fitness_score=self.current_movement_meta_data['fitness_score'][self.best_global_idx],
-                                    fitness_metric=self.current_movement_meta_data['fitness_metric'][self.best_global_idx],
+        self.evolution: dict = dict(model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
+                                    param=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                    param_moved=self.current_adjustment_meta_data['param_moved'][self.best_global_idx],
+                                    fitness_score=self.current_adjustment_meta_data['fitness_score'][self.best_global_idx],
+                                    fitness_metric=self.current_adjustment_meta_data['fitness_metric'][self.best_global_idx],
                                     epoch_metric_score=self.population[self.best_global_idx].epoch_eval if self.deep_learning else None,
-                                    features=self.current_movement_meta_data['features'][self.best_global_idx],
+                                    features=self.current_adjustment_meta_data['features'][self.best_global_idx],
                                     target=self.target,
                                     target_type=self.target_type,
                                     re_split_data=self.re_split_data,
                                     re_split_cases=self.re_sample_cases,
                                     re_sample_features=self.re_sample_features,
-                                    id=self.current_movement_meta_data['id'][self.best_global_idx],
+                                    id=self.current_adjustment_meta_data['id'][self.best_global_idx],
                                     mode=self.mode,
-                                    movements=self.current_movement_meta_data['movement'],
-                                    parent_ratio=self.parents_ratio,
+                                    adjustments=self.current_adjustment_meta_data['adjustment'],
                                     adjustment_prob=self.adjustment_prob,
                                     adjustment_rate=self.adjustment_rate,
                                     moved_features=self.moved_features,
-                                    movement_history=self.movement_history,
+                                    adjustment_history=self.adjustment_history,
                                     evolution_history=self.evolution_history,
                                     evolution_gradient=self.evolution_gradient,
                                     convergence_check=self.convergence,
@@ -1229,45 +1246,45 @@ class SwarmIntelligence:
                            breeding_map=True,
                            breeding_graph=True,
                            fitness_distribution=True,
-                           fitness_evolution=True if self.current_movement_meta_data['movement'] > 0 else False,
+                           fitness_evolution=True if self.current_adjustment_meta_data['adjustment'] > 0 else False,
                            fitness_dimensions=True,
-                           per_movement=True if self.current_movement_meta_data['movement'] > 0 else False,
+                           per_adjustment=True if self.current_adjustment_meta_data['adjustment'] > 0 else False,
                            prediction_of_best_model=True,
                            epoch_stats=True
                            )
         if self.output_file_path is not None:
             if len(self.output_file_path) > 0:
-                self.save_evolution(ga=True,
+                self.save_evolution(si=True,
                                     model=self.deploy_model,
                                     evolution_history=False,
-                                    movement_history=False,
-                                    final_movement=False
+                                    adjustment_history=False,
+                                    final_adjustment=False
                                     )
 
-    def optimize_continue(self, deploy_model: bool = True, max_movements: int = 5):
+    def optimize_continue(self, deploy_model: bool = True, max_adjustments: int = 5):
         """
-        Continue evolution by using last movement of previous evolution as new movement 0
+        Continue evolution by using last adjustment of previous evolution as new adjustment 0
 
         :param deploy_model: bool
             Deploy fittest model to cloud platform
 
-        :param max_movements: int
-            Maximum number of movements
+        :param max_adjustments: int
+            Maximum number of adjustments
         """
         self.data_set = None
         self.evolution_continue = True
         self.deploy_model = deploy_model
-        _max_gen: int = max_movements if max_movements > 0 else 5
-        self.max_movements: int = self.max_movements + _max_gen
-        self.burn_in_movements += self.current_movement_meta_data['movement']
+        _max_gen: int = max_adjustments if max_adjustments > 0 else 5
+        self.max_adjustments: int = self.max_adjustments + _max_gen
+        self.burn_in_adjustments += self.current_adjustment_meta_data['adjustment']
         self.optimize()
 
     def save_evolution(self,
                        si: bool = True,
                        model: bool = True,
                        evolution_history: bool = False,
-                       movement_history: bool = False,
-                       final_movement: bool = False
+                       adjustment_history: bool = False,
+                       final_adjustment: bool = False
                        ):
         """
         Save evolution meta data generated by genetic algorithm to local hard drive as pickle file
@@ -1281,11 +1298,11 @@ class SwarmIntelligence:
         :param evolution_history: bool
             Save evolution history meta data
 
-        :param movement_history: bool
-            Save movement history meta data
+        :param adjustment_history: bool
+            Save adjustment history meta data
 
-        :param final_movement: bool
-            Save settings of each individual of final movement
+        :param final_adjustment: bool
+            Save settings of each individual of final adjustment
         """
         # Export evolution history data:
         if evolution_history:
@@ -1296,18 +1313,18 @@ class SwarmIntelligence:
                          cloud=self.cloud,
                          bucket_name=self.bucket_name
                          ).file()
-        # Export movement history data:
-        if movement_history:
-            DataExporter(obj=self.movement_history,
-                         file_path=os.path.join(self.output_file_path, 'movement_history.p'),
+        # Export adjustment history data:
+        if adjustment_history:
+            DataExporter(obj=self.adjustment_history,
+                         file_path=os.path.join(self.output_file_path, 'adjustment_history.p'),
                          create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
                          bucket_name=self.bucket_name
                          ).file()
-        if final_movement:
-            DataExporter(obj=self.final_movement,
-                         file_path=os.path.join(self.output_file_path, 'final_movement.p'),
+        if final_adjustment:
+            DataExporter(obj=self.final_adjustment,
+                         file_path=os.path.join(self.output_file_path, 'final_adjustment.p'),
                          create_dir=True,
                          overwrite=True,
                          cloud=self.cloud,
@@ -1358,7 +1375,7 @@ class SwarmIntelligence:
                   fitness_distribution: bool = True,
                   fitness_evolution: bool = True,
                   fitness_dimensions: bool = True,
-                  per_movement: bool = True,
+                  per_adjustment: bool = True,
                   prediction_of_best_model: bool = True,
                   epoch_stats: bool = True
                   ):
@@ -1406,8 +1423,8 @@ class SwarmIntelligence:
                 -> Radar Chart
                 -> Tree Map
 
-        :param per_movement: bool
-            Visualize results of each movement in detail or visualize just evolutionary results
+        :param per_adjustment: bool
+            Visualize results of each adjustment in detail or visualize just evolutionary results
 
         :param prediction_of_best_model: bool
             Evaluation of prediction of the fittest model of evolution
@@ -1422,7 +1439,7 @@ class SwarmIntelligence:
         _m: List[str] = ['fitness_score', 'ml_metric', 'train_test_diff']
         _evolution_history_data[_m] = _evolution_history_data[_m].round(decimals=2)
         _evolution_gradient_data: pd.DataFrame = pd.DataFrame(data=self.evolution_gradient)
-        _evolution_gradient_data['movement'] = [i for i in range(0, len(self.evolution_gradient.get('max')), 1)]
+        _evolution_gradient_data['adjustment'] = [i for i in range(0, len(self.evolution_gradient.get('max')), 1)]
         _best_model_results: pd.DataFrame = pd.DataFrame(data=dict(obs=self.data_set.get('y_test'),
                                                                    pred=self.data_set.get('pred')
                                                                    )
@@ -1441,7 +1458,7 @@ class SwarmIntelligence:
                             })
         if model_evolution:
             _charts.update({'Evolution of used ML Models:': dict(data=_evolution_history_data,
-                                                                 features=['fitness_score', 'movement'],
+                                                                 features=['fitness_score', 'adjustment'],
                                                                  color_feature='model',
                                                                  plot_type='scatter',
                                                                  melt=True,
@@ -1452,7 +1469,7 @@ class SwarmIntelligence:
             if self.models is None or len(self.models) > 1:
                 _charts.update({'Distribution of used ML Models:': dict(data=_evolution_history_data,
                                                                         features=['model'],
-                                                                        group_by=['movement'] if per_movement else None,
+                                                                        group_by=['adjustment'] if per_adjustment else None,
                                                                         plot_type='pie',
                                                                         file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_model_distribution.html')
                                                                         )
@@ -1460,7 +1477,7 @@ class SwarmIntelligence:
         #if param_distribution:
         #    _charts.update({'Distribution of ML Model parameters:': dict(data=_evolution_history_data,
         #                                                                 features=['model_param'],
-        #                                                                 group_by=['movement'] if per_movement else None,
+        #                                                                 group_by=['adjustment'] if per_adjustment else None,
         #                                                                 plot_type='tree',
         #                                                                 file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_parameter_treemap.html')
         #                                                                 )
@@ -1475,10 +1492,10 @@ class SwarmIntelligence:
                                                                            )
                             })
         if breeding_map:
-            _breeding_map: pd.DataFrame = pd.DataFrame(data=dict(gen_0=self.movement_history['population']['gen_0'].get('fitness')), index=[0])
-            for g in self.movement_history['population'].keys():
+            _breeding_map: pd.DataFrame = pd.DataFrame(data=dict(gen_0=self.adjustment_history['population']['gen_0'].get('fitness')), index=[0])
+            for g in self.adjustment_history['population'].keys():
                 if g != 'gen_0':
-                    _breeding_map[g] = self.movement_history['population'][g].get('fitness')
+                    _breeding_map[g] = self.adjustment_history['population'][g].get('fitness')
             _charts.update({'Breeding Heat Map:': dict(data=_breeding_map,
                                                        plot_type='heat',
                                                        file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_breeding_heatmap.html')
@@ -1486,7 +1503,7 @@ class SwarmIntelligence:
                             })
         if breeding_graph:
             _charts.update({'Breeding Network Graph:': dict(data=_evolution_history_data,
-                                                            features=['movement', 'fitness_score'],
+                                                            features=['adjustment', 'fitness_score'],
                                                             graph_features=dict(node='id', edge='parent'),
                                                             color_feature='model',
                                                             plot_type='network',
@@ -1496,9 +1513,9 @@ class SwarmIntelligence:
         if fitness_distribution:
             _charts.update({'Distribution of Fitness Metric:': dict(data=_evolution_history_data,
                                                                     features=['fitness_score'],
-                                                                    time_features=['movement'],
+                                                                    time_features=['adjustment'],
                                                                     plot_type='ridgeline',
-                                                                    file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_fitness_score_distribution_per_movement.html')
+                                                                    file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_fitness_score_distribution_per_adjustment.html')
                                                                     )
                             })
         if fitness_dimensions:
@@ -1509,7 +1526,7 @@ class SwarmIntelligence:
                                                                    'fitness_score',
                                                                    'parent',
                                                                    'id',
-                                                                   'movement',
+                                                                   'adjustment',
                                                                    'model'
                                                                    ],
                                                          color_feature='model',
@@ -1520,7 +1537,7 @@ class SwarmIntelligence:
         if fitness_evolution:
             _charts.update({'Fitness Evolution:': dict(data=_evolution_gradient_data,
                                                        features=['min', 'median', 'mean', 'max'],
-                                                       time_features=['movement'],
+                                                       time_features=['adjustment'],
                                                        plot_type='line',
                                                        file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_evolution_fitness_score.html')
                                                        )
