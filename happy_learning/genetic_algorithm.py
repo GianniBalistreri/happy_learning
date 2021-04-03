@@ -69,7 +69,7 @@ class GeneticAlgorithm:
                  max_generations: int = 50,
                  pop_size: int = 64,
                  mutation_rate: float = 0.1,
-                 mutation_prob: float = 0.15,
+                 mutation_prob: float = 0.85,
                  parents_ratio: float = 0.5,
                  early_stopping: int = 0,
                  convergence: bool = True,
@@ -83,6 +83,7 @@ class GeneticAlgorithm:
                  deep_learning_output_size: int = None,
                  cloud: str = None,
                  deploy_model: bool = True,
+                 generation_zero: list = None,
                  multi_threading: bool = False,
                  multi_processing: bool = False,
                  log: bool = False,
@@ -162,6 +163,9 @@ class GeneticAlgorithm:
         :param mutation_rate: float
             Mutation rate
 
+        :param mutation_prob: float
+            Mutation probability
+
         :param parents_ratio: float
             Ratio of parents to generate
 
@@ -231,6 +235,9 @@ class GeneticAlgorithm:
         :param deploy_model: bool
             Whether to deploy (save) evolved model or not
 
+        :param generation_zero: list
+            Pre-defined models for initial generation
+
         :param multi_threading: bool
             Whether to run genetic algorithm using multiple threads (of one cpu core) or single thread
 
@@ -290,13 +297,13 @@ class GeneticAlgorithm:
                 self.models: List[str] = _neural_nets
         self.parents_ratio: float = parents_ratio
         self.pop_size: int = pop_size if pop_size >= 3 else 64
-        if (self.pop_size * self.parents_ratio) % 2 != 1:
-            if self.parents_ratio == 0.5:
-                self.pop_size += 1
-            else:
-                self.parents_ratio = 0.5
-                if (self.pop_size * self.parents_ratio) % 2 != 1:
-                    self.pop_size += 1
+        #if (self.pop_size * self.parents_ratio) % 2 != 1:
+        #    if self.parents_ratio == 0.5:
+        #        self.pop_size += 1
+        #    else:
+        #        self.parents_ratio = 0.5
+        #        if (self.pop_size * self.parents_ratio) % 2 != 1:
+        #            self.pop_size += 1
         self.input_file_path: str = input_file_path
         self.train_data_file_path: str = train_data_file_path
         self.test_data_file_path: str = test_data_file_path
@@ -345,10 +352,11 @@ class GeneticAlgorithm:
         self.burn_in_generations: int = burn_in_generations if burn_in_generations >= 0 else round(0.1 * self.max_generations)
         self.population: List[object] = []
         self.mutation_rate: float = mutation_rate if mutation_rate <= 0 or mutation_rate >= 1 else 0.1
-        self.mutation_prob: float = mutation_prob if mutation_prob < 0 or mutation_prob >= 1 else 0.15
+        self.mutation_prob: float = mutation_prob if mutation_prob < 0 or mutation_prob >= 1 else 0.85
         self.plot: bool = plot
         self.fitness_function = fitness_function
         self.deep_learning_type: str = deep_learning_type
+        self.generation_zero: list = generation_zero
         self.dask_client = None
         self.n_threads: int = self.pop_size
         self.multi_threading: bool = multi_threading
@@ -876,7 +884,7 @@ class GeneticAlgorithm:
             Model parameter config to force during mutation
         """
         if self.mode.find('model') >= 0:
-            if np.random.uniform(low=0, high=1) <= self.mutation_prob:
+            if np.random.uniform(low=0, high=1) > self.mutation_prob:
                 if self.mode == 'model_sampler':
                     self._sampling(features=self.population[child].features)
                 if self.deep_learning and self.warm_start_strategy == 'adaptive':
@@ -961,6 +969,10 @@ class GeneticAlgorithm:
                 if self.evolution_continue:
                     _params: dict = self.final_generation.get('param')
                 else:
+                    if self.generation_zero is not None:
+                        if p <= len(self.generation_zero):
+                            self.population.append(self.generation_zero[p])
+                            continue
                     if len(_warm_model.keys()) > 0:
                         if p + 1 > len(_warm_model.keys()):
                             _params: dict = self.model_params
@@ -989,6 +1001,10 @@ class GeneticAlgorithm:
                 if self.evolution_continue:
                     _params: dict = self.final_generation.get('param')
                 else:
+                    if self.generation_zero is not None:
+                        if p <= len(self.generation_zero):
+                            self.population.append(self.generation_zero[p])
+                            continue
                     if len(_warm_model.keys()) > 0:
                         if p + 1 > len(_warm_model.keys()):
                             _params: dict = self.model_params
@@ -1038,6 +1054,11 @@ class GeneticAlgorithm:
         for p in range(0, self.pop_size - _n_vanilla_networks - 1, 1):
             if self.evolution_continue:
                 _model_param: dict = self.final_generation[str(p + len(self.population))].get('param')
+            else:
+                if self.generation_zero is not None:
+                    if p <= len(self.generation_zero):
+                        self.population.append(self.generation_zero[p])
+                        continue
             if self.mode.find('feature') >= 0:
                 self._sampling(features=self.feature_pairs[p])
             _net_gen: NetworkGenerator = NetworkGenerator(target=self.target,
