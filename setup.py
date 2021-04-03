@@ -30,7 +30,7 @@ requires = [r.strip() for r in requires.split('\n') if ((r.strip()[0] != "#") an
 
 setuptools.setup(
     name='happy_learning',
-    version='0.3.0',
+    version='0.3.1',
     author='Gianni Francesco Balistreri',
     author_email='gbalistreri@gmx.de',
     description='Toolbox for reinforced developing of supervised and unsupervised machine learning models (as proof-of-concept)',
@@ -45,7 +45,6 @@ setuptools.setup(
                                      'README.md',
                                      'requirements.txt',
                                      'setup.py',
-                                     #'Happily Applied Learning -> Avocado.ipynb',
                                      'Happy Learnings.ipynb',
                                      'Happy Learning - Methodology.pdf'
                                      ]
@@ -65,6 +64,7 @@ setuptools.setup(
                          'test/test_sampler.py',
                          'test/test_self_taught_short_clustering.py',
                          'test/test_supervised_machine_learning.py',
+                         'test/test_swarm_intelligence.py',
                          'test/test_text_clustering.py',
                          'test/test_text_clustering_generator.py',
                          'test/test_text_miner.py',
