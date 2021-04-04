@@ -2379,13 +2379,15 @@ class FeatureEngineer:
         :param kwargs: dict
             Key-word arguments for class DataImporter
         """
+        global ALL_FEATURES
         global MERGES
         global PREDICTORS
         global FEATURE_TYPES
         global TEXT_MINER
+        ALL_FEATURES = []
         MERGES = {}
         PREDICTORS = []
-        FEATURE_TYPES = {}
+        FEATURE_TYPES = {ft: [] for ft in FEATURE_TYPES.keys()}
         TEXT_MINER = dict(obj=None, segments={}, data=None, generated_features=[], linguistic={})
         kwargs.update({'partitions': DATA_PROCESSING['partitions']})
         DATA_PROCESSING['df'] = DataImporter(file_path=file_path, as_data_frame=True, use_dask=True, sep=sep, **kwargs).file(table_name=kwargs.get('table_name'))
@@ -2394,9 +2396,9 @@ class FeatureEngineer:
         DATA_PROCESSING['n_cases'] = len(DATA_PROCESSING['df'])
         global TEMP_INDEXER
         TEMP_INDEXER = {'__index__': [i for i in range(0, DATA_PROCESSING['n_cases'], 1)]}
-        DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns})
         if 'Unnamed: 0' in list(DATA_PROCESSING['df'].columns):
             del DATA_PROCESSING['df']['Unnamed: 0']
+        DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns})
         DATA_PROCESSING['processing']['features']['raw'].update({feature: [] for feature in list(DATA_PROCESSING.get('df').columns)})
         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Data set loaded from local file ({})\nCases: {}\nFeatures: {}'.format(file_path,
                                                                                                                                       len(DATA_PROCESSING['df']),
