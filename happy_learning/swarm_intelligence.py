@@ -1023,7 +1023,7 @@ class SwarmIntelligence:
 
     def _trainer(self):
         """
-        Prepare data set and start training
+        Prepare data set, start training and collect meta data
         """
         _trials: int = 0
         while True:
@@ -1076,12 +1076,12 @@ class SwarmIntelligence:
     @staticmethod
     def get_models() -> dict:
         """
-        Get all in GA implemented supervised machine learning models
+        Get all implemented supervised and unsupervised machine learning models
 
         :return: dict
-            Model overview for each machine learning case (classification / regression / neural network)
+            Model overview for each machine learning case (classification / regression / neural network / clustering)
         """
-        return dict(cls=CLF_ALGORITHMS, reg=REG_ALGORITHMS, nn=NETWORK_TYPE)
+        return dict(clf=CLF_ALGORITHMS, reg=REG_ALGORITHMS, nn=NETWORK_TYPE, cl=CLUSTER_ALGORITHMS)
 
     def inject_data(self):
         """
@@ -1144,7 +1144,6 @@ class SwarmIntelligence:
                 Log(write=self.log).log('Maximum number of adjustments reached: {}'.format(self.max_adjustments))
         if self.mode.find('feature') >= 0:
             self._select_best_individual()
-            self._adjust()
             for idx in [self.best_global_idx, self.best_local_idx]:
                 self.evolved_features.extend(self.feature_pairs[idx])
             self.evolved_features = list(set(self.evolved_features))

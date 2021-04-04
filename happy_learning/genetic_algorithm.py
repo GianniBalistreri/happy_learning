@@ -1115,7 +1115,7 @@ class GeneticAlgorithm:
 
     def _trainer(self):
         """
-        Selecting best individuals in the current generation as parents for reducing the offspring of the next generation
+        Prepare data set, start training and collect meta data
         """
         _trials: int = 0
         while True:
@@ -1168,12 +1168,12 @@ class GeneticAlgorithm:
     @staticmethod
     def get_models() -> dict:
         """
-        Get all in GA implemented supervised machine learning models
+        Get all implemented supervised and unsupervised machine learning models
 
         :return: dict
-            Model overview for each machine learning case (classification / regression / neural network)
+            Model overview for each machine learning case (classification / regression / neural network / clustering)
         """
-        return dict(cls=CLF_ALGORITHMS, reg=REG_ALGORITHMS, nn=NETWORK_TYPE)
+        return dict(clf=CLF_ALGORITHMS, reg=REG_ALGORITHMS, nn=NETWORK_TYPE, cl=CLUSTER_ALGORITHMS)
 
     def inject_data(self):
         """
