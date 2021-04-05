@@ -351,19 +351,20 @@ class SwarmIntelligence:
         self.n_individuals: int = -1
         self.best_global_idx: int = -1
         self.best_local_idx: int = -1
+        self.best_global_local_idx: List[int] = []
         self.final_adjustment: dict = {}
         self.evolution: dict = {}
         self.evolved_features: List[str] = []
-        self.moved_features: dict = dict(best=[], to=[], fitness=[], adjustment=[], action=[])
+        self.adjusted_features: dict = dict(best=[], to=[], fitness=[], adjustment=[], action=[])
         self.current_adjustment_meta_data: dict = dict(adjustment=0,
-                                                     id=[],
-                                                     fitness_metric=[],
-                                                     fitness_score=[],
-                                                     model_name=[],
-                                                     param=[],
-                                                     param_moved=[],
-                                                     features=[]
-                                                     )
+                                                       id=[],
+                                                       fitness_metric=[],
+                                                       fitness_score=[],
+                                                       model_name=[],
+                                                       param=[],
+                                                       param_moved=[],
+                                                       features=[]
+                                                       )
         self.adjustment_history: dict = dict(population={}, inheritance={}, time=[])
         self.evolution_history: dict = dict(id=[],
                                             model=[],
@@ -434,10 +435,10 @@ class SwarmIntelligence:
                                     _new_features.append(feature)
                                 else:
                                     _new_features.append(_generated_feature)
-                                self.moved_features['best'].append(feature)
-                                self.moved_features['to'].append(_new_features[-1])
-                                self.moved_features['adjustment'].append(feature)
-                                self.moved_features['action'].append(self.feature_engineer.get_last_action())
+                                self.adjusted_features['best'].append(feature)
+                                self.adjusted_features['to'].append(_new_features[-1])
+                                self.adjusted_features['adjustment'].append(feature)
+                                self.adjusted_features['action'].append(self.feature_engineer.get_last_action())
                             else:
                                 _new_features.append(feature)
                         elif self.mode == 'feature_selector':
@@ -1020,6 +1021,8 @@ class SwarmIntelligence:
         self.best_local_idx = np.array(_other_idx).argmax()
         if self.best_global_idx <= self.best_local_idx:
             self.best_local_idx += 1
+        self.best_global_local_idx.append(self.best_global_idx)
+        self.best_global_local_idx.append(self.best_local_idx)
 
     def _trainer(self):
         """
@@ -1144,7 +1147,7 @@ class SwarmIntelligence:
                 Log(write=self.log).log('Maximum number of adjustments reached: {}'.format(self.max_adjustments))
         if self.mode.find('feature') >= 0:
             self._select_best_individual()
-            for idx in [self.best_global_idx, self.best_local_idx]:
+            for idx in self.best_global_local_idx:
                 self.evolved_features.extend(self.feature_pairs[idx])
             self.evolved_features = list(set(self.evolved_features))
         if self.deep_learning:
@@ -1224,7 +1227,7 @@ class SwarmIntelligence:
                                     adjustments=self.current_adjustment_meta_data['adjustment'],
                                     adjustment_prob=self.adjustment_prob,
                                     adjustment_rate=self.adjustment_rate,
-                                    moved_features=self.moved_features,
+                                    adjusted_features=self.adjusted_features,
                                     adjustment_history=self.adjustment_history,
                                     evolution_history=self.evolution_history,
                                     evolution_gradient=self.evolution_gradient,
