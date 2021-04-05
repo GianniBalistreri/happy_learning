@@ -332,10 +332,14 @@ class FeatureLearning:
         _feature_learning_evolution.optimize()
         self.evolved_features.extend(_feature_learning_evolution.evolved_features)
         self.feature_engineer = _feature_learning_evolution.feature_engineer
-        Log(write=False, level='error').log(msg='Generated {} engineered features'.format(len(_feature_learning_evolution.mutated_features.get('child'))))
+        if evolutionary_algorithm == 'ga':
+            _generated_features: List[str] = _feature_learning_evolution.mutated_features.get('child')
+        else:
+            _generated_features: List[str] = _feature_learning_evolution.adjusted_features.get('to')
+        Log(write=False, level='error').log(msg='Generated {} engineered features'.format(len(_generated_features)))
         if self.keep_fittest_only:
             Log(write=False, level='error').log(msg='Selected {} fittest features'.format(len(_feature_learning_evolution.evolved_features)))
-            _erase: Dict[str, List[str]] = dict(features=list(set(_feature_learning_evolution.mutated_features.get('child')).difference(_feature_learning_evolution.evolved_features)))
+            _erase: Dict[str, List[str]] = dict(features=list(set(_generated_features).difference(_feature_learning_evolution.evolved_features)))
             if len(_erase.get('features')) > 0:
                 self.feature_engineer.clean(markers=_erase)
         del _feature_learning_evolution
