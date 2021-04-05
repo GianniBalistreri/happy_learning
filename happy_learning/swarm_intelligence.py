@@ -1147,7 +1147,7 @@ class SwarmIntelligence:
                 Log(write=self.log).log('Maximum number of adjustments reached: {}'.format(self.max_adjustments))
         if self.mode.find('feature') >= 0:
             self._select_best_individual()
-            for idx in self.best_global_local_idx:
+            for idx in list(set(self.best_global_local_idx)):
                 self.evolved_features.extend(self.feature_pairs[idx])
             self.evolved_features = list(set(self.evolved_features))
         if self.deep_learning:
