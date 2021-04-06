@@ -1299,7 +1299,7 @@ class GeneticAlgorithm:
                                  )
         else:
             if self.mode.find('model') >= 0 and self.plot:
-                self.data_set.update({'pred': self.population[self.best_individual_idx].predict(x=self.data_set.get('x_test'))})
+                self.data_set.update({'pred': self.model.predict(self.data_set.get('x_test'))})
         self.evolution: dict = dict(model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
                                     param=self.current_generation_meta_data['param'][self.best_individual_idx],
                                     param_mutated=self.current_generation_meta_data['param_mutated'][self.best_individual_idx],
@@ -1580,7 +1580,7 @@ class GeneticAlgorithm:
                                                                            features=['train_time_in_seconds'],
                                                                            group_by=['model'],
                                                                            plot_type='violin',
-                                                                           melt=True,
+                                                                           melt=True if len(self.models) > 1 else False,
                                                                            file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_training_time_distribution.html')
                                                                            )
                             })
