@@ -370,7 +370,7 @@ class SwarmIntelligence:
                                             model=[],
                                             adjustment=[],
                                             training=[],
-                                            parent=[],
+                                            best=[],
                                             fitness_score=[],
                                             ml_metric=[],
                                             train_test_diff=[],
@@ -456,13 +456,13 @@ class SwarmIntelligence:
         :param idx: int
             Index number of individual within population
         """
-        if self.adjustment_history['population'].get('gen_{}'.format(self.current_adjustment_meta_data['adjustment'])) is None:
+        if self.adjustment_history['population'].get('adjustment_{}'.format(self.current_adjustment_meta_data['adjustment'])) is None:
             self.adjustment_history['population'].update(
-                {'gen_{}'.format(self.current_adjustment_meta_data['adjustment']): dict(id=[],
-                                                                                    model=[],
-                                                                                    parent=[],
-                                                                                    fitness=[]
-                                                                                    )
+                {'adjustment_{}'.format(self.current_adjustment_meta_data['adjustment']): dict(id=[],
+                                                                                               model=[],
+                                                                                               best=[],
+                                                                                               fitness=[]
+                                                                                               )
                  })
         if current_adjustment:
             setattr(self.population[idx], 'fitness_score', self.evolution_history.get('fitness_score')[self.population[idx].id])
@@ -486,7 +486,7 @@ class SwarmIntelligence:
                 self.current_adjustment_meta_data['fitness_score'][idx] = copy.deepcopy(self.population[idx].fitness_score)
         else:
             if idx is None:
-                self.adjustment_history['population']['gen_{}'.format(self.current_adjustment_meta_data['adjustment'])]['fitness'] = copy.deepcopy(self.current_adjustment_meta_data.get('fitness'))
+                self.adjustment_history['population']['adjustment_{}'.format(self.current_adjustment_meta_data['adjustment'])]['fitness'] = copy.deepcopy(self.current_adjustment_meta_data.get('fitness'))
                 self.evolution_gradient.get('min').append(copy.deepcopy(min(self.current_adjustment_meta_data.get('fitness_score'))))
                 self.evolution_gradient.get('median').append(copy.deepcopy(np.median(self.current_adjustment_meta_data.get('fitness_score'))))
                 self.evolution_gradient.get('mean').append(copy.deepcopy(np.mean(self.current_adjustment_meta_data.get('fitness_score'))))
@@ -501,11 +501,10 @@ class SwarmIntelligence:
                     'Fitness: Min -> {}'.format(self.evolution_gradient.get('min')[-1]))
             else:
                 if self.current_adjustment_meta_data['adjustment'] == 0:
-                    self.evolution_history.get('parent').append(-1)
+                    self.evolution_history.get('best').append(-1)
                 else:
-                    self.evolution_history.get('parent').append(copy.deepcopy(self.population[idx].id))
-                self.adjustment_history['population']['gen_{}'.format(self.current_adjustment_meta_data['adjustment'])][
-                    'parent'].append(copy.deepcopy(self.evolution_history.get('parent')[-1]))
+                    self.evolution_history.get('best').append(copy.deepcopy(self.population[idx].id))
+                self.adjustment_history['population']['adjustment_{}'.format(self.current_adjustment_meta_data['adjustment'])]['best'].append(copy.deepcopy(self.evolution_history.get('best')[-1]))
                 self.n_individuals += 1
                 setattr(self.population[idx], 'id', self.n_individuals)
                 setattr(self.population[idx], 'target', self.target)
@@ -513,8 +512,8 @@ class SwarmIntelligence:
                 self.evolution_history.get('adjustment').append(copy.deepcopy(self.current_adjustment_meta_data['adjustment']))
                 self.evolution_history.get('model').append(copy.deepcopy(self.population[idx].model_name))
                 self.evolution_history.get('training').append(copy.deepcopy(self.n_training))
-                self.adjustment_history['population']['gen_{}'.format(self.current_adjustment_meta_data['adjustment'])]['id'].append(copy.deepcopy(self.population[idx].id))
-                self.adjustment_history['population']['gen_{}'.format(self.current_adjustment_meta_data['adjustment'])]['model'].append(copy.deepcopy(self.population[idx].model_name))
+                self.adjustment_history['population']['adjustment_{}'.format(self.current_adjustment_meta_data['adjustment'])]['id'].append(copy.deepcopy(self.population[idx].id))
+                self.adjustment_history['population']['adjustment_{}'.format(self.current_adjustment_meta_data['adjustment'])]['model'].append(copy.deepcopy(self.population[idx].model_name))
 
     def _fitness(self, individual: object, ml_metric: str):
         """
@@ -1209,7 +1208,7 @@ class SwarmIntelligence:
                                  )
         else:
             if self.mode.find('model') >= 0 and self.plot:
-                self.data_set.update({'pred': self.population[self.best_global_idx].predict(x=self.data_set.get('x_test'))})
+                self.data_set.update({'pred': self.model.predict(self.data_set.get('x_test'))})
         self.evolution: dict = dict(model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
                                     param=self.current_adjustment_meta_data['param'][self.best_global_idx],
                                     param_moved=self.current_adjustment_meta_data['param_moved'][self.best_global_idx],
@@ -1455,7 +1454,7 @@ class SwarmIntelligence:
         if results_table:
             _charts.update({'Results of Genetic Algorithm:': dict(data=_evolution_history_data,
                                                                   plot_type='table',
-                                                                  file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_metadata_table.html')
+                                                                  file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_metadata_table.html')
                                                                   )
                             })
         if model_evolution:
@@ -1464,7 +1463,7 @@ class SwarmIntelligence:
                                                                  color_feature='model',
                                                                  plot_type='scatter',
                                                                  melt=True,
-                                                                 file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_model_evolution.html')
+                                                                 file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_model_evolution.html')
                                                                  )
                             })
         if model_distribution:
@@ -1473,7 +1472,7 @@ class SwarmIntelligence:
                                                                         features=['model'],
                                                                         group_by=['adjustment'] if per_adjustment else None,
                                                                         plot_type='pie',
-                                                                        file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_model_distribution.html')
+                                                                        file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_model_distribution.html')
                                                                         )
                                 })
         #if param_distribution:
@@ -1481,7 +1480,7 @@ class SwarmIntelligence:
         #                                                                 features=['model_param'],
         #                                                                 group_by=['adjustment'] if per_adjustment else None,
         #                                                                 plot_type='tree',
-        #                                                                 file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_parameter_treemap.html')
+        #                                                                 file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_parameter_treemap.html')
         #                                                                 )
         #                    })
         if train_time_distribution:
@@ -1489,27 +1488,27 @@ class SwarmIntelligence:
                                                                            features=['train_time_in_seconds'],
                                                                            group_by=['model'],
                                                                            plot_type='violin',
-                                                                           melt=True,
-                                                                           file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_training_time_distribution.html')
+                                                                           melt=False,
+                                                                           file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_training_time_distribution.html')
                                                                            )
                             })
         if breeding_map:
-            _breeding_map: pd.DataFrame = pd.DataFrame(data=dict(gen_0=self.adjustment_history['population']['gen_0'].get('fitness')), index=[0])
+            _breeding_map: pd.DataFrame = pd.DataFrame(data=dict(adjustment_0=self.adjustment_history['population']['adjustment_0'].get('fitness')), index=[0])
             for g in self.adjustment_history['population'].keys():
-                if g != 'gen_0':
+                if g != 'adjustment_0':
                     _breeding_map[g] = self.adjustment_history['population'][g].get('fitness')
             _charts.update({'Breeding Heat Map:': dict(data=_breeding_map,
                                                        plot_type='heat',
-                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_breeding_heatmap.html')
+                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_breeding_heatmap.html')
                                                        )
                             })
         if breeding_graph:
             _charts.update({'Breeding Network Graph:': dict(data=_evolution_history_data,
                                                             features=['adjustment', 'fitness_score'],
-                                                            graph_features=dict(node='id', edge='parent'),
+                                                            graph_features=dict(node='id', edge='best'),
                                                             color_feature='model',
                                                             plot_type='network',
-                                                            file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_breeding_graph.html')
+                                                            file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_breeding_graph.html')
                                                             )
                             })
         if fitness_distribution:
@@ -1517,7 +1516,7 @@ class SwarmIntelligence:
                                                                     features=['fitness_score'],
                                                                     time_features=['adjustment'],
                                                                     plot_type='ridgeline',
-                                                                    file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_fitness_score_distribution_per_adjustment.html')
+                                                                    file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_fitness_score_distribution_per_adjustment.html')
                                                                     )
                             })
         if fitness_dimensions:
@@ -1526,14 +1525,14 @@ class SwarmIntelligence:
                                                                    'ml_metric',
                                                                    'train_test_diff',
                                                                    'fitness_score',
-                                                                   'parent',
+                                                                   'best',
                                                                    'id',
                                                                    'adjustment',
                                                                    'model'
                                                                    ],
                                                          color_feature='model',
                                                          plot_type='parcoords',
-                                                         file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_metadata_evolution_coords_actor_only.html')
+                                                         file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_metadata_evolution_coords_actor_only.html')
                                                          )
                             })
         if fitness_evolution:
@@ -1541,7 +1540,7 @@ class SwarmIntelligence:
                                                        features=['min', 'median', 'mean', 'max'],
                                                        time_features=['adjustment'],
                                                        plot_type='line',
-                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_evolution_fitness_score.html')
+                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_evolution_fitness_score.html')
                                                        )
                             })
         if epoch_stats:
@@ -1553,22 +1552,22 @@ class SwarmIntelligence:
                                                                                    features=['train', 'val'],
                                                                                    time_features=['epoch'],
                                                                                    plot_type='line',
-                                                                                   file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_epoch_metric_score.html')
+                                                                                   file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_epoch_metric_score.html')
                                                                                    )
                                 })
         if prediction_of_best_model:
             if self.target_type == 'reg':
-                _charts.update({'Prediction Evaluation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                           features=['obs', 'abs_diff', 'rel_diff', 'pred'],
-                                                                                           color_feature='pred',
-                                                                                           plot_type='parcoords',
-                                                                                           file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_prediction_evaluation_coords.html')
-                                                                                           ),
-                                'Prediction vs. Observation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                                features=['obs', 'pred'],
-                                                                                                plot_type='joint',
-                                                                                                file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_prediction_scatter_contour.html')
-                                                                                                )
+                _charts.update({'Prediction Evaluation of final adjusted ML Model:': dict(data=_best_model_results,
+                                                                                          features=['obs', 'abs_diff', 'rel_diff', 'pred'],
+                                                                                          color_feature='pred',
+                                                                                          plot_type='parcoords',
+                                                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_evaluation_coords.html')
+                                                                                          ),
+                                'Prediction vs. Observation of final adjusted ML Model:': dict(data=_best_model_results,
+                                                                                               features=['obs', 'pred'],
+                                                                                               plot_type='joint',
+                                                                                               file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_scatter_contour.html')
+                                                                                               )
                                 })
             else:
                 _confusion_matrix: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
@@ -1585,13 +1584,13 @@ class SwarmIntelligence:
                 _confusion_matrix = pd.concat([_confusion_matrix, _cf_col_sum], axis=1)
                 _charts.update({'Confusion Matrix': dict(data=_confusion_matrix,
                                                          plot_type='table',
-                                                         file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_prediction_confusion_table.html')
+                                                         file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_confusion_table.html')
                                                          )
                                 })
                 _charts.update({'Confusion Matrix Heatmap': dict(data=_best_model_results,
                                                                  features=['obs', 'pred'],
                                                                  plot_type='heat',
-                                                                 file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_prediction_confusion_heatmap.html')
+                                                                 file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_confusion_heatmap.html')
                                                                  )
                                 })
                 _confusion_matrix_normalized: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
@@ -1603,12 +1602,12 @@ class SwarmIntelligence:
                 _charts.update({'Confusion Matrix Normalized Heatmap:': dict(data=_confusion_matrix_normalized,
                                                                              features=self.target_labels,
                                                                              plot_type='heat',
-                                                                             file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_prediction_confusion_normal_heatmap.html')
+                                                                             file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_confusion_normal_heatmap.html')
                                                                              )
                                 })
                 _charts.update({'Classification Report:': dict(data=_best_model_results,
                                                                plot_type='table',
-                                                               file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_prediction_clf_report_table.html')
+                                                               file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_clf_report_table.html')
                                                                )
                                 })
                 if self.target_type == 'clf_multi':
@@ -1617,7 +1616,7 @@ class SwarmIntelligence:
                                                                                                color_feature='pred',
                                                                                                plot_type='parcoords',
                                                                                                brushing=True,
-                                                                                               file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_prediction_evaluation_category.html')
+                                                                                               file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_evaluation_category.html')
                                                                                                )
                                     })
                 else:
@@ -1633,7 +1632,7 @@ class SwarmIntelligence:
                                                           #xaxis_label=['False Positive Rate'],
                                                           #yaxis_label=['True Positive Rate'],
                                                           plot_type='line',
-                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'ga_prediction_roc_auc_curve.html')
+                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_roc_auc_curve.html')
                                                           )
                                     })
         if len(_charts.keys()) > 0:
