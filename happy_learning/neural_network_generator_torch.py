@@ -659,6 +659,8 @@ class NetworkGenerator(NeuralNetwork):
                 _eval = EvalReg
             else:
                 _eval = EvalClf
+            if torch.cuda.is_available():
+                self.model.cuda()
             self.model.eval()
             with torch.no_grad():
                 _predictions: List[int] = []
