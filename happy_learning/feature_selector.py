@@ -143,6 +143,7 @@ class FeatureSelector:
                                                   increasing_pair_size_factor=0.05 if self.kwargs.get('increasing_pair_size_factor') is None else self.kwargs.get('increasing_pair_size_factor'),
                                                   games=3 if self.kwargs.get('games') is None else self.kwargs.get('games'),
                                                   penalty_factor=0.1 if self.kwargs.get('penalty_factor') is None else self.kwargs.get('penalty_factor'),
+                                                  evolutionary_algorithm='si' if self.kwargs.get('evolutionary_algorithm') is None else self.kwargs.get('evolutionary_algorithm'),
                                                   max_iter=50 if self.kwargs.get('max_iter') is None else self.kwargs.get('max_iter'),
                                                   **self.kwargs
                                                   ).play()

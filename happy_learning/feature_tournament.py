@@ -7,6 +7,7 @@ from .evaluate_machine_learning import sml_fitness_score
 from .genetic_algorithm import GeneticAlgorithm
 from .sampler import MLSampler
 from .supervised_machine_learning import ModelGeneratorClf, ModelGeneratorReg
+from .swarm_intelligence import SwarmIntelligence
 from .utils import HappyLearningUtils
 from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
@@ -36,6 +37,7 @@ class FeatureTournament:
                  games: int = 3,
                  penalty_factor: float = 0.1,
                  max_iter: int = 50,
+                 evolutionary_algorithm: str = 'ga',
                  multi_threading: bool = True,
                  **kwargs
                  ):
@@ -66,6 +68,11 @@ class FeatureTournament:
 
         :param max_iter: int
             Maximum number of steps of the tournament
+
+        :param evolutionary_algorithm: str
+            Name of the reinforced evolutionary algorithm
+                -> ga: Genetic Algorithm
+                -> si: Swarm Intelligence
 
         :param multi_threading: bool
             Whether to run each game multi- or single-threaded during each iteration
@@ -124,6 +131,7 @@ class FeatureTournament:
         self.tournament: bool = False
         self.shapley_additive_explanation: dict = dict(sum={}, game={}, tournament={})
         self.models: List[str] = models
+        self.evolutionary_algorithm: str = evolutionary_algorithm
         self.kwargs: dict = kwargs
         self._evolve_feature_tournament_ai()
 
@@ -132,36 +140,69 @@ class FeatureTournament:
         Evolve ai for feature tournament using genetic algorithm
         """
         Log(write=False, level='info').log(msg='Evolve feature tournament ai ...')
-        _feature_tournament_ai_learning: GeneticAlgorithm = GeneticAlgorithm(mode='model',
-                                                                             df=self.df,
-                                                                             target=self.target,
-                                                                             features=self.features,
-                                                                             re_split_data=False if self.kwargs.get('re_split_data') is None else self.kwargs.get('re_split_data'),
-                                                                             re_sample_cases=False if self.kwargs.get('re_sample_cases') is None else self.kwargs.get('re_sample_cases'),
-                                                                             re_sample_features=True,
-                                                                             max_features=self.n_features,
-                                                                             labels=self.kwargs.get('labels'),
-                                                                             models=['cat'] if self.models is None else self.models,
-                                                                             model_params=None,
-                                                                             burn_in_generations=-1 if self.kwargs.get('burn_in_generations') is None else self.kwargs.get('burn_in_generations'),
-                                                                             warm_start=True if self.kwargs.get('warm_start') is None else self.kwargs.get('warm_start'),
-                                                                             max_generations=2 if self.kwargs.get('max_generations_ai') is None else self.kwargs.get('max_generations_ai'),
-                                                                             pop_size=64 if self.kwargs.get('pop_size') is None else self.kwargs.get('pop_size'),
-                                                                             mutation_rate=0.1 if self.kwargs.get('mutation_rate') is None else self.kwargs.get('mutation_rate'),
-                                                                             mutation_prob=0.5 if self.kwargs.get('mutation_prob') is None else self.kwargs.get('mutation_prob'),
-                                                                             parents_ratio=0.5 if self.kwargs.get('parents_ratio') is None else self.kwargs.get('parents_ratio'),
-                                                                             early_stopping=0 if self.kwargs.get('early_stopping') is None else self.kwargs.get('early_stopping'),
-                                                                             convergence=False if self.kwargs.get('convergence') is None else self.kwargs.get('convergence'),
-                                                                             timer_in_seconds=10000 if self.kwargs.get('timer_in_secondes') is None else self.kwargs.get('timer_in_secondes'),
-                                                                             force_target_type=self.force_target_type,
-                                                                             plot=False if self.kwargs.get('plot') is None else self.kwargs.get('plot'),
-                                                                             output_file_path=self.kwargs.get('output_file_path'),
-                                                                             multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
-                                                                             multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
-                                                                             log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
-                                                                             verbose=0 if self.kwargs.get('verbose') is None else self.kwargs.get('verbose'),
-                                                                             **self.kwargs
-                                                                             )
+        if self.evolutionary_algorithm == 'ga':
+            _feature_tournament_ai_learning: GeneticAlgorithm = GeneticAlgorithm(mode='model',
+                                                                                 df=self.df,
+                                                                                 target=self.target,
+                                                                                 features=self.features,
+                                                                                 re_split_data=False if self.kwargs.get('re_split_data') is None else self.kwargs.get('re_split_data'),
+                                                                                 re_sample_cases=False if self.kwargs.get('re_sample_cases') is None else self.kwargs.get('re_sample_cases'),
+                                                                                 re_sample_features=True,
+                                                                                 max_features=self.n_features,
+                                                                                 labels=self.kwargs.get('labels'),
+                                                                                 models=['cat'] if self.models is None else self.models,
+                                                                                 model_params=None,
+                                                                                 burn_in_generations=-1 if self.kwargs.get('burn_in_generations') is None else self.kwargs.get('burn_in_generations'),
+                                                                                 warm_start=True if self.kwargs.get('warm_start') is None else self.kwargs.get('warm_start'),
+                                                                                 max_generations=2 if self.kwargs.get('max_generations_ai') is None else self.kwargs.get('max_generations_ai'),
+                                                                                 pop_size=64 if self.kwargs.get('pop_size') is None else self.kwargs.get('pop_size'),
+                                                                                 mutation_rate=0.1 if self.kwargs.get('mutation_rate') is None else self.kwargs.get('mutation_rate'),
+                                                                                 mutation_prob=0.5 if self.kwargs.get('mutation_prob') is None else self.kwargs.get('mutation_prob'),
+                                                                                 parents_ratio=0.5 if self.kwargs.get('parents_ratio') is None else self.kwargs.get('parents_ratio'),
+                                                                                 early_stopping=0 if self.kwargs.get('early_stopping') is None else self.kwargs.get('early_stopping'),
+                                                                                 convergence=False if self.kwargs.get('convergence') is None else self.kwargs.get('convergence'),
+                                                                                 timer_in_seconds=10000 if self.kwargs.get('timer_in_secondes') is None else self.kwargs.get('timer_in_secondes'),
+                                                                                 force_target_type=self.force_target_type,
+                                                                                 plot=False if self.kwargs.get('plot') is None else self.kwargs.get('plot'),
+                                                                                 output_file_path=self.kwargs.get('output_file_path'),
+                                                                                 multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
+                                                                                 multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
+                                                                                 log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
+                                                                                 verbose=0 if self.kwargs.get('verbose') is None else self.kwargs.get('verbose'),
+                                                                                 **self.kwargs
+                                                                                 )
+        elif self.evolutionary_algorithm == 'si':
+            _feature_tournament_ai_learning: SwarmIntelligence = SwarmIntelligence(mode='model',
+                                                                                   df=self.df,
+                                                                                   target=self.target,
+                                                                                   features=self.features,
+                                                                                   re_split_data=False if self.kwargs.get('re_split_data') is None else self.kwargs.get('re_split_data'),
+                                                                                   re_sample_cases=False if self.kwargs.get('re_sample_cases') is None else self.kwargs.get('re_sample_cases'),
+                                                                                   re_sample_features=True,
+                                                                                   max_features=self.n_features,
+                                                                                   labels=self.kwargs.get('labels'),
+                                                                                   models=['cat'] if self.models is None else self.models,
+                                                                                   model_params=None,
+                                                                                   burn_in_adjustments=-1 if self.kwargs.get('burn_in_adjustments') is None else self.kwargs.get('burn_in_adjustments'),
+                                                                                   warm_start=True if self.kwargs.get('warm_start') is None else self.kwargs.get('warm_start'),
+                                                                                   max_adjustments=2 if self.kwargs.get('max_adjustments_ai') is None else self.kwargs.get('max_adjustments_ai'),
+                                                                                   pop_size=64 if self.kwargs.get('pop_size') is None else self.kwargs.get('pop_size'),
+                                                                                   adjustment_rate=0.1 if self.kwargs.get('adjustment_rate') is None else self.kwargs.get('adjustment_rate'),
+                                                                                   adjustment_prob=0.5 if self.kwargs.get('adjustment_prob') is None else self.kwargs.get('adjustment_prob'),
+                                                                                   early_stopping=0 if self.kwargs.get('early_stopping') is None else self.kwargs.get('early_stopping'),
+                                                                                   convergence=False if self.kwargs.get('convergence') is None else self.kwargs.get('convergence'),
+                                                                                   timer_in_seconds=10000 if self.kwargs.get('timer_in_secondes') is None else self.kwargs.get('timer_in_secondes'),
+                                                                                   force_target_type=self.force_target_type,
+                                                                                   plot=False if self.kwargs.get('plot') is None else self.kwargs.get('plot'),
+                                                                                   output_file_path=self.kwargs.get('output_file_path'),
+                                                                                   multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
+                                                                                   multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
+                                                                                   log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
+                                                                                   verbose=0 if self.kwargs.get('verbose') is None else self.kwargs.get('verbose'),
+                                                                                   **self.kwargs
+                                                                                   )
+        else:
+            raise FeatureTournamentException('Reinforced evolutionary algorithm ({}) not supported'.format(self.evolutionary_algorithm))
         _feature_tournament_ai_learning.optimize()
         self.feature_tournament_ai = _feature_tournament_ai_learning.evolution
         Log(write=False, level='error').log(msg='Feature tournament ai evolved -> {}'.format(self.feature_tournament_ai.get('model_name')))

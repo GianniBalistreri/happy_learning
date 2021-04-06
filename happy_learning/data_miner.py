@@ -9,6 +9,7 @@ from .feature_selector import FeatureSelector
 from .genetic_algorithm import GeneticAlgorithm
 from .sampler import MLSampler
 from .supervised_machine_learning import ModelGeneratorClf, ModelGeneratorReg
+from .swarm_intelligence import SwarmIntelligence
 from .utils import HappyLearningUtils
 from easyexplore.data_import_export import DataExporter
 from easyexplore.data_visualizer import DataVisualizer
@@ -34,19 +35,23 @@ class DataMiner:
     Class for running reinforced prototyping using structured (tabular) data
     """
     def __init__(self,
+                 temp_dir: str,
                  df: Union[dd.DataFrame, pd.DataFrame] = None,
                  file_path: str = None,
                  target: str = None,
                  predictors: List[str] = None,
                  feature_engineer: FeatureEngineer = None,
                  feature_generator: bool = True,
-                 train_critic: bool = True,
+                 train_critic: bool = False,
                  cpu_cores: int = 0,
                  plot: bool = True,
                  output_path: str = None,
                  **kwargs
                  ):
         """
+        :param temp_dir: str
+            File path of the temporary feature files
+
         :param df: Pandas or dask DataFrame
             Data set
 
@@ -104,6 +109,7 @@ class DataMiner:
                                                                      auto_engineering=False if kwargs.get('auto_engineering') is None else kwargs.get('auto_engineering'),
                                                                      multi_threading=False,
                                                                      file_path=file_path,
+                                                                     temp_dir=temp_dir,
                                                                      sep=',' if kwargs.get('sep') is None else kwargs.get('sep'),
                                                                      print_msg=True if kwargs.get('print_msg') is None else kwargs.get('print_msg'),
                                                                      seed=1234 if kwargs.get('seed') is None else kwargs.get('seed'),
@@ -153,7 +159,7 @@ class DataMiner:
                    clf_eval_metric: str = 'auc',
                    reg_eval_metric: str = 'rmse_norm',
                    save_train_test_data: bool = True,
-                   save_ga: bool = True,
+                   save_optimizer: bool = True,
                    **kwargs
                    ):
         """
@@ -172,6 +178,7 @@ class DataMiner:
         :param optimizer: str
             Model optimizer method:
                 -> ga: Genetic Algorithm
+                -> si: Swarm Intelligence
                 -> None: Develop model manually using pre-defined parameter config without optimization
 
         :param force_target_type: str
@@ -200,11 +207,11 @@ class DataMiner:
         :param save_train_test_data: bool
             Whether to save train-test data split or not
 
-        :param save_ga: bool
-            Whether to save "Genetic" object or not
+        :param save_optimizer: bool
+            Whether to save "GeneticAlgorithm" or "SwarmIntelligence" object or not
 
         :param kwargs: dict
-            Key-word arguments of classes FeatureSelector / DataExporter / Genetic / MLSampler / DataVisualizer
+            Key-word arguments of classes FeatureSelector / DataExporter / GeneticAlgorithm / SwarmIntelligence / MLSampler / DataVisualizer
         """
         self.force_target_type = force_target_type
         if train:
@@ -249,36 +256,76 @@ class DataMiner:
                                  overwrite=False if kwargs.get('overwrite') is None else kwargs.get('overwrite')
                                  ).file()
             if optimizer == 'ga':
-                _ga = GeneticAlgorithm(mode='model',
-                                       df=self.feature_engineer.get_training_data(),
-                                       target=self.feature_engineer.get_target(),
-                                       force_target_type=force_target_type,
-                                       features=self.feature_engineer.get_predictors(),
-                                       stratify=stratification,
-                                       labels=None if kwargs.get('labels') is None else kwargs.get('labels'),
-                                       models=models,
-                                       burn_in_generations=10 if kwargs.get('burn_in_generations') is None else kwargs.get('burn_in_generations'),
-                                       max_generations=25 if kwargs.get('max_generations') is None else kwargs.get('max_generations'),
-                                       pop_size=64 if kwargs.get('pop_size') is None else kwargs.get('pop_size'),
-                                       mutation_rate=0.1 if kwargs.get('mutation_rate') is None else kwargs.get('mutation_rate'),
-                                       mutation_prob=0.15 if kwargs.get('mutation_prob') is None else kwargs.get('mutation_prob'),
-                                       parents_ratio=0.5 if kwargs.get('parents_ratio') is None else kwargs.get('parents_ratio'),
-                                       early_stopping=0 if kwargs.get('early_stopping') is None else kwargs.get('early_stopping'),
-                                       convergence=False if kwargs.get('convergence') is None else kwargs.get('convergence'),
-                                       convergence_measure='median' if kwargs.get('convergence_measure') is None else kwargs.get('convergence_measure'),
-                                       timer_in_seconds=43200 if kwargs.get('timer_in_seconds') is None else kwargs.get('timer_in_seconds'),
-                                       plot=self.plot,
-                                       output_file_path=self.output_path
-                                       )
-                _ga.optimize()
+                _optimizer: GeneticAlgorithm = GeneticAlgorithm(mode='model',
+                                                                df=self.feature_engineer.get_training_data(),
+                                                                target=self.feature_engineer.get_target(),
+                                                                force_target_type=force_target_type,
+                                                                features=self.feature_engineer.get_predictors(),
+                                                                stratify=stratification,
+                                                                labels=None if kwargs.get('labels') is None else kwargs.get('labels'),
+                                                                models=models,
+                                                                burn_in_generations=10 if kwargs.get('burn_in_generations') is None else kwargs.get('burn_in_generations'),
+                                                                max_generations=25 if kwargs.get('max_generations') is None else kwargs.get('max_generations'),
+                                                                pop_size=64 if kwargs.get('pop_size') is None else kwargs.get('pop_size'),
+                                                                mutation_rate=0.1 if kwargs.get('mutation_rate') is None else kwargs.get('mutation_rate'),
+                                                                mutation_prob=0.15 if kwargs.get('mutation_prob') is None else kwargs.get('mutation_prob'),
+                                                                parents_ratio=0.5 if kwargs.get('parents_ratio') is None else kwargs.get('parents_ratio'),
+                                                                early_stopping=0 if kwargs.get('early_stopping') is None else kwargs.get('early_stopping'),
+                                                                convergence=False if kwargs.get('convergence') is None else kwargs.get('convergence'),
+                                                                convergence_measure='median' if kwargs.get('convergence_measure') is None else kwargs.get('convergence_measure'),
+                                                                timer_in_seconds=43200 if kwargs.get('timer_in_seconds') is None else kwargs.get('timer_in_seconds'),
+                                                                plot=self.plot,
+                                                                output_file_path=self.output_path
+                                                                )
+                _optimizer.optimize()
                 if save_train_test_data:
-                    DataExporter(obj=_ga.data_set,
+                    DataExporter(obj=_optimizer.data_set,
                                  file_path='{}train_test_data.pkl'.format(self.output_path),
-                                 create_dir=True if kwargs.get('create_dir') is None else kwargs.get('create_dir'),
+                                 create_dir=False if kwargs.get('create_dir') is None else kwargs.get('create_dir'),
                                  overwrite=False if kwargs.get('overwrite') is None else kwargs.get('overwrite')
                                  ).file()
-                if save_ga:
-                    _ga.save_evolution(ga=True, model=False)
+                if save_optimizer:
+                    _optimizer.save_evolution(ga=True,
+                                              model=False if kwargs.get('model') is None else kwargs.get('model'),
+                                              evolution_history=False if kwargs.get('evolution_history') is None else kwargs.get('evolution_history'),
+                                              generation_history=False if kwargs.get('generation_history') is None else kwargs.get('generation_history'),
+                                              final_generation=False if kwargs.get('final_generation') is None else kwargs.get('final_generation'),
+                                              )
+            elif optimizer == 'si':
+                _optimizer: SwarmIntelligence = SwarmIntelligence(mode='model',
+                                                                  df=self.feature_engineer.get_training_data(),
+                                                                  target=self.feature_engineer.get_target(),
+                                                                  force_target_type=force_target_type,
+                                                                  features=self.feature_engineer.get_predictors(),
+                                                                  stratify=stratification,
+                                                                  labels=None if kwargs.get('labels') is None else kwargs.get('labels'),
+                                                                  models=models,
+                                                                  burn_in_adjustments=-1 if kwargs.get('burn_in_adjustments') is None else kwargs.get('burn_in_adjustments'),
+                                                                  max_adjustments=10 if kwargs.get('max_adjustments') is None else kwargs.get('max_adjustments'),
+                                                                  pop_size=64 if kwargs.get('pop_size') is None else kwargs.get('pop_size'),
+                                                                  adjustment_rate=0.1 if kwargs.get('adjustment_rate') is None else kwargs.get('adjustment_rate'),
+                                                                  adjustment_prob=0.15 if kwargs.get('adjustment_prob') is None else kwargs.get('adjustment_prob'),
+                                                                  early_stopping=0 if kwargs.get('early_stopping') is None else kwargs.get('early_stopping'),
+                                                                  convergence=False if kwargs.get('convergence') is None else kwargs.get('convergence'),
+                                                                  convergence_measure='median' if kwargs.get('convergence_measure') is None else kwargs.get('convergence_measure'),
+                                                                  timer_in_seconds=43200 if kwargs.get('timer_in_seconds') is None else kwargs.get('timer_in_seconds'),
+                                                                  plot=self.plot,
+                                                                  output_file_path=self.output_path
+                                                                  )
+                _optimizer.optimize()
+                if save_train_test_data:
+                    DataExporter(obj=_optimizer.data_set,
+                                 file_path='{}train_test_data.pkl'.format(self.output_path),
+                                 create_dir=False if kwargs.get('create_dir') is None else kwargs.get('create_dir'),
+                                 overwrite=False if kwargs.get('overwrite') is None else kwargs.get('overwrite')
+                                 ).file()
+                if save_optimizer:
+                    _optimizer.save_evolution(si=True,
+                                              model=False if kwargs.get('model') is None else kwargs.get('model'),
+                                              evolution_history=False if kwargs.get('evolution_history') is None else kwargs.get('evolution_history'),
+                                              adjustment_history=False if kwargs.get('adjustmenmt_history') is None else kwargs.get('generation_history'),
+                                              final_adjustment=False if kwargs.get('final_adjustment') is None else kwargs.get('final_adjustment'),
+                                              )
             else:
                 _model_eval_plot: dict = {}
                 _data_set: dict = MLSampler(df=self.feature_engineer.get_data(),
@@ -393,4 +440,4 @@ class DataMiner:
                                      overwrite=False
                                      ).file()
         else:
-            raise NotImplementedError('Prediction method not implemented yet')
+            raise DataMinerException('Prediction method not implemented yet')

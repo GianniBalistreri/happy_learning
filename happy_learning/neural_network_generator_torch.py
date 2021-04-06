@@ -659,6 +659,8 @@ class NetworkGenerator(NeuralNetwork):
                 _eval = EvalReg
             else:
                 _eval = EvalClf
+            if torch.cuda.is_available():
+                self.model.cuda()
             self.model.eval()
             with torch.no_grad():
                 _predictions: List[int] = []
@@ -1073,7 +1075,8 @@ class NetworkGenerator(NeuralNetwork):
         :param text_data: str
             Text data sequence
         """
-        return self.model.predict(to_predict=text_data, multi_label=False if self.output_size <= 2 else True)
+        _predictions, _raw_output = self.model.predict(to_predict=[text_data], multi_label=False if self.output_size <= 2 else True)
+        return _predictions
 
     def _stochastic_learning(self, train: bool = True, eval_set: str = 'val'):
         """

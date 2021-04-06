@@ -696,7 +696,7 @@ class Transformers:
                                          weight=None,
                                          args=self.args,
                                          use_cuda=torch.cuda.is_available(),
-                                         cuda_device=-1,
+                                         cuda_device=0 if torch.cuda.is_available() else -1,
                                          onnx_execution_provider=None
                                          )
 
