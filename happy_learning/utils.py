@@ -282,7 +282,7 @@ class HappyLearningUtils:
         return list(accumulate([ratio] * n, mul))
 
     @staticmethod
-    def get_analytical_type(df,
+    def get_analytical_type(df: pd.DataFrame,
                             feature: str,
                             dtype: List[np.dtype],
                             continuous: List[str] = None,
