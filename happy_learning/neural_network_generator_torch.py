@@ -158,6 +158,7 @@ class NeuralNetwork:
                  sequential_type: str = 'text',
                  input_param: dict = None,
                  model_param: dict = None,
+                 cache_dir: str = None,
                  seed: int = 1234,
                  **kwargs
                  ):
@@ -192,6 +193,9 @@ class NeuralNetwork:
 
         :param model_param: dict
             Pre-configured model parameter
+
+        :param cache_dir: str
+            Cache directory for loading pre-trained language (embedding) models from disk (locally)
 
         :param seed: int
             Seed
@@ -229,6 +233,7 @@ class NeuralNetwork:
         self.test_iter = None
         self.validation_iter = None
         self.sequential_type: str = sequential_type
+        self.cache_dir: str = cache_dir
         self.seed: int = 1234 if seed <= 0 else seed
 
     def attention_network(self) -> Attention:
@@ -389,21 +394,20 @@ class NeuralNetwork:
         :return: Transformers
             Model object
         """
-        return Transformers(parameters=self.model_param, output_size=self.output_size)
+        return Transformers(parameters=self.model_param, output_size=self.output_size, cache_dir=self.cache_dir)
 
-    @staticmethod
-    def transformer_param() -> dict:
+    def transformer_param(self) -> dict:
         """
         Generate Transformer Network classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        _model_type: str = np.random.choice(a=list(TRANSFORMER.keys()))
+        _model_type: str = np.random.choice(a=list(TRANSFORMER.keys())) if self.cache_dir is None else self.cache_dir.split('/')[-2].split('-')[0]
         _num_attention_heads: int = np.random.randint(low=2, high=20)
         _hidden_size: int = _num_attention_heads * np.random.randint(low=100, high=1000)
         return dict(model_type=_model_type,
-                    model_name=TRANSFORMER.get(_model_type),
+                    model_name=TRANSFORMER.get(_model_type) if self.cache_dir is None else self.cache_dir,
                     epoch=np.random.randint(low=3, high=20),
                     batch_size=int(np.random.choice(a=HappyLearningUtils().geometric_progression(n=8))),
                     learning_rate=np.random.uniform(low=0.00001, high=0.4),
@@ -464,6 +468,7 @@ class NetworkGenerator(NeuralNetwork):
                  models: List[str] = None,
                  sep: str = '\t',
                  cloud: str = None,
+                 cache_dir: str = None,
                  seed: int = 1234
                  ):
         """
@@ -493,6 +498,9 @@ class NetworkGenerator(NeuralNetwork):
             Name of the cloud provider
                 -> google: Google Cloud Storage
                 -> aws: AWS Cloud
+
+        :param cache_dir: str
+            Cache directory for loading pre-trained language (embedding) models from disk (locally)
 
         :param seed: int
             Seed
@@ -544,6 +552,7 @@ class NetworkGenerator(NeuralNetwork):
         self.pred: list = []
         self.sep: str = sep
         self.cloud: str = cloud
+        self.cache_dir: str = cache_dir
         if self.cloud is None:
             self.bucket_name: str = None
         else:
