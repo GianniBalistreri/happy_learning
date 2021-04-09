@@ -893,7 +893,8 @@ class GeneticAlgorithm:
                     self.population[child] = ClusteringGenerator(predictor=self.features[0],
                                                                  models=self.models,
                                                                  tokenize=False,
-                                                                 cloud=self.cloud
+                                                                 cloud=self.cloud,
+                                                                 sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                                  ).generate_model()
                 else:
                     self.population[child] = ModelGeneratorReg(models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models).generate_model()
@@ -902,7 +903,8 @@ class GeneticAlgorithm:
                     self.population[child] = ClusteringGenerator(predictor=self.features[0],
                                                                  models=self.models,
                                                                  tokenize=False,
-                                                                 cloud=self.cloud
+                                                                 cloud=self.cloud,
+                                                                 sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                                  ).generate_params(param_rate=self.mutation_rate,
                                                                                    force_param=force_param
                                                                                    )
@@ -963,7 +965,8 @@ class GeneticAlgorithm:
                                                   models=self.models,
                                                   tokenize=False,
                                                   cloud=self.cloud,
-                                                  train_data_path=self.train_data_file_path
+                                                  train_data_path=self.train_data_file_path,
+                                                  sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                   ).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.evolution_continue:
@@ -985,7 +988,8 @@ class GeneticAlgorithm:
                                                            cluster_params=_params,
                                                            tokenize=False,
                                                            cloud=self.cloud,
-                                                           train_data_path=self.train_data_file_path
+                                                           train_data_path=self.train_data_file_path,
+                                                           sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                            ).generate_model()
                                        )
         else:
@@ -1046,7 +1050,8 @@ class GeneticAlgorithm:
                                                             model_name=model,
                                                             input_param=_model_param,
                                                             hidden_layer_size=self.warm_start_constant_hidden_layers,
-                                                            hidden_layer_size_category=self.warm_start_constant_category
+                                                            hidden_layer_size_category=self.warm_start_constant_category,
+                                                            cache_dir=self.kwargs.get('cache_dir')
                                                             ).get_vanilla_model()
                                            )
         else:
@@ -1076,7 +1081,8 @@ class GeneticAlgorithm:
                                                           models=self.models,
                                                           input_param=_model_param,
                                                           hidden_layer_size=self.warm_start_constant_hidden_layers,
-                                                          hidden_layer_size_category=self.warm_start_constant_category
+                                                          hidden_layer_size_category=self.warm_start_constant_category,
+                                                          cache_dir=self.kwargs.get('cache_dir')
                                                           )
             self.population.append(_net_gen.generate_model())
 
@@ -1258,7 +1264,8 @@ class GeneticAlgorithm:
                                         model_param=self.current_generation_meta_data['param'][self.best_individual_idx],
                                         hidden_layer_size=self.warm_start_constant_hidden_layers,
                                         hidden_layer_size_category=self.warm_start_constant_category,
-                                        cloud=self.cloud
+                                        cloud=self.cloud,
+                                        cache_dir=self.kwargs.get('cache_dir')
                                         ).generate_model()
             _net_gen.train()
             self.model = _net_gen.model
@@ -1269,7 +1276,8 @@ class GeneticAlgorithm:
                                                    cluster_params=self.current_generation_meta_data['param'][self.best_individual_idx],
                                                    tokenize=False,
                                                    cloud=self.cloud,
-                                                   train_data_path=self.train_data_file_path
+                                                   train_data_path=self.train_data_file_path,
+                                                   sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                    ).generate_model()
                 _cluster_gen.train()
                 self.model = _cluster_gen.model

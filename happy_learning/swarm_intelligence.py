@@ -362,7 +362,7 @@ class SwarmIntelligence:
                                                        fitness_score=[],
                                                        model_name=[],
                                                        param=[],
-                                                       param_moved=[],
+                                                       param_adjusted=[],
                                                        features=[]
                                                        )
         self.adjustment_history: dict = dict(population={}, inheritance={}, time=[])
@@ -403,7 +403,8 @@ class SwarmIntelligence:
                             self.population[idx] = ClusteringGenerator(predictor=self.features[0],
                                                                        models=self.models,
                                                                        tokenize=False,
-                                                                       cloud=self.cloud
+                                                                       cloud=self.cloud,
+                                                                       sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                                        ).generate_model()
                         else:
                             self.population[idx] = ModelGeneratorReg(models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models).generate_model()
@@ -412,7 +413,8 @@ class SwarmIntelligence:
                             self.population[idx] = ClusteringGenerator(predictor=self.features[0],
                                                                        models=self.models,
                                                                        tokenize=False,
-                                                                       cloud=self.cloud
+                                                                       cloud=self.cloud,
+                                                                       sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                                        ).generate_params(param_rate=self.adjustment_rate)
                         else:
                             self.population[idx] = ModelGeneratorReg(reg_params=self.population[self.best_global_idx].model_param,
@@ -473,7 +475,7 @@ class SwarmIntelligence:
                 self.current_adjustment_meta_data.get('features').append(copy.deepcopy(self.population[idx].features))
                 self.current_adjustment_meta_data.get('model_name').append(copy.deepcopy(self.population[idx].model_name))
                 self.current_adjustment_meta_data.get('param').append(copy.deepcopy(self.population[idx].model_param))
-                self.current_adjustment_meta_data.get('param_moved').append(copy.deepcopy(self.population[idx].model_param_mutated))
+                self.current_adjustment_meta_data.get('param_adjusted').append(copy.deepcopy(self.population[idx].model_param_mutated))
                 self.current_adjustment_meta_data.get('fitness_metric').append(copy.deepcopy(self.population[idx].fitness))
                 self.current_adjustment_meta_data.get('fitness_score').append(copy.deepcopy(self.population[idx].fitness_score))
             else:
@@ -481,7 +483,7 @@ class SwarmIntelligence:
                 self.current_adjustment_meta_data['features'][idx] = copy.deepcopy(self.population[idx].features)
                 self.current_adjustment_meta_data['model_name'][idx] = copy.deepcopy(self.population[idx].model_name)
                 self.current_adjustment_meta_data['param'][idx] = copy.deepcopy(self.population[idx].model_param)
-                self.current_adjustment_meta_data['param_moved'][idx] = copy.deepcopy(self.population[idx].model_param_mutated)
+                self.current_adjustment_meta_data['param_adjusted'][idx] = copy.deepcopy(self.population[idx].model_param_mutated)
                 self.current_adjustment_meta_data['fitness_metric'][idx] = copy.deepcopy(self.population[idx].fitness)
                 self.current_adjustment_meta_data['fitness_score'][idx] = copy.deepcopy(self.population[idx].fitness_score)
         else:
@@ -860,7 +862,8 @@ class SwarmIntelligence:
                                                   models=self.models,
                                                   tokenize=False,
                                                   cloud=self.cloud,
-                                                  train_data_path=self.train_data_file_path
+                                                  train_data_path=self.train_data_file_path,
+                                                  sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                   ).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.evolution_continue:
@@ -882,7 +885,8 @@ class SwarmIntelligence:
                                                            cluster_params=_params,
                                                            tokenize=False,
                                                            cloud=self.cloud,
-                                                           train_data_path=self.train_data_file_path
+                                                           train_data_path=self.train_data_file_path,
+                                                           sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                            ).generate_model()
                                        )
         else:
@@ -943,7 +947,8 @@ class SwarmIntelligence:
                                                             model_name=model,
                                                             input_param=_model_param,
                                                             hidden_layer_size=self.warm_start_constant_hidden_layers,
-                                                            hidden_layer_size_category=self.warm_start_constant_category
+                                                            hidden_layer_size_category=self.warm_start_constant_category,
+                                                            cache_dir=self.kwargs.get('cache_dir')
                                                             ).get_vanilla_model()
                                            )
         else:
@@ -973,7 +978,8 @@ class SwarmIntelligence:
                                                           models=self.models,
                                                           input_param=_model_param,
                                                           hidden_layer_size=self.warm_start_constant_hidden_layers,
-                                                          hidden_layer_size_category=self.warm_start_constant_category
+                                                          hidden_layer_size_category=self.warm_start_constant_category,
+                                                          cache_dir=self.kwargs.get('cache_dir')
                                                           )
             self.population.append(_net_gen.generate_model())
 
@@ -1167,7 +1173,8 @@ class SwarmIntelligence:
                                         model_param=self.current_adjustment_meta_data['param'][self.best_global_idx],
                                         hidden_layer_size=self.warm_start_constant_hidden_layers,
                                         hidden_layer_size_category=self.warm_start_constant_category,
-                                        cloud=self.cloud
+                                        cloud=self.cloud,
+                                        cache_dir=self.kwargs.get('cache_dir')
                                         ).generate_model()
             _net_gen.train()
             self.model = _net_gen.model
@@ -1178,7 +1185,8 @@ class SwarmIntelligence:
                                                    cluster_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
                                                    tokenize=False,
                                                    cloud=self.cloud,
-                                                   train_data_path=self.train_data_file_path
+                                                   train_data_path=self.train_data_file_path,
+                                                   sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                    ).generate_model()
                 _cluster_gen.train()
                 self.model = _cluster_gen.model
@@ -1211,7 +1219,7 @@ class SwarmIntelligence:
                 self.data_set.update({'pred': self.model.predict(self.data_set.get('x_test'))})
         self.evolution: dict = dict(model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
                                     param=self.current_adjustment_meta_data['param'][self.best_global_idx],
-                                    param_moved=self.current_adjustment_meta_data['param_moved'][self.best_global_idx],
+                                    param_adjusted=self.current_adjustment_meta_data['param_adjusted'][self.best_global_idx],
                                     fitness_score=self.current_adjustment_meta_data['fitness_score'][self.best_global_idx],
                                     fitness_metric=self.current_adjustment_meta_data['fitness_metric'][self.best_global_idx],
                                     epoch_metric_score=self.population[self.best_global_idx].epoch_eval if self.deep_learning else None,
