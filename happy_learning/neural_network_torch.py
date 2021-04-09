@@ -612,7 +612,7 @@ class Transformers:
     """
     Class for building encoder decoder transformer networks using simpletransformers based on hugging face
     """
-    def __init__(self, parameters: dict, output_size: int):
+    def __init__(self, parameters: dict, output_size: int, cache_dir: str = None):
         """
         :param parameters: dict
 			Parameter settings
@@ -622,6 +622,9 @@ class Transformers:
                 -> 1: Float value (Regression)
                 -> 2: Classes (Binary Classification)
                 -> >2: Classes (Multi-Class Classification)
+
+        :param cache_dir: str
+            Cache directory for loading pre-trained language (embedding) models from disk
         """
         self.args: dict = dict(model_type=parameters.get('model_type'),
                                model_name=parameters.get('model_name'),
@@ -688,6 +691,7 @@ class Transformers:
                                fp16=parameters.get('fp16'),
                                fp16_opt_level=parameters.get('fp16_opt_level')
                                )
+        _kwargs: dict = dict(cache_dir=cache_dir, local_files_only=False if cache_dir is None else True)
         self.model = ClassificationModel(model_type=parameters.get('model_type'),
                                          model_name=parameters.get('model_name'),
                                          tokenizer_type=None,
@@ -697,7 +701,8 @@ class Transformers:
                                          args=self.args,
                                          use_cuda=torch.cuda.is_available(),
                                          cuda_device=0 if torch.cuda.is_available() else -1,
-                                         onnx_execution_provider=None
+                                         onnx_execution_provider=None,
+                                         **_kwargs
                                          )
 
     def forward(self) -> ClassificationModel:
