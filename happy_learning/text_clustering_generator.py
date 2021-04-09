@@ -230,6 +230,7 @@ class ClusteringGenerator(Clustering):
                  sep: str = '\t',
                  cloud: str = None,
                  train_data_path: str = None,
+                 sentence_embedding_model_path: str = None,
                  seed: int = 1234
                  ):
         """
@@ -262,6 +263,9 @@ class ClusteringGenerator(Clustering):
         :param train_data_path: str
             Complete file path of the training data
 
+        :param sentence_embedding_model_path: str
+            Local path of the sentence embedding model
+
         :param seed: int
             Seed
         """
@@ -285,6 +289,7 @@ class ClusteringGenerator(Clustering):
         self.sep: str = sep
         self.x: np.ndarray = None
         self.cloud: str = cloud
+        self.sentence_embedding_model_path: str = sentence_embedding_model_path
         if self.cloud is None:
             self.bucket_name: str = None
         else:
@@ -311,7 +316,8 @@ class ClusteringGenerator(Clustering):
         Internal cluster evaluation using semi-supervised Self-Taught Short Text Clustering algorithm to generate Normalized Mutual Information score
         """
         _embedding: np.ndarray = get_sentence_embedding(text_data=self.x,
-                                                        lang_model_name='paraphrase-xlm-r-multilingual-v1' if self.cluster_params.get('lang_model_name') is None else self.cluster_params.get('lang_model_name')
+                                                        lang_model_name='paraphrase-xlm-r-multilingual-v1' if self.cluster_params.get('lang_model_name') is None else self.cluster_params.get('lang_model_name'),
+                                                        lang_model_path=self.sentence_embedding_model_path
                                                         )
         _embedding_tensor: torch.tensor = torch.tensor(_embedding.astype(np.float32))
         _target_tensor: torch.tensor = torch.tensor(np.array(self.cluster_label).astype(np.float32))
