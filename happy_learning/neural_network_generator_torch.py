@@ -85,8 +85,8 @@ OPTIMIZER: dict = dict(adam=torch.optim.Adam,
                        sgd=torch.optim.SGD
                        )
 EMBEDDING: dict = dict(fast_text=FastText)
-TRANSFORMER: dict = {'roberta': 'roberta-large',
-                     'xlm': 'xlm-mlm-100-1280',
+TRANSFORMER: dict = {'roberta': 'roberta-large'
+                     #'xlm': 'xlm-mlm-100-1280',
                      #'xlm-roberta': 'xlm-roberta-large'
                      }
 IGNORE_PARAM_FOR_OPTIMIZATION: List[str] = ['embedding_len',
@@ -533,7 +533,7 @@ class NetworkGenerator(NeuralNetwork):
             self.target_type: str = 'clf_multi'
         self.models: List[str] = models
         self.model_name: str = model_name
-        self.transformer: bool = True if model_name == 'transformer' else False
+        self.transformer: bool = True if model_name == 'trans' else False
         if self.model_name is None:
             self.random: bool = True
             if self.models is not None:
@@ -1370,7 +1370,47 @@ class NetworkGenerator(NeuralNetwork):
             return self
         else:
             if self.transformer:
-                pass
+                if len(self.input_param.keys()) == 0:
+                    self.model_param = getattr(NeuralNetwork(target=self.target,
+                                                             predictors=self.predictors,
+                                                             output_layer_size=self.output_size,
+                                                             x_train=self.x_train,
+                                                             y_train=self.y_train,
+                                                             x_test=self.x_test,
+                                                             y_test=self.y_test,
+                                                             x_val=self.x_val,
+                                                             y_val=self.y_val,
+                                                             train_data_path=self.train_data_path,
+                                                             test_data_path=self.test_data_path,
+                                                             validation_data_path=self.validation_data_path
+                                                             ),
+                                               '{}_param'.format(NETWORK_TYPE.get(self.model_name))
+                                               )()
+                else:
+                    self.model_param = copy.deepcopy(self.input_param)
+                if len(self.predictors) > 0:
+                    if self.target != '':
+                        self._import_data_torch()
+                    else:
+                        raise NeuralNetworkException('No target feature found')
+                else:
+                    raise NeuralNetworkException('No predictors found')
+                self.model = getattr(NeuralNetwork(target=self.target,
+                                                   predictors=self.predictors,
+                                                   output_layer_size=self.output_size,
+                                                   x_train=self.x_train,
+                                                   y_train=self.y_train,
+                                                   x_test=self.x_test,
+                                                   y_test=self.y_test,
+                                                   x_val=self.x_val,
+                                                   y_val=self.y_val,
+                                                   train_data_path=self.train_data_path,
+                                                   test_data_path=self.test_data_path,
+                                                   validation_data_path=self.validation_data_path,
+                                                   model_param=self.model_param
+                                                   ),
+                                     NETWORK_TYPE.get(self.model_name)
+                                     )()
             else:
                 if len(self.input_param.keys()) == 0:
                     self.model_param = getattr(NeuralNetwork(target=self.target,
