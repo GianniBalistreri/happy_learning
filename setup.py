@@ -30,10 +30,10 @@ requires = [r.strip() for r in requires.split('\n') if ((r.strip()[0] != "#") an
 
 setuptools.setup(
     name='happy_learning',
-    version='0.3.3',
+    version='0.3.4',
     author='Gianni Francesco Balistreri',
     author_email='gbalistreri@gmx.de',
-    description='Toolbox for reinforced developing of supervised and unsupervised machine learning models (as proof-of-concept)',
+    description='Toolbox for reinforced developing of machine learning models (as proof-of-concept)',
     long_description=long_description,
     long_description_content_type='text/markdown',
     keywords='feature engineering feature selection genetic algorithm machine learning automl reinforcement shapley clustering',
