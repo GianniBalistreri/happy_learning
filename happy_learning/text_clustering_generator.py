@@ -63,9 +63,8 @@ class Clustering:
         """
         return GibbsSamplingDirichletMultinomialModeling(
             vocab_size=self.vocab_size,
-            n_clusters=10 if self.cluster_params.get('n_clusters') is None else self.cluster_params.get('n_clusters'),
-            n_iterations=5 if self.cluster_params.get('n_iterations') is None else self.cluster_params.get(
-                'n_iterations'),
+            n_clusters=4 if self.cluster_params.get('n_clusters') is None else self.cluster_params.get('n_clusters'),
+            n_iterations=5 if self.cluster_params.get('n_iterations') is None else self.cluster_params.get('n_iterations'),
             alpha=0.1 if self.cluster_params.get('alpha') is None else self.cluster_params.get('alpha'),
             beta=0.5 if self.cluster_params.get('beta') is None else self.cluster_params.get('beta'),
             )
@@ -78,7 +77,7 @@ class Clustering:
         :return: dict
             Parameter config
         """
-        return dict(n_clusters=np.random.randint(low=5, high=30),
+        return dict(n_clusters=np.random.randint(low=3, high=15),
                     n_iterations=np.random.randint(low=5, high=100),
                     alpha=np.random.uniform(low=0.05, high=0.95),
                     beta=np.random.uniform(low=0.05, high=0.95),
@@ -273,6 +272,7 @@ class ClusteringGenerator(Clustering):
                                                   train_data_path=train_data_path,
                                                   seed=seed
                                                   )
+        self.id: int = 0
         self.predictor: str = predictor
         self.model_name: str = model_name
         self.models: List[str] = models
@@ -280,7 +280,8 @@ class ClusteringGenerator(Clustering):
         self.model_param: dict = {}
         self.tokenize: bool = tokenize
         self.stc = None
-        self.nmi: float = 0.0
+        self.fitness: float = 0.0
+        self.fitness_score: float = 0.0
         self.train_time: float = 0.0
         self.random: bool = random
         self.cluster_label: List[int] = []
@@ -327,7 +328,8 @@ class ClusteringGenerator(Clustering):
         self.cluster_params.update({'dimensions': [_embedding.shape[0], _embedding.shape[1]], 'iterator': _data_loader})
         self.stc = self.self_taught_short_text_clustering()
         self.stc.fit(x=_embedding_tensor)
-        self.nmi = self.stc.nmi_score
+        self.fitness = self.stc.nmi_score
+        self.fitness_score = self.fitness
 
     def _import_data(self):
         """
