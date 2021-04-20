@@ -76,8 +76,8 @@ LOSS: dict = dict(reg=dict(mse=torch.nn.MSELoss(),
                                   #hinge_embedding=torch.nn.functional.hinge_embedding_loss
                                   ),
                   clf_multi=dict(cross_entropy=torch.nn.CrossEntropyLoss(),
-                                 multilabel_margin=torch.nn.MultiLabelMarginLoss(),
-                                 multilabel_soft_margin=torch.nn.MultiLabelSoftMarginLoss()
+                                 #multilabel_margin=torch.nn.MultiLabelMarginLoss(),
+                                 #multilabel_soft_margin=torch.nn.MultiLabelSoftMarginLoss()
                                  )
                   )
 OPTIMIZER: dict = dict(adam=torch.optim.Adam,
@@ -415,7 +415,7 @@ class NeuralNetwork:
                     adafactor_clip_threshold=np.random.uniform(low=0.001, high=1),
                     adafactor_decay_rate=np.random.uniform(low=-0.001, high=0.999),
                     adafactor_eps=(np.random.uniform(low=1e-50, high=1e-10), np.random.uniform(low=1e-50, high=1e-10)),
-                    adafactor_relative_step=np.random.choice(a=[False, True]),
+                    adafactor_relative_step=True,#np.random.choice(a=[False, True]),
                     adafactor_scale_parameter=np.random.choice(a=[False, True]),
                     adafactor_warmup_init=np.random.choice(a=[False, True]),
                     adam_epsilon=np.random.uniform(low=1e-10, high=1e-5),
