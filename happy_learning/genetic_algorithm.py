@@ -952,7 +952,7 @@ class GeneticAlgorithm:
                                                                   sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
                                                                   cache_dir=self.kwargs.get('cache_dir')
                                                                   ).generate_model()
-                        self.population[child].generate_params(param_rate=self.adjustment_rate)
+                        self.population[child].generate_params(param_rate=self.mutation_rate)
                     else:
                         self.population[child] = ModelGeneratorReg(reg_params=self.population[parent].model_param, models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[parent].model_param, models=self.models).generate_model()
                         self.population[child].generate_params(param_rate=self.mutation_rate, force_param=force_param)
@@ -990,7 +990,7 @@ class GeneticAlgorithm:
         """
         Select best individuals of population as parents for next generation
         """
-        # Calculate number of parents within generation:
+        # Calculate number of parents within current generation:
         _count_parents: int = int(self.pop_size * self.parents_ratio)
         # Rank individuals according to their fitness score:
         _sorted_fitness_matrix: pd.DataFrame = pd.DataFrame(data=dict(fitness=self.current_generation_meta_data.get('fitness_score'))).sort_values(by='fitness', axis=0, ascending=False)
@@ -1364,7 +1364,7 @@ class GeneticAlgorithm:
                                     fitness_score=self.current_generation_meta_data['fitness_score'][self.best_individual_idx],
                                     fitness_metric=self.current_generation_meta_data['fitness_metric'][self.best_individual_idx],
                                     epoch_metric_score=self.population[self.best_individual_idx].epoch_eval if self.deep_learning else None,
-                                    features=self.current_generation_meta_data['features'][self.best_individual_idx],
+                                    features=self.features if self.text_clustering or self.deep_learning else self.current_generation_meta_data['features'][self.best_individual_idx],
                                     target=self.target,
                                     target_type=self.target_type,
                                     re_split_data=self.re_split_data,
@@ -1487,12 +1487,7 @@ class GeneticAlgorithm:
             _file_name: str = 'model{}.p'.format(_file_name_extension)
             if self.deep_learning:
                 if self.current_generation_meta_data['model_name'][self.best_individual_idx] == 'trans':
-                    self.model.save_model(output_dir=os.path.join(self.output_file_path, _file_name),
-                                          optimizer=None,
-                                          scheduler=None,
-                                          model=None,
-                                          results=None
-                                          )
+                    torch.save(obj=self.model.model, f=os.path.join(self.output_file_path, _file_name))
                 else:
                     torch.save(obj=self.model, f=os.path.join(self.output_file_path, _file_name))
             else:

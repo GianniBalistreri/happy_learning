@@ -602,7 +602,6 @@ class SwarmIntelligence:
                                                                   ),
                                           train_time_in_seconds=individual.train_time
                                           )
-                print(_scores)
         else:
             _scores: dict = self.fitness_function(**dict(ml_metric=tuple([_best_score, individual.fitness['test'].get(_ml_metric)]),
                                                          train_test_metric=tuple([individual.fitness['train'].get(_ml_metric),
@@ -1426,12 +1425,7 @@ class SwarmIntelligence:
             _file_name: str = 'model{}.p'.format(_file_name_extension)
             if self.deep_learning:
                 if self.current_adjustment_meta_data['model_name'][self.best_global_idx] == 'trans':
-                    self.model.save_model(output_dir=os.path.join(self.output_file_path, _file_name),
-                                          optimizer=None,
-                                          scheduler=None,
-                                          model=None,
-                                          results=None
-                                          )
+                    torch.save(obj=self.model.model, f=os.path.join(self.output_file_path, _file_name))
                 else:
                     torch.save(obj=self.model, f=os.path.join(self.output_file_path, _file_name))
             else:
