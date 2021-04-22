@@ -53,9 +53,9 @@ TRAIN_TEST_TEXT_CLF: dict = MLSampler(df=DATA_SET_TEXT_CLF,
 TRAIN_DATA_PATH_TEXT: str = 'data/text_train.csv'
 TEST_DATA_PATH_TEXT: str = 'data/text_test.csv'
 VALIDATION_DATA_PATH_TEXT: str = 'data/text_val.csv'
-#pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_train')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_train'))], axis=1).to_csv(path_or_buf=TRAIN_DATA_PATH_TEXT, index=False)
-#pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_test')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_test'))], axis=1).to_csv(path_or_buf=TEST_DATA_PATH_TEXT, index=False)
-#pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_val')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_val'))], axis=1).to_csv(path_or_buf=VALIDATION_DATA_PATH_TEXT, index=False)
+pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_train')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_train'))], axis=1).to_csv(path_or_buf=TRAIN_DATA_PATH_TEXT, index=False)
+pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_test')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_test'))], axis=1).to_csv(path_or_buf=TEST_DATA_PATH_TEXT, index=False)
+pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_val')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_val'))], axis=1).to_csv(path_or_buf=VALIDATION_DATA_PATH_TEXT, index=False)
 
 
 class GeneticAlgorithmTest(unittest.TestCase):

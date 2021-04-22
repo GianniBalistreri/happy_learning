@@ -39,8 +39,9 @@ VALIDATION_DATA_PATH: str = 'data/text_val.csv'
 pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_REG.get('x_train')), pd.DataFrame(data=TRAIN_TEST_REG.get('y_train'))], axis=1).to_csv(path_or_buf=TRAIN_DATA_REG_PATH, index=False)
 pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_REG.get('x_test')), pd.DataFrame(data=TRAIN_TEST_REG.get('y_test'))], axis=1).to_csv(path_or_buf=TEST_DATA_REG_PATH, index=False)
 pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_REG.get('x_val')), pd.DataFrame(data=TRAIN_TEST_REG.get('y_val'))], axis=1).to_csv(path_or_buf=VALIDATION_DATA_REG_PATH, index=False)
-DATA_SET_TEXT_CLF: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/tripadvisor_hotel_reviews.csv').loc[0:1000, ]
+DATA_SET_TEXT_CLF: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/tripadvisor_hotel_reviews.csv').loc[0:100, ]
 DATA_SET_TEXT_CLF = DATA_SET_TEXT_CLF.loc[~DATA_SET_TEXT_CLF.isnull().any(axis=1), :]
+UNIQUE_LABELS: int = 3 # len(DATA_SET_TEXT_CLF['label'].unique())
 TRAIN_TEST_TEXT_CLF: dict = MLSampler(df=DATA_SET_TEXT_CLF,
                                       target=TARGET_TEXT,
                                       features=PREDICTORS_TEXT,
@@ -52,9 +53,9 @@ TRAIN_TEST_TEXT_CLF: dict = MLSampler(df=DATA_SET_TEXT_CLF,
 TRAIN_DATA_PATH_TEXT: str = 'data/text_train.csv'
 TEST_DATA_PATH_TEXT: str = 'data/text_test.csv'
 VALIDATION_DATA_PATH_TEXT: str = 'data/text_val.csv'
-pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_train')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_train'))], axis=1).to_csv(path_or_buf=TRAIN_DATA_PATH_TEXT, index=False)
-pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_test')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_test'))], axis=1).to_csv(path_or_buf=TEST_DATA_PATH_TEXT, index=False)
-pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_val')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_val'))], axis=1).to_csv(path_or_buf=VALIDATION_DATA_PATH_TEXT, index=False)
+#pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_train')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_train'))], axis=1).to_csv(path_or_buf=TRAIN_DATA_PATH_TEXT, index=False)
+#pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_test')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_test'))], axis=1).to_csv(path_or_buf=TEST_DATA_PATH_TEXT, index=False)
+#pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_val')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_val'))], axis=1).to_csv(path_or_buf=VALIDATION_DATA_PATH_TEXT, index=False)
 
 
 class SwarmIntelligenceTest(unittest.TestCase):
@@ -124,14 +125,14 @@ class SwarmIntelligenceTest(unittest.TestCase):
                                                    max_trials=2,
                                                    max_features=-1,
                                                    labels=None,
-                                                   models=['rcnn'],
+                                                   models=['trans'],
                                                    model_params=None,
                                                    burn_in_adjustments=-1,
                                                    warm_start=True,
                                                    warm_start_strategy='monotone',
                                                    warm_start_constant_hidden_layers=0,
                                                    warm_start_constant_category='very_small',
-                                                   max_adjustments=2,
+                                                   max_adjustments=1,
                                                    pop_size=4,
                                                    adjustment_rate=0.5,
                                                    adjustment_prob=0.85,
@@ -143,7 +144,7 @@ class SwarmIntelligenceTest(unittest.TestCase):
                                                    plot=False,
                                                    output_file_path='data',
                                                    deep_learning_type='batch',
-                                                   deep_learning_output_size=5,
+                                                   deep_learning_output_size=UNIQUE_LABELS,
                                                    log=False,
                                                    feature_engineer=None,
                                                    sampling_function=None,
