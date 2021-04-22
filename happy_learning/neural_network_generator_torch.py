@@ -406,21 +406,22 @@ class NeuralNetwork:
         _model_type: str = np.random.choice(a=list(TRANSFORMER.keys())) if self.cache_dir is None else self.cache_dir.split('/')[-2].split('-')[0]
         _num_attention_heads: int = np.random.randint(low=2, high=20)
         _hidden_size: int = _num_attention_heads * np.random.randint(low=100, high=1000)
+        _batch_size: int = int(np.random.choice(a=HappyLearningUtils().geometric_progression(n=6))) if torch.cuda.is_available() else int(np.random.choice(a=HappyLearningUtils().geometric_progression(n=8)))
         return dict(model_type=_model_type,
                     model_name=TRANSFORMER.get(_model_type) if self.cache_dir is None else self.cache_dir,
-                    epoch=np.random.randint(low=3, high=20),
-                    batch_size=int(np.random.choice(a=HappyLearningUtils().geometric_progression(n=8))),
+                    epoch=np.random.randint(low=1, high=20),
+                    batch_size=_batch_size,
                     learning_rate=np.random.uniform(low=0.00001, high=0.4),
-                    adafactor_beta1=np.random.uniform(low=0.0, high=1),
-                    adafactor_clip_threshold=np.random.uniform(low=0.001, high=1),
-                    adafactor_decay_rate=np.random.uniform(low=-0.001, high=0.999),
-                    adafactor_eps=(np.random.uniform(low=1e-50, high=1e-10), np.random.uniform(low=1e-50, high=1e-10)),
-                    adafactor_relative_step=True,#np.random.choice(a=[False, True]),
-                    adafactor_scale_parameter=np.random.choice(a=[False, True]),
-                    adafactor_warmup_init=np.random.choice(a=[False, True]),
+                    #adafactor_beta1=np.random.uniform(low=0.0, high=1),
+                    #adafactor_clip_threshold=np.random.uniform(low=0.001, high=1),
+                    #adafactor_decay_rate=np.random.uniform(low=-0.001, high=0.999),
+                    #adafactor_eps=(np.random.uniform(low=1e-50, high=1e-10), np.random.uniform(low=1e-50, high=1e-10)),
+                    #adafactor_relative_step=False,#np.random.choice(a=[False, True]),
+                    #adafactor_scale_parameter=np.random.choice(a=[False, True]),
+                    #adafactor_warmup_init=False,#np.random.choice(a=[False, True]),
                     adam_epsilon=np.random.uniform(low=1e-10, high=1e-5),
                     cosine_schedule_num_cycles=np.random.uniform(low=0.3, high=0.7),
-                    dynamic_quantize=np.random.choice(a=[False, True]),
+                    dynamic_quantize=False,#np.random.choice(a=[False, True]),
                     early_stopping_consider_epochs=np.random.choice(a=[False, True]),
                     use_early_stopping=np.random.choice(a=[False, True]),
                     early_stopping_delta=np.random.uniform(low=0, high=0.3),
@@ -428,16 +429,18 @@ class NeuralNetwork:
                     attention_probs_dropout_prob=np.random.uniform(low=0.05, high=0.95),
                     hidden_size=_hidden_size,
                     hidden_dropout_prob=np.random.uniform(low=0.05, high=0.95),
-                    gradient_accumulation_steps=np.random.randint(low=1, high=3),
+                    gradient_accumulation_steps=1,#np.random.randint(low=1, high=3),
                     initializer_range=np.random.uniform(low=0.05, high=0.95),
                     layer_norm_eps=np.random.uniform(low=0.05, high=0.5),
                     num_attention_heads=_num_attention_heads,
-                    num_hidden_layers=np.random.randint(low=2, high=20),
+                    num_hidden_layers=np.random.randint(low=2, high=30),
                     warmup_ratio=np.random.uniform(low=0.03, high=0.15),
-                    optimizer=np.random.choice(a=['AdamW', 'Adafactor']),
-                    scheduler=np.random.choice(a=['constant_schedule', 'constant_schedule_with_warmup', 'linear_schedule_with_warmup', 'cosine_schedule_with_warmup', 'cosine_with_hard_restarts_schedule_with_warmup', 'polynomial_decay_schedule_with_warmup']),
+                    optimizer='AdamW',#np.random.choice(a=['AdamW', 'Adafactor']),
+                    scheduler='linear_schedule_with_warmup',#np.random.choice(a=['constant_schedule', 'constant_schedule_with_warmup', 'linear_schedule_with_warmup', 'cosine_schedule_with_warmup', 'cosine_with_hard_restarts_schedule_with_warmup', 'polynomial_decay_schedule_with_warmup']),
                     polynomial_decay_schedule_lr_end=np.random.uniform(low=1e-8, high=1e-4),
-                    polynomial_decay_schedule_power=np.random.uniform(low=0.5, high=1.0)
+                    polynomial_decay_schedule_power=np.random.uniform(low=0.5, high=1.0),
+                    max_grad_norm=np.random.uniform(low=0.01, high=1.0),
+                    weight_decay=np.random.randint(low=0, high=1)
                     )
 
 
@@ -1084,7 +1087,7 @@ class NetworkGenerator(NeuralNetwork):
         :param text_data: str
             Text data sequence
         """
-        _predictions, _raw_output = self.model.predict(to_predict=[text_data], multi_label=False if self.output_size <= 2 else True)
+        _predictions, _raw_output = self.model.model.predict(to_predict=[text_data], multi_label=False if self.output_size <= 2 else True)
         return _predictions
 
     def _stochastic_learning(self, train: bool = True, eval_set: str = 'val'):
@@ -1176,17 +1179,16 @@ class NetworkGenerator(NeuralNetwork):
         Train neural network using deep learning framework 'PyTorch' (transformer only)
         """
         self.model.model.train_model(train_df=self.train_data_df,
-                                     multi_label=False if self.output_size == 2 else True,
+                                     multi_label=False,
                                      output_dir=None,
-                                     show_running_loss=True,
+                                     show_running_loss=False,
                                      eval_df=self.val_data_df,
-                                     verbose=True
+                                     verbose=False
                                      )
-        _result, _predictions, _wrong_predictions = self.model.eval_model(self.train_data_df)
-        self._eval(iter_type='train', obs=self.train_data_df.values.tolist(), pred=_predictions)
-        del _result
+        _predictions, _raw_output = self.model.model.predict(to_predict=self.train_data_df[self.predictors[0]].values.tolist())
+        self._eval(iter_type='train', obs=self.train_data_df[self.target].values.tolist(), pred=_predictions.tolist())
         del _predictions
-        del _wrong_predictions
+        del _raw_output
 
     def generate_model(self) -> object:
         """
@@ -1297,43 +1299,62 @@ class NetworkGenerator(NeuralNetwork):
                                               ),
                                 '{}_param'.format(NETWORK_TYPE.get(self.model_name))
                                 )()
-        for fixed in ['hidden_layers', 'hidden_layer_size_category']:
-            if fixed in list(self.model_param.keys()):
-                del _params[fixed]
-        _force_param: dict = {} if force_param is None else force_param
-        _param_choices: List[str] = [p for p in list(_params.keys()) if p not in list(_force_param.keys())]
-        _gen_n_params: int = round(len(_params.keys()) * _rate)
-        if _gen_n_params == 0:
-            _gen_n_params = 1
-        self.model_param_mutated.update({len(self.model_param_mutated.keys()) + 1: {copy.deepcopy(self.model_name): {}}})
-        for param in list(_force_param.keys()):
-            self.model_param.update({param: copy.deepcopy(_force_param.get(param))})
-        _old_model_param: dict = copy.deepcopy(self.model_param)
-        _ignore_param: List[str] = IGNORE_PARAM_FOR_OPTIMIZATION
-        if self.learning_type == 'batch':
-            _ignore_param.append('batch_size')
-        elif self.learning_type == 'stochastic':
-            _ignore_param.append('sample_size')
-        _parameters: List[str] = [p for p in _param_choices if p not in _ignore_param]
-        for _ in range(0, _gen_n_params, 1):
-            while True:
-                _param: str = np.random.choice(a=_parameters)
-                if _old_model_param.get(_param) is not None:
-                    if self.model_param.get(_param) is not None:
-                        break
-            if _param == 'loss':
-                self._config_params(loss=True)
-            elif _param == 'optimizer':
-                self._config_params(optimizer=True)
-            elif _param == 'hidden_layers':
-                self._config_params(hidden_layers=True)
-            else:
-                if _param in self._get_param_space(general=True).keys():
-                    self.model_param.update({_param: copy.deepcopy(self._get_param_space(general=True).get(_param))})
-                elif _param in self._get_param_space(general=False).keys():
-                    self.model_param.update({_param: copy.deepcopy(self._get_param_space(general=False).get(_param))})
-            self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update({_param: self.model_param.get(_param)})
-        self.model_param_mutation = 'new_model'
+        if self.transformer:
+            _force_param: dict = {} if force_param is None else force_param
+            _param_choices: List[str] = [p for p in list(_params.keys()) if p not in list(_force_param.keys())]
+            _gen_n_params: int = round(len(_params.keys()) * _rate)
+            if _gen_n_params == 0:
+                _gen_n_params = 1
+            self.model_param_mutated.update({len(self.model_param_mutated.keys()) + 1: {copy.deepcopy(self.model_name): {}}})
+            for param in list(_force_param.keys()):
+                self.model_param.update({param: copy.deepcopy(_force_param.get(param))})
+            _old_model_param: dict = copy.deepcopy(self.model_param)
+            for _ in range(0, _gen_n_params, 1):
+                while True:
+                    _param: str = np.random.choice(a=_param_choices)
+                    if _old_model_param.get(_param) is not None:
+                        if self.model_param.get(_param) is not None:
+                            break
+                self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update({_param: self.model_param.get(_param)})
+            self.model_param_mutation = 'new_model'
+        else:
+            for fixed in ['hidden_layers', 'hidden_layer_size_category']:
+                if fixed in list(self.model_param.keys()):
+                    del _params[fixed]
+            _force_param: dict = {} if force_param is None else force_param
+            _param_choices: List[str] = [p for p in list(_params.keys()) if p not in list(_force_param.keys())]
+            _gen_n_params: int = round(len(_params.keys()) * _rate)
+            if _gen_n_params == 0:
+                _gen_n_params = 1
+            self.model_param_mutated.update({len(self.model_param_mutated.keys()) + 1: {copy.deepcopy(self.model_name): {}}})
+            for param in list(_force_param.keys()):
+                self.model_param.update({param: copy.deepcopy(_force_param.get(param))})
+            _old_model_param: dict = copy.deepcopy(self.model_param)
+            _ignore_param: List[str] = IGNORE_PARAM_FOR_OPTIMIZATION
+            if self.learning_type == 'batch':
+                _ignore_param.append('batch_size')
+            elif self.learning_type == 'stochastic':
+                _ignore_param.append('sample_size')
+            _parameters: List[str] = [p for p in _param_choices if p not in _ignore_param]
+            for _ in range(0, _gen_n_params, 1):
+                while True:
+                    _param: str = np.random.choice(a=_parameters)
+                    if _old_model_param.get(_param) is not None:
+                        if self.model_param.get(_param) is not None:
+                            break
+                if _param == 'loss':
+                    self._config_params(loss=True)
+                elif _param == 'optimizer':
+                    self._config_params(optimizer=True)
+                elif _param == 'hidden_layers':
+                    self._config_params(hidden_layers=True)
+                else:
+                    if _param in self._get_param_space(general=True).keys():
+                        self.model_param.update({_param: copy.deepcopy(self._get_param_space(general=True).get(_param))})
+                    elif _param in self._get_param_space(general=False).keys():
+                        self.model_param.update({_param: copy.deepcopy(self._get_param_space(general=False).get(_param))})
+                self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update({_param: self.model_param.get(_param)})
+            self.model_param_mutation = 'new_model'
         if len(self.predictors) > 0:
             if self.target != '':
                 self._import_data_torch()
@@ -1468,14 +1489,19 @@ class NetworkGenerator(NeuralNetwork):
         """
         if self.transformer:
             if validation:
-                _result, _predictions, _wrong_predictions = self.model.model.eval_model(self.val_data_df)
-                self._eval(iter_type='val', obs=self.val_data_df.values.tolist(), pred=_predictions)
+                _predictions, _raw_output = self.model.model.predict(to_predict=self.val_data_df[self.predictors[0]].values.tolist())
+                self._eval(iter_type='val', obs=self.val_data_df[self.target].values.tolist(), pred=_predictions)
             else:
-                _result, _predictions, _wrong_predictions = self.model.model.eval_model(self.test_data_df)
-                self._eval(iter_type='test', obs=self.test_data_df.values.tolist(), pred=_predictions)
-            del _result
+                _predictions, _raw_output = self.model.model.predict(to_predict=self.test_data_df[self.predictors[0]].values.tolist())
+                self._eval(iter_type='test', obs=self.test_data_df[self.target].values.tolist(), pred=_predictions)
+            # _result, _predictions_val, _wrong_predictions = self.model.model.eval_model(eval_df=self.val_data_df,
+            #                                                                            multi_label=False,
+            #                                                                            output_dir=None,
+            #                                                                            show_running_loss=True,
+            #                                                                            verbose=True
+            #                                                                            )
             del _predictions
-            del _wrong_predictions
+            del _raw_output
         else:
             if self.learning_type == 'batch':
                 self._batch_learning(train=False, eval_set='val' if validation else 'test')
