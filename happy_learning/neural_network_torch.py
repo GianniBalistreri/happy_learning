@@ -678,6 +678,7 @@ class Transformers:
                                do_lower_case=True,
                                no_save=True,
                                no_cache=False,
+                               silent=True,
                                best_model_dir=BEST_MODEL_DIR,
                                output_dir=OUTPUT_DIR,
                                cache_dir=CACHE_DIR,
