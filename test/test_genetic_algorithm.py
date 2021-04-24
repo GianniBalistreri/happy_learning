@@ -63,7 +63,11 @@ class GeneticAlgorithmTest(unittest.TestCase):
     Class for testing class GeneticAlgorithm
     """
     def test_optimize_modeling(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice', temp_dir=DATA_DIR)
+        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET,
+                                                             target_feature='AveragePrice',
+                                                             temp_dir=DATA_DIR,
+                                                             auto_typing=False
+                                                             )
         _feature_engineer.set_predictors(exclude_original_data=False)
         _ga: GeneticAlgorithm = GeneticAlgorithm(mode='model',
                                                  target=_feature_engineer.get_target(),
@@ -88,8 +92,8 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  warm_start_strategy='monotone',
                                                  warm_start_constant_hidden_layers=0,
                                                  warm_start_constant_category='very_small',
-                                                 max_generations=10,
-                                                 pop_size=64,
+                                                 max_generations=2,
+                                                 pop_size=4,
                                                  mutation_rate=0.1,
                                                  mutation_prob=0.85,
                                                  parents_ratio=0.5,
@@ -103,6 +107,8 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  deep_learning_type='batch',
                                                  deep_learning_output_size=None,
                                                  log=False,
+                                                 verbose=False,
+                                                 checkpoint=True,
                                                  feature_engineer=_feature_engineer,
                                                  sampling_function=None
                                                  )

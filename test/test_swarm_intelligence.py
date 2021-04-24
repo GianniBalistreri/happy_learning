@@ -63,7 +63,11 @@ class SwarmIntelligenceTest(unittest.TestCase):
     Class for testing class SwarmIntelligence
     """
     def test_optimize_modeling(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice', temp_dir=DATA_DIR)
+        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET,
+                                                             target_feature='AveragePrice',
+                                                             temp_dir=DATA_DIR,
+                                                             auto_typing=False
+                                                             )
         _feature_engineer.set_predictors(exclude_original_data=False)
         _si: SwarmIntelligence = SwarmIntelligence(mode='model',
                                                    target=_feature_engineer.get_target(),
@@ -81,15 +85,15 @@ class SwarmIntelligenceTest(unittest.TestCase):
                                                    max_trials=2,
                                                    max_features=-1,
                                                    labels=None,
-                                                   models=None,
+                                                   models=['cat'],
                                                    model_params=None,
                                                    burn_in_adjustments=-1,
                                                    warm_start=True,
                                                    warm_start_strategy='monotone',
                                                    warm_start_constant_hidden_layers=0,
                                                    warm_start_constant_category='very_small',
-                                                   max_adjustments=10,
-                                                   pop_size=64,
+                                                   max_adjustments=2,
+                                                   pop_size=4,
                                                    adjustment_rate=0.1,
                                                    adjustment_prob=0.85,
                                                    early_stopping=0,
@@ -102,6 +106,8 @@ class SwarmIntelligenceTest(unittest.TestCase):
                                                    deep_learning_type='batch',
                                                    deep_learning_output_size=None,
                                                    log=False,
+                                                   verbose=False,
+                                                   checkpoint=True,
                                                    feature_engineer=_feature_engineer,
                                                    sampling_function=None
                                                    )
