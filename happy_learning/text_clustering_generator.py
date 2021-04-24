@@ -4,12 +4,14 @@ import re
 import pandas as pd
 import torch
 
+from .evaluate_machine_learning import EvalClf
 from .self_taught_short_text_clustering import get_sentence_embedding, STC
 from .text_clustering import GibbsSamplingDirichletMultinomialModeling, LatentDirichletAllocation, \
     LatentSemanticIndexing, NonNegativeMatrixFactorization
 from datetime import datetime
 from easyexplore.data_import_export import CLOUD_PROVIDER, DataImporter
 from gensim import corpora
+from simpletransformers.model import ClassificationModel
 from torch.utils.data import TensorDataset, DataLoader
 from typing import List
 
@@ -19,6 +21,8 @@ CLUSTER_ALGORITHMS: dict = dict(gsdmm='gibbs_sampling_dirichlet_multinomial_mode
                                 nmf='non_negative_matrix_factorization',
                                 #stc='self_taught_short_text_clustering'
                                 )
+
+EVAL_METH: List[str] = ['stc', 'trans']
 
 
 class ClusteringException(Exception):
@@ -226,10 +230,12 @@ class ClusteringGenerator(Clustering):
                  models: List[str] = None,
                  tokenize: bool = False,
                  random: bool = True,
+                 eval_method: str = 'stc',
                  sep: str = '\t',
                  cloud: str = None,
                  train_data_path: str = None,
                  sentence_embedding_model_path: str = None,
+                 language_model_path: str = None,
                  seed: int = 1234
                  ):
         """
@@ -251,6 +257,11 @@ class ClusteringGenerator(Clustering):
         :param random: bool
             Draw clustering model randomly
 
+        :param eval_method: str
+            Name of the evaluation method:
+                -> stc: Self-Taught Short Text Clustering (semi-supervised)
+                -> trans: Transformer (supervised)
+
         :param sep: str
             Separator
 
@@ -263,7 +274,10 @@ class ClusteringGenerator(Clustering):
             Complete file path of the training data
 
         :param sentence_embedding_model_path: str
-            Local path of the sentence embedding model
+            Local path of the pre-trained sentence embedding model (stc)
+
+        :param language_model_path: str
+            Local path of the pre-trained language model (transformer)
 
         :param seed: int
             Seed
@@ -287,10 +301,14 @@ class ClusteringGenerator(Clustering):
         self.cluster_label: List[int] = []
         self.model_param_mutation: str = ''
         self.model_param_mutated: dict = {}
+        if eval_method not in EVAL_METH:
+            raise ClusteringException('Evaluation method ({}) not supported'.format(eval_method))
+        self.eval_method: str = eval_method
         self.sep: str = sep
         self.x: np.ndarray = None
         self.cloud: str = cloud
         self.sentence_embedding_model_path: str = sentence_embedding_model_path
+        self.language_model_path: str = language_model_path
         if self.cloud is None:
             self.bucket_name: str = None
         else:
@@ -316,19 +334,54 @@ class ClusteringGenerator(Clustering):
         """
         Internal cluster evaluation using semi-supervised Self-Taught Short Text Clustering algorithm to generate Normalized Mutual Information score
         """
-        _embedding: np.ndarray = get_sentence_embedding(text_data=self.x,
-                                                        lang_model_name='paraphrase-xlm-r-multilingual-v1' if self.cluster_params.get('lang_model_name') is None else self.cluster_params.get('lang_model_name'),
-                                                        lang_model_path=self.sentence_embedding_model_path
-                                                        )
-        _embedding_tensor: torch.tensor = torch.tensor(_embedding.astype(np.float32))
-        _target_tensor: torch.tensor = torch.tensor(np.array(self.cluster_label).astype(np.float32))
-        _data_tensor: TensorDataset = TensorDataset(_embedding_tensor, _target_tensor)
-        _batch_size: int = 16 if self.cluster_params.get('batch_size') is None else self.cluster_params.get('batch_size')
-        _data_loader: DataLoader = DataLoader(dataset=_data_tensor, batch_size=_batch_size, shuffle=True)
-        self.cluster_params.update({'dimensions': [_embedding.shape[0], _embedding.shape[1]], 'iterator': _data_loader})
-        self.stc = self.self_taught_short_text_clustering()
-        self.stc.fit(x=_embedding_tensor)
-        self.fitness = self.stc.nmi_score
+        if self.eval_method == 'stc':
+            _embedding: np.ndarray = get_sentence_embedding(text_data=self.x,
+                                                            lang_model_name='paraphrase-xlm-r-multilingual-v1' if self.cluster_params.get('lang_model_name') is None else self.cluster_params.get('lang_model_name'),
+                                                            lang_model_path=self.sentence_embedding_model_path
+                                                            )
+            _embedding_tensor: torch.tensor = torch.tensor(_embedding.astype(np.float32))
+            _target_tensor: torch.tensor = torch.tensor(np.array(self.cluster_label).astype(np.float32))
+            _data_tensor: TensorDataset = TensorDataset(_embedding_tensor, _target_tensor)
+            _batch_size: int = 16 if self.cluster_params.get('batch_size') is None else self.cluster_params.get('batch_size')
+            _data_loader: DataLoader = DataLoader(dataset=_data_tensor, batch_size=_batch_size, shuffle=True)
+            self.cluster_params.update({'dimensions': [_embedding.shape[0], _embedding.shape[1]], 'iterator': _data_loader})
+            self.stc = self.self_taught_short_text_clustering()
+            self.stc.fit(x=_embedding_tensor)
+            self.fitness = self.stc.nmi_score
+        elif self.eval_method == 'trans':
+            _df_train: pd.DataFrame = pd.DataFrame(data=dict(text=self.x, label=self.cluster_label))
+            _args: dict = dict(do_lower_case=True,
+                               evaluate_during_training=False,
+                               manual_seed=1234,
+                               no_save=True,
+                               no_cache=False,
+                               overwrite_output_dir=True,
+                               silent=True
+                               )
+            _kwargs: dict = dict(cache_dir=self.language_model_path, local_files_only=False if self.language_model_path is None else True)
+            _model_type: str = 'roberta' if self.language_model_path is None else self.language_model_path.split('/')[-2].split('-')[0]
+            _transformer = ClassificationModel(model_type=_model_type,
+                                               model_name='roberta-large' if self.language_model_path is None else self.language_model_path,
+                                               tokenizer_type=None,
+                                               tokenizer_name=None,
+                                               num_labels=len(list(set(self.cluster_label))),
+                                               weight=None,
+                                               args=_args,
+                                               use_cuda=torch.cuda.is_available(),
+                                               cuda_device=0 if torch.cuda.is_available() else -1,
+                                               onnx_execution_provider=None,
+                                               **_kwargs
+                                               )
+            _transformer.train_model(train_df=_df_train,
+                                     multi_label=False,
+                                     output_dir=None,
+                                     show_running_loss=False,
+                                     eval_df=None,
+                                     verbose=False
+                                     )
+            _predictions, _raw_output = _transformer.predict(to_predict=_df_train['text'].values.tolist())
+            self.fitness = EvalClf(obs=self.cluster_label, pred=_predictions.tolist()).roc_auc_multi(meth='ovr')
+            del _df_train, _predictions, _raw_output
         self.fitness_score = self.fitness
 
     def _import_data(self):
