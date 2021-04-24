@@ -33,6 +33,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 DASK_INDEXER: str = '___dask_index___'
 TEMP_INDEXER: dict = {'__index__': []}
+IGNORE_FEATURES: List[str] = ['Unnamed: 0']
 TEMP_DIR: str = ''
 NOTEPAD: dict = {}
 PREDICTORS: List[str] = []
@@ -233,6 +234,8 @@ def _load_temp_files(features: List[str]):
     DATA_PROCESSING['df'] = None
     DATA_PROCESSING['df'] = pd.DataFrame(data=TEMP_INDEXER)
     for feature in features:
+        if feature in IGNORE_FEATURES:
+            continue
         DATA_PROCESSING['df'][feature] = DataImporter(file_path=os.path.join(TEMP_DIR, '{}.json'.format(feature)),
                                                       as_data_frame=True,
                                                       use_dask=False,
@@ -555,20 +558,21 @@ def _save_temp_files(feature: str):
     """
     Save temporary feature files
     """
-    global ALL_FEATURES
-    if isinstance(DATA_PROCESSING['df'], dd.DataFrame):
-        _data: list = DATA_PROCESSING['df'][feature].values.compute().tolist()
-    else:
-        _data: list = DATA_PROCESSING['df'][feature].values.tolist()
-    DataExporter(obj={feature: _data},
-                 file_path=os.path.join(TEMP_DIR, '{}.json'.format(feature)),
-                 create_dir=False,
-                 overwrite=True,
-                 cloud=None,
-                 bucket_name=None
-                 ).file()
-    if feature not in ALL_FEATURES:
-        ALL_FEATURES.append(feature)
+    if feature not in IGNORE_FEATURES:
+        global ALL_FEATURES
+        if isinstance(DATA_PROCESSING['df'], dd.DataFrame):
+            _data: list = DATA_PROCESSING['df'][feature].values.compute().tolist()
+        else:
+            _data: list = DATA_PROCESSING['df'][feature].values.tolist()
+        DataExporter(obj={feature: _data},
+                     file_path=os.path.join(TEMP_DIR, '{}.json'.format(feature)),
+                     create_dir=False,
+                     overwrite=True,
+                     cloud=None,
+                     bucket_name=None
+                     ).file()
+        if feature not in ALL_FEATURES:
+            ALL_FEATURES.append(feature)
 
 
 def _set_feature_relations(feature: str, new_feature: str):
@@ -1074,9 +1078,10 @@ class FeatureEngineer:
                 DATA_PROCESSING['n_cases'] = len(DATA_PROCESSING['df'])
                 global TEMP_INDEXER
                 TEMP_INDEXER['__index__'] = [i for i in range(0, DATA_PROCESSING['n_cases'], 1)]
+                for ignore in IGNORE_FEATURES:
+                    if ignore in list(DATA_PROCESSING['df'].columns):
+                        del DATA_PROCESSING['df'][ignore]
                 DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns})
-                if 'Unnamed: 0' in list(DATA_PROCESSING['df'].columns):
-                    del DATA_PROCESSING['df']['Unnamed: 0']
                 for feature in DATA_PROCESSING['df'].columns:
                     _save_temp_files(feature=feature)
                 DATA_PROCESSING['df'] = None
