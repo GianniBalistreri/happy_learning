@@ -1,4 +1,7 @@
 import copy
+import io
+
+import boto3
 import numpy as np
 import os
 import pandas as pd
@@ -13,7 +16,7 @@ from .supervised_machine_learning import CLF_ALGORITHMS, ModelGeneratorClf, Mode
 from .text_clustering_generator import CLUSTER_ALGORITHMS, ClusteringGenerator
 from .utils import HappyLearningUtils
 from datetime import datetime
-from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter
+from easyexplore.data_import_export import CLOUD_PROVIDER
 from easyexplore.data_visualizer import DataVisualizer
 from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
@@ -1487,10 +1490,18 @@ class SwarmIntelligence:
             _file_name_extension: str = '' if self.kwargs.get('model_file_name_extension') is None else '_{}'.format(self.kwargs.get('model_file_name_extension'))
             _file_name: str = 'model{}.p'.format(_file_name_extension)
             if self.deep_learning:
+                buffer = io.BytesIO()
+                output_model_file = "trained_models/model.p"
                 if self.current_adjustment_meta_data['model_name'][self.best_global_idx] == 'trans':
-                    torch.save(obj=self.model.model, f=os.path.join(self.output_file_path, _file_name))
+
+                    torch.save(self.model.model, buffer)
+
+                    # torch.save(obj=self.model.model, f=os.path.join(self.output_file_path, _file_name))
                 else:
-                    torch.save(obj=self.model, f=os.path.join(self.output_file_path, _file_name))
+                    torch.save(self.model, buffer)
+                    # torch.save(obj=self.model, f=os.path.join(self.output_file_path, _file_name))
+                s3_resource = boto3.resource('s3')
+                s3_resource.put_object(Bucket=self.bucket_name, Key=output_model_file, Body=buffer.getvalue())
             else:
                 DataExporter(obj=self.model,
                              file_path=os.path.join(self.output_file_path, _file_name),
