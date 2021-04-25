@@ -16,7 +16,7 @@ from .supervised_machine_learning import CLF_ALGORITHMS, ModelGeneratorClf, Mode
 from .text_clustering_generator import CLUSTER_ALGORITHMS, ClusteringGenerator
 from .utils import HappyLearningUtils
 from datetime import datetime
-from easyexplore.data_import_export import CLOUD_PROVIDER
+from easyexplore.data_import_export import CLOUD_PROVIDER,DataExporter
 from easyexplore.data_visualizer import DataVisualizer
 from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
