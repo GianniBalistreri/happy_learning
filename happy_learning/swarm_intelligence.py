@@ -1,9 +1,10 @@
 import copy
-import dask.dataframe as dd
+import io
 import numpy as np
 import os
 import pandas as pd
 import random
+import torch
 import warnings
 
 from .evaluate_machine_learning import EvalClf, sml_score
@@ -17,7 +18,7 @@ from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter
 from easyexplore.data_visualizer import DataVisualizer
 from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
-from typing import Dict, List, Union
+from typing import Dict, List
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -44,12 +45,12 @@ class SwarmIntelligence:
     """
     def __init__(self,
                  mode: str,
-                 target: str,
+                 target: str = None,
                  input_file_path: str = None,
                  train_data_file_path: str = None,
                  test_data_file_path: str = None,
                  valid_data_file_path: str = None,
-                 df: Union[dd.DataFrame, pd.DataFrame] = None,
+                 df: pd.DataFrame = None,
                  data_set: dict = None,
                  features: List[str] = None,
                  re_split_data: bool = False,
@@ -71,7 +72,7 @@ class SwarmIntelligence:
                  adjustment_rate: float = 0.1,
                  adjustment_prob: float = 0.85,
                  early_stopping: int = 0,
-                 convergence: bool = True,
+                 convergence: bool = False,
                  convergence_measure: str = 'min',
                  timer_in_seconds: int = 43200,
                  force_target_type: str = None,
@@ -86,7 +87,8 @@ class SwarmIntelligence:
                  multi_threading: bool = False,
                  multi_processing: bool = False,
                  log: bool = False,
-                 verbose: int = 0,
+                 verbose: bool = False,
+                 checkpoint: bool = True,
                  feature_engineer=None,
                  fitness_function=sml_score,
                  sampling_function=None,
@@ -103,7 +105,7 @@ class SwarmIntelligence:
         :param input_file_path: str
             Complete file path of input file
 
-        :param df: Pandas or dask DataFrame
+        :param df: Pandas DataFrame
             Data set
 
         :param data_set: dict
@@ -243,10 +245,11 @@ class SwarmIntelligence:
         :param log: bool
             Write logging file or just print messages
 
-        :param verbose: int
-            Logging level:
-                -> 0: Log basic info only
-                -> 1: Log all info including algorithm results
+        :param verbose: bool
+            Log all processes (extended logging)
+
+        :param checkpoint: bool
+            Save checkpoint after each adjustment
 
         :param kwargs: dict
             Key-word arguments
@@ -271,7 +274,7 @@ class SwarmIntelligence:
         if models is None:
             self.text_clustering: bool = False
             self.deep_learning: bool = False
-            self.models: List[str] = models
+            self.models: List[str] = []
         else:
             for model in models:
                 if model in NETWORK_TYPE.keys():
@@ -296,12 +299,7 @@ class SwarmIntelligence:
         self.train_data_file_path: str = train_data_file_path
         self.test_data_file_path: str = test_data_file_path
         self.valid_data_file_path: str = valid_data_file_path
-        if isinstance(df, pd.DataFrame):
-            self.df: dd.DataFrame = dd.from_pandas(data=df, npartitions=4 if kwargs.get('partitions') is None else kwargs.get('partitions'))
-        elif isinstance(df, dd.DataFrame):
-            self.df: dd.DataFrame = df
-        else:
-            self.df = None
+        self.df: pd.DataFrame = df
         self.data_set: dict = data_set
         self.feature_engineer = feature_engineer
         self.target: str = target
@@ -328,7 +326,7 @@ class SwarmIntelligence:
         self._input_manager()
         self.target_labels: List[str] = labels
         self.log: bool = log
-        self.verbose: int = verbose
+        self.verbose: bool = verbose
         self.warm_start: bool = warm_start
         self.warm_start_strategy: str = warm_start_strategy if warm_start_strategy in HIDDEN_LAYER_CATEGORY_EVOLUTION else 'monotone'
         self.warm_start_constant_hidden_layers: int = warm_start_constant_hidden_layers if warm_start_constant_hidden_layers > 0 else 0
@@ -338,13 +336,12 @@ class SwarmIntelligence:
         self.max_adjustments: int = max_adjustments if max_adjustments >= 0 else 50
         self.burn_in_adjustments: int = burn_in_adjustments if burn_in_adjustments >= 0 else round(0.1 * self.max_adjustments)
         self.population: List[object] = []
-        self.adjustment_rate: float = adjustment_rate if adjustment_rate <= 0 or adjustment_rate >= 1 else 0.1
-        self.adjustment_prob: float = adjustment_prob if adjustment_prob < 0 or adjustment_prob >= 1 else 0.85
+        self.adjustment_rate: float = adjustment_rate if adjustment_rate > 0 or adjustment_rate <= 1 else 0.1
+        self.adjustment_prob: float = adjustment_prob if adjustment_prob > 0 or adjustment_prob <= 1 else 0.85
         self.plot: bool = plot
         self.fitness_function = fitness_function
         self.deep_learning_type: str = deep_learning_type
         self.initial_population: list = initial_population
-        self.dask_client = None
         self.n_threads: int = self.pop_size
         self.multi_threading: bool = multi_threading
         self.multi_processing: bool = multi_processing
@@ -352,6 +349,8 @@ class SwarmIntelligence:
         self.best_global_idx: int = -1
         self.best_local_idx: int = -1
         self.best_global_local_idx: List[int] = []
+        self.stopping_reason: str = None
+        self.checkpoint: bool = checkpoint
         self.final_adjustment: dict = {}
         self.evolution: dict = {}
         self.evolved_features: List[str] = []
@@ -362,7 +361,7 @@ class SwarmIntelligence:
                                                        fitness_score=[],
                                                        model_name=[],
                                                        param=[],
-                                                       param_moved=[],
+                                                       param_adjusted=[],
                                                        features=[]
                                                        )
         self.adjustment_history: dict = dict(population={}, inheritance={}, time=[])
@@ -395,36 +394,105 @@ class SwarmIntelligence:
             if idx != self.best_global_idx and idx != self.best_local_idx:
                 if self.mode.find('model') >= 0:
                     if np.random.uniform(low=0, high=1) > self.adjustment_prob:
+                        if self.verbose:
+                            Log(write=self.log, logger_file_path=self.output_file_path).log('Generate new model for individual {}'.format(idx))
                         if self.mode == 'model_sampler':
                             self._sampling(features=self.population[idx].features)
-                        if self.deep_learning and self.warm_start_strategy == 'adaptive':
-                            self.population[idx].update_model_param(hidden_layer_size=self.population[idx].hidden_layer_size + 1)
                         if self.text_clustering:
                             self.population[idx] = ClusteringGenerator(predictor=self.features[0],
                                                                        models=self.models,
-                                                                       tokenize=False,
-                                                                       cloud=self.cloud
+                                                                       model_name=self.models[0],
+                                                                       tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
+                                                                       cloud=self.cloud,
+                                                                       train_data_path=self.train_data_file_path,
+                                                                       sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
+                                                                       eval_method='stc' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
+                                                                       language_model_path=self.kwargs.get('language_model_path'),
+                                                                       sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                                        ).generate_model()
                         else:
-                            self.population[idx] = ModelGeneratorReg(models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models).generate_model()
+                            if self.deep_learning:
+                                #if self.warm_start_strategy == 'adaptive':
+                                _hidden_layer_size: int = self.population[idx].hidden_layer_size
+                                self.population[idx] = NetworkGenerator(target=self.target,
+                                                                        predictors=self.features,
+                                                                        output_layer_size=self.deep_learning_output_size,
+                                                                        x_train=self.data_set.get('x_train').values if self.data_set is not None else self.data_set,
+                                                                        y_train=self.data_set.get('y_train').values if self.data_set is not None else self.data_set,
+                                                                        x_test=self.data_set.get('x_test').values if self.data_set is not None else self.data_set,
+                                                                        y_test=self.data_set.get('y_test').values if self.data_set is not None else self.data_set,
+                                                                        x_val=self.data_set.get('x_val').values if self.data_set is not None else self.data_set,
+                                                                        y_val=self.data_set.get('y_val').values if self.data_set is not None else self.data_set,
+                                                                        train_data_path=self.train_data_file_path,
+                                                                        test_data_path=self.test_data_file_path,
+                                                                        validation_data_path=self.valid_data_file_path,
+                                                                        models=self.models,
+                                                                        hidden_layer_size=_hidden_layer_size,
+                                                                        hidden_layer_size_category=self.warm_start_constant_category,
+                                                                        sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
+                                                                        cache_dir=self.kwargs.get('cache_dir')
+                                                                        ).generate_model()
+                            else:
+                                self.population[idx] = ModelGeneratorReg(models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models).generate_model()
                     else:
+                        if self.verbose:
+                            Log(write=self.log, logger_file_path=self.output_file_path).log('Adjust individual {}'.format(idx))
                         if self.text_clustering:
                             self.population[idx] = ClusteringGenerator(predictor=self.features[0],
                                                                        models=self.models,
-                                                                       tokenize=False,
-                                                                       cloud=self.cloud
-                                                                       ).generate_params(param_rate=self.adjustment_rate)
-                        else:
-                            self.population[idx] = ModelGeneratorReg(reg_params=self.population[self.best_global_idx].model_param,
-                                                                     models=self.models
-                                                                     ).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[self.best_global_idx].model_param, models=self.models).generate_model()
+                                                                       model_name=self.models[0],
+                                                                       cluster_params=self.population[self.best_global_idx].model_param,
+                                                                       tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
+                                                                       cloud=self.cloud,
+                                                                       train_data_path=self.train_data_file_path,
+                                                                       sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
+                                                                       eval_method='stc' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
+                                                                       language_model_path=self.kwargs.get('language_model_path'),
+                                                                       sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
+                                                                       ).generate_model()
                             self.population[idx].generate_params(param_rate=self.adjustment_rate)
+                        else:
+                            if self.deep_learning:
+                                self.population[idx] = NetworkGenerator(target=self.target,
+                                                                        predictors=self.features,
+                                                                        output_layer_size=self.deep_learning_output_size,
+                                                                        x_train=self.data_set.get(
+                                                                            'x_train').values if self.data_set is not None else self.data_set,
+                                                                        y_train=self.data_set.get(
+                                                                            'y_train').values if self.data_set is not None else self.data_set,
+                                                                        x_test=self.data_set.get(
+                                                                            'x_test').values if self.data_set is not None else self.data_set,
+                                                                        y_test=self.data_set.get(
+                                                                            'y_test').values if self.data_set is not None else self.data_set,
+                                                                        x_val=self.data_set.get(
+                                                                            'x_val').values if self.data_set is not None else self.data_set,
+                                                                        y_val=self.data_set.get(
+                                                                            'y_val').values if self.data_set is not None else self.data_set,
+                                                                        train_data_path=self.train_data_file_path,
+                                                                        test_data_path=self.test_data_file_path,
+                                                                        validation_data_path=self.valid_data_file_path,
+                                                                        models=self.models,
+                                                                        input_param=self.population[idx].model_param,
+                                                                        hidden_layer_size=self.population[idx].hidden_layer_size,
+                                                                        hidden_layer_size_category=self.warm_start_constant_category,
+                                                                        sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
+                                                                        cache_dir=self.kwargs.get('cache_dir')
+                                                                        ).generate_model()
+                                self.population[idx].generate_params(param_rate=self.adjustment_rate)
+                            else:
+                                self.population[idx] = ModelGeneratorReg(reg_params=self.population[self.best_global_idx].model_param,
+                                                                         models=self.models,
+                                                                         model_name=self.models[0]
+                                                                         ).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[self.best_global_idx].model_param, models=self.models).generate_model()
+                                self.population[idx].generate_params(param_rate=self.adjustment_rate)
                 elif self.mode.find('feature') >= 0:
                     _new_features: List[str] = []
                     _feature_pool: List[str] = list(set(self.feature_pairs[np.random.choice(a=[self.best_global_idx, self.best_local_idx])]))
                     for feature in self.feature_pairs[idx]:
                         if self.mode == 'feature_engineer':
                             if np.random.uniform(low=0, high=1) > self.adjustment_prob:
+                                if self.verbose:
+                                    Log(write=self.log, logger_file_path=self.output_file_path).log('Generate new feature for individual {} using feature: {}'.format(idx, feature))
                                 self.feature_engineer.act(actor=feature,
                                                           inter_actors=_feature_pool,
                                                           force_action=None,
@@ -444,7 +512,6 @@ class SwarmIntelligence:
                         elif self.mode == 'feature_selector':
                             _new_features.append(feature)
                     self.feature_pairs[idx] = copy.deepcopy(_new_features)
-                    # print('mutated new child', self.feature_pairs[child])
 
     def _collect_meta_data(self, current_adjustment: bool, idx: int = None):
         """
@@ -466,24 +533,32 @@ class SwarmIntelligence:
                  })
         if current_adjustment:
             setattr(self.population[idx], 'fitness_score', self.evolution_history.get('fitness_score')[self.population[idx].id])
-            if not self.deep_learning:
+            if not self.deep_learning and not self.text_clustering:
                 setattr(self.population[idx], 'features', list(self.data_set.get('x_train').columns))
             if self.current_adjustment_meta_data['adjustment'] == 0:
                 self.current_adjustment_meta_data.get('id').append(copy.deepcopy(idx))
-                self.current_adjustment_meta_data.get('features').append(copy.deepcopy(self.population[idx].features))
+                if not self.deep_learning and not self.text_clustering:
+                    self.current_adjustment_meta_data.get('features').append(copy.deepcopy(self.population[idx].features))
                 self.current_adjustment_meta_data.get('model_name').append(copy.deepcopy(self.population[idx].model_name))
                 self.current_adjustment_meta_data.get('param').append(copy.deepcopy(self.population[idx].model_param))
-                self.current_adjustment_meta_data.get('param_moved').append(copy.deepcopy(self.population[idx].model_param_mutated))
+                self.current_adjustment_meta_data.get('param_adjusted').append(copy.deepcopy(self.population[idx].model_param_mutated))
                 self.current_adjustment_meta_data.get('fitness_metric').append(copy.deepcopy(self.population[idx].fitness))
                 self.current_adjustment_meta_data.get('fitness_score').append(copy.deepcopy(self.population[idx].fitness_score))
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Fitness score {} of individual {}'.format(self.population[idx].fitness_score, idx))
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Fitness metric {} of individual {}'.format(self.population[idx].fitness, idx))
             else:
                 self.current_adjustment_meta_data['id'][idx] = copy.deepcopy(self.population[idx].id)
-                self.current_adjustment_meta_data['features'][idx] = copy.deepcopy(self.population[idx].features)
+                if not self.deep_learning and not self.text_clustering:
+                    self.current_adjustment_meta_data['features'][idx] = copy.deepcopy(self.population[idx].features)
                 self.current_adjustment_meta_data['model_name'][idx] = copy.deepcopy(self.population[idx].model_name)
                 self.current_adjustment_meta_data['param'][idx] = copy.deepcopy(self.population[idx].model_param)
-                self.current_adjustment_meta_data['param_moved'][idx] = copy.deepcopy(self.population[idx].model_param_mutated)
+                self.current_adjustment_meta_data['param_adjusted'][idx] = copy.deepcopy(self.population[idx].model_param_mutated)
                 self.current_adjustment_meta_data['fitness_metric'][idx] = copy.deepcopy(self.population[idx].fitness)
                 self.current_adjustment_meta_data['fitness_score'][idx] = copy.deepcopy(self.population[idx].fitness_score)
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Fitness score {} of individual {}'.format(self.population[idx].fitness_score, idx))
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Fitness metric {} of individual {}'.format(self.population[idx].fitness, idx))
         else:
             if idx is None:
                 self.adjustment_history['population']['adjustment_{}'.format(self.current_adjustment_meta_data['adjustment'])]['fitness'] = copy.deepcopy(self.current_adjustment_meta_data.get('fitness'))
@@ -491,14 +566,10 @@ class SwarmIntelligence:
                 self.evolution_gradient.get('median').append(copy.deepcopy(np.median(self.current_adjustment_meta_data.get('fitness_score'))))
                 self.evolution_gradient.get('mean').append(copy.deepcopy(np.mean(self.current_adjustment_meta_data.get('fitness_score'))))
                 self.evolution_gradient.get('max').append(copy.deepcopy(max(self.current_adjustment_meta_data.get('fitness_score'))))
-                Log(write=self.log, logger_file_path=self.output_file_path).log(
-                    'Fitness: Max -> {}'.format(self.evolution_gradient.get('max')[-1]))
-                Log(write=self.log, logger_file_path=self.output_file_path).log(
-                    'Fitness: Median -> {}'.format(self.evolution_gradient.get('median')[-1]))
-                Log(write=self.log, logger_file_path=self.output_file_path).log(
-                    'Fitness: Mean -> {}'.format(self.evolution_gradient.get('mean')[-1]))
-                Log(write=self.log, logger_file_path=self.output_file_path).log(
-                    'Fitness: Min -> {}'.format(self.evolution_gradient.get('min')[-1]))
+                Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness: Max -> {}'.format(self.evolution_gradient.get('max')[-1]))
+                Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness: Median -> {}'.format(self.evolution_gradient.get('median')[-1]))
+                Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness: Mean -> {}'.format(self.evolution_gradient.get('mean')[-1]))
+                Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness: Min -> {}'.format(self.evolution_gradient.get('min')[-1]))
             else:
                 if self.current_adjustment_meta_data['adjustment'] == 0:
                     self.evolution_history.get('best').append(-1)
@@ -507,7 +578,8 @@ class SwarmIntelligence:
                 self.adjustment_history['population']['adjustment_{}'.format(self.current_adjustment_meta_data['adjustment'])]['best'].append(copy.deepcopy(self.evolution_history.get('best')[-1]))
                 self.n_individuals += 1
                 setattr(self.population[idx], 'id', self.n_individuals)
-                setattr(self.population[idx], 'target', self.target)
+                if not self.text_clustering:
+                    setattr(self.population[idx], 'target', self.target)
                 self.evolution_history.get('id').append(copy.deepcopy(self.population[idx].id))
                 self.evolution_history.get('adjustment').append(copy.deepcopy(self.current_adjustment_meta_data['adjustment']))
                 self.evolution_history.get('model').append(copy.deepcopy(self.population[idx].model_name))
@@ -538,7 +610,7 @@ class SwarmIntelligence:
         _ml_metric: str = 'roc_auc' if ml_metric == 'auc' else ml_metric
         if self.fitness_function.__name__ == 'sml_score':
             if self.text_clustering:
-                _scores: dict = dict(train={_ml_metric: individual.nmi})
+                _scores: dict = dict(fitness_score=individual.fitness)
             else:
                 _scores: dict = sml_score(ml_metric=tuple([_best_score, individual.fitness['test'].get(_ml_metric)]),
                                           train_test_metric=tuple([individual.fitness['train'].get(_ml_metric),
@@ -563,13 +635,75 @@ class SwarmIntelligence:
         """
         for i, individual in enumerate(self.population):
             self.final_adjustment.update({i: dict(id=copy.deepcopy(individual.id),
-                                                model_name=copy.deepcopy(individual.model_name),
-                                                param=copy.deepcopy(individual.model_param),
-                                                fitness=copy.deepcopy(individual.fitness),
-                                                fitness_score=copy.deepcopy(individual.fitness_score),
-                                                hidden_layer_size=copy.deepcopy(individual.hidden_layer_size) if self.deep_learning else None
-                                                )
-                                        })
+                                                  model_name=copy.deepcopy(individual.model_name),
+                                                  param=copy.deepcopy(individual.model_param),
+                                                  fitness=copy.deepcopy(individual.fitness),
+                                                  fitness_score=copy.deepcopy(individual.fitness_score),
+                                                  hidden_layer_size=copy.deepcopy(individual.hidden_layer_size) if self.deep_learning else None
+                                                  )
+                                          })
+
+    def _generate_final_model(self):
+        """
+        Generate final model based on the evolved parameters / features
+        """
+        if self.deep_learning:
+            _net_gen = NetworkGenerator(target=self.target,
+                                        predictors=self.features,
+                                        output_layer_size=self.deep_learning_output_size,
+                                        x_train=self.data_set.get('x_train').values if self.data_set is not None else self.data_set,
+                                        y_train=self.data_set.get('y_train').values if self.data_set is not None else self.data_set,
+                                        x_test=self.data_set.get('x_test').values if self.data_set is not None else self.data_set,
+                                        y_test=self.data_set.get('y_test').values if self.data_set is not None else self.data_set,
+                                        x_val=self.data_set.get('x_val').values if self.data_set is not None else self.data_set,
+                                        y_val=self.data_set.get('y_val').values if self.data_set is not None else self.data_set,
+                                        train_data_path=self.train_data_file_path,
+                                        test_data_path=self.test_data_file_path,
+                                        validation_data_path=self.valid_data_file_path,
+                                        models=[self.current_adjustment_meta_data['model_name'][self.best_global_idx]],
+                                        model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
+                                        input_param=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                        model_param=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                        hidden_layer_size=self.warm_start_constant_hidden_layers,
+                                        hidden_layer_size_category=self.warm_start_constant_category,
+                                        cloud=self.cloud,
+                                        sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
+                                        cache_dir=self.kwargs.get('cache_dir')
+                                        ).generate_model()
+            _net_gen.train()
+            self.model = _net_gen.model
+        else:
+            if self.text_clustering:
+                _cluster_gen = ClusteringGenerator(predictor=self.features[0],
+                                                   models=[self.current_adjustment_meta_data['model_name'][self.best_global_idx]],
+                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
+                                                   cluster_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                                   tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
+                                                   cloud=self.cloud,
+                                                   train_data_path=self.train_data_file_path,
+                                                   sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
+                                                   eval_method='stc' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
+                                                   language_model_path=self.kwargs.get('language_model_path'),
+                                                   sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
+                                                   ).generate_model()
+                _cluster_gen.train()
+                self.model = _cluster_gen.model
+            else:
+                if self.target_type == 'reg':
+                    _model_gen = ModelGeneratorReg(reg_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx]
+                                                   ).generate_model()
+                else:
+                    _model_gen = ModelGeneratorClf(clf_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx]
+                                                   ).generate_model()
+                _model_gen.train(x=copy.deepcopy(self.data_set.get('x_train').values),
+                                 y=copy.deepcopy(self.data_set.get('y_train').values),
+                                 validation=dict(x_val=copy.deepcopy(self.data_set.get('x_val').values),
+                                                 y_val=copy.deepcopy(self.data_set.get('y_val').values)
+                                                 )
+                                 )
+                self.model = _model_gen.model
 
     def _input_manager(self):
         """
@@ -596,17 +730,25 @@ class SwarmIntelligence:
                 if self.df is None:
                     if self.feature_engineer is None:
                         if self.data_set is None:
-                            if self.train_data_file_path is None or self.test_data_file_path is None or self.valid_data_file_path is None:
-                                raise SwarmIntelligenceException('No data set found')
+                            if self.text_clustering:
+                                if self.train_data_file_path is None:
+                                    raise SwarmIntelligenceException('No training data set found')
+                            else:
+                                if self.train_data_file_path is None or self.test_data_file_path is None or self.valid_data_file_path is None:
+                                    raise SwarmIntelligenceException('No training, testing, validation data set found')
                         else:
-                            if 'x_train' not in self.data_set.keys():
-                                raise SwarmIntelligenceException('x_train not found in data dictionary')
-                            if 'y_train' not in self.data_set.keys():
-                                raise SwarmIntelligenceException('y_train not found in data dictionary')
-                            if 'x_test' not in self.data_set.keys():
-                                raise SwarmIntelligenceException('x_test not found in data dictionary')
-                            if 'y_test' not in self.data_set.keys():
-                                raise SwarmIntelligenceException('y_test not found in data dictionary')
+                            if self.text_clustering:
+                                if 'x_train' not in self.data_set.keys():
+                                    raise SwarmIntelligenceException('x_train not found in data dictionary')
+                            else:
+                                if 'x_train' not in self.data_set.keys():
+                                    raise SwarmIntelligenceException('x_train not found in data dictionary')
+                                if 'y_train' not in self.data_set.keys():
+                                    raise SwarmIntelligenceException('y_train not found in data dictionary')
+                                if 'x_test' not in self.data_set.keys():
+                                    raise SwarmIntelligenceException('x_test not found in data dictionary')
+                                if 'y_test' not in self.data_set.keys():
+                                    raise SwarmIntelligenceException('y_test not found in data dictionary')
                     else:
                         self.df = self.feature_engineer.get_training_data()
                         self.target = self.feature_engineer.get_target()
@@ -616,19 +758,24 @@ class SwarmIntelligence:
                         self.n_test_cases: int = round(self.n_cases * (1 - _train_size))
                         self.n_train_cases: int = round(self.n_cases * _train_size)
                 else:
-                    if self.target not in self.df.columns:
+                    if self.target not in self.df.columns and not self.text_clustering:
                         raise SwarmIntelligenceException('Target feature ({}) not found in data set'.format(self.target))
                     if self.features is None:
                         self.features = list(self.df.columns)
-                        del self.features[self.features.index(self.target)]
-                    self.df = self.df[self.features + [self.target]]
-                    self.target_values: np.array = self.df[self.target].unique()
-                    self.feature_pairs = None
-                    self.n_cases = len(self.df)
-                    self.n_test_cases: int = round(self.n_cases * (1 - _train_size))
-                    self.n_train_cases: int = round(self.n_cases * _train_size)
+                        if not self.text_clustering:
+                            del self.features[self.features.index(self.target)]
+                    if not self.text_clustering:
+                        self.df = self.df[self.features + [self.target]]
+                        self.target_values: np.array = self.df[self.target].unique()
+                        self.feature_pairs = None
+                        self.n_cases = len(self.df)
+                        self.n_test_cases: int = round(self.n_cases * (1 - _train_size))
+                        self.n_train_cases: int = round(self.n_cases * _train_size)
                 if self.re_sample_features:
-                    _features: List[str] = random.sample(self.features, self.max_features)
+                    if self.text_clustering:
+                        _features: List[str] = []
+                    else:
+                        _features: List[str] = random.sample(self.features, self.max_features)
                 else:
                     _features: List[str] = self.features
                 if self.data_set is None:
@@ -637,10 +784,15 @@ class SwarmIntelligence:
                         self.n_test_cases = 0
                         self.n_train_cases = 0
                     else:
-                        self._sampling(features=_features)
-                        self.n_cases = len(self.df)
-                        self.n_test_cases: int = len(self.data_set['x_test'])
-                        self.n_train_cases: int = len(self.data_set['x_train'])
+                        if self.text_clustering:
+                            self.n_cases = 0
+                            self.n_test_cases = 0
+                            self.n_train_cases = 0
+                        else:
+                            self._sampling(features=_features)
+                            self.n_cases = len(self.df)
+                            self.n_test_cases: int = len(self.data_set['x_test'])
+                            self.n_train_cases: int = len(self.data_set['x_train'])
         else:
             raise SwarmIntelligenceException('Optimization mode ({}) not supported. Use "model", "feature_engineer" or "feature_selector" instead.'.format(self.mode))
         if self.deep_learning:
@@ -665,8 +817,15 @@ class SwarmIntelligence:
                 else:
                     self.deep_learning_output_size = self.target_classes
         else:
-            self.target_classes = len(self.target_values)
-            self.target_type: str = HappyLearningUtils().get_ml_type(values=self.target_values)
+            if self.text_clustering:
+                self.target_type: str = 'cluster'
+            else:
+                self.target_classes = len(self.target_values)
+                self.target_type: str = HappyLearningUtils().get_ml_type(values=self.target_values)
+                if self.models is None and self.target_type == 'reg':
+                    self.models = np.random.choice(a=list(REG_ALGORITHMS.keys()))
+                if self.models is None and self.target_type != 'reg':
+                    self.models = np.random.choice(a=list(CLF_ALGORITHMS.keys()))
         if self.force_target_type is not None:
             if self.force_target_type == 'reg' and self.target_type == 'clf_multi':
                 self.target_type = 'reg'
@@ -790,12 +949,12 @@ class SwarmIntelligence:
             try:
                 if self.mode == 'model':
                     if _re_generate:
-                        if np.random.uniform(low=0, high=1) <= self.adjustment_prob:
-                            self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_model())
-                        else:
-                            self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_params(param_rate=self.adjustment_rate))
+                        if self.verbose:
+                            Log(write=self.log, logger_file_path=self.output_file_path).log('Re-generate individual {}'.format(pop_idx))
+                        self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_params(param_rate=self.adjustment_rate))
                 elif self.mode == 'feature_engineer':
-                    #if self.current_adjustment_meta_data['adjustment'] > 0:
+                    if self.verbose:
+                        Log(write=self.log, logger_file_path=self.output_file_path).log('Re-sample features for individual {}'.format(pop_idx))
                     self._sampling(features=self.feature_pairs[pop_idx])
                     if self.deep_learning:
                         self.population[pop_idx].update_data(x_train=self.data_set.get('x_train'),
@@ -805,6 +964,8 @@ class SwarmIntelligence:
                                                              x_valn=self.data_set.get('x_val'),
                                                              y_valn=self.data_set.get('y_val')
                                                              )
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Train individual {}'.format(pop_idx))
                 if self.deep_learning:
                     self.population[pop_idx].train()
                 else:
@@ -824,9 +985,11 @@ class SwarmIntelligence:
                     break
                 else:
                     _re_generate = True
-                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Error while training model ({})\n{}'.format(self.population[pop_idx].model_name, e))
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Error while training model ({} : {})\n{}'.format(self.population[pop_idx].model_name, self.population[pop_idx].model_param, e))
         if _re == _re_generate_max:
             raise SwarmIntelligenceException('Maximum number of errors occurred. Check last error message ...')
+        if self.verbose:
+            Log(write=self.log, logger_file_path=self.output_file_path).log('Evaluate training of individual {}'.format(pop_idx))
         if self.text_clustering:
             self._fitness(individual=self.population[pop_idx], ml_metric='nmi')
         else:
@@ -858,9 +1021,13 @@ class SwarmIntelligence:
             if self.warm_start:
                 _warm_model = ClusteringGenerator(predictor=self.features[0],
                                                   models=self.models,
-                                                  tokenize=False,
+                                                  tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
                                                   cloud=self.cloud,
-                                                  train_data_path=self.train_data_file_path
+                                                  train_data_path=self.train_data_file_path,
+                                                  sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
+                                                  eval_method='stc' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
+                                                  language_model_path=self.kwargs.get('language_model_path'),
+                                                  sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                   ).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.evolution_continue:
@@ -877,12 +1044,18 @@ class SwarmIntelligence:
                             _params: dict = _warm_model.get(list(_warm_model.keys())[p])
                     else:
                         _params: dict = self.model_params
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(p))
                 self.population.append(ClusteringGenerator(predictor=self.features[0],
                                                            models=self.models,
                                                            cluster_params=_params,
-                                                           tokenize=False,
+                                                           tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
                                                            cloud=self.cloud,
-                                                           train_data_path=self.train_data_file_path
+                                                           train_data_path=self.train_data_file_path,
+                                                           sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
+                                                           eval_method='stc' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
+                                                           language_model_path=self.kwargs.get('language_model_path'),
+                                                           sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                            ).generate_model()
                                        )
         else:
@@ -894,6 +1067,8 @@ class SwarmIntelligence:
                     _warm_model = ModelGeneratorClf(models=self.models).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.mode.find('feature') >= 0:
+                    if self.verbose:
+                        Log(write=self.log, logger_file_path=self.output_file_path).log('Sample features for individual {}'.format(p))
                     self._sampling(features=self.feature_pairs[p])
                 if self.evolution_continue:
                     _params: dict = self.final_adjustment.get('param')
@@ -909,6 +1084,8 @@ class SwarmIntelligence:
                             _params: dict = _warm_model.get(list(_warm_model.keys())[p])
                     else:
                         _params: dict = self.model_params
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(p))
                 if self.target_type == 'reg':
                     self.population.append(ModelGeneratorReg(reg_params=_params, models=self.models).generate_model())
                 else:
@@ -943,7 +1120,9 @@ class SwarmIntelligence:
                                                             model_name=model,
                                                             input_param=_model_param,
                                                             hidden_layer_size=self.warm_start_constant_hidden_layers,
-                                                            hidden_layer_size_category=self.warm_start_constant_category
+                                                            hidden_layer_size_category=self.warm_start_constant_category,
+                                                            sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
+                                                            cache_dir=self.kwargs.get('cache_dir')
                                                             ).get_vanilla_model()
                                            )
         else:
@@ -957,7 +1136,11 @@ class SwarmIntelligence:
                         self.population.append(self.initial_population[p])
                         continue
             if self.mode.find('feature') >= 0:
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Sample features for individual {}'.format(p))
                 self._sampling(features=self.feature_pairs[p])
+            if self.verbose:
+                Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(p))
             _net_gen: NetworkGenerator = NetworkGenerator(target=self.target,
                                                           predictors=self.features,
                                                           output_layer_size=self.deep_learning_output_size,
@@ -973,9 +1156,85 @@ class SwarmIntelligence:
                                                           models=self.models,
                                                           input_param=_model_param,
                                                           hidden_layer_size=self.warm_start_constant_hidden_layers,
-                                                          hidden_layer_size_category=self.warm_start_constant_category
+                                                          hidden_layer_size_category=self.warm_start_constant_category,
+                                                          sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
+                                                          cache_dir=self.kwargs.get('cache_dir')
                                                           )
             self.population.append(_net_gen.generate_model())
+
+    def _post_processing(self):
+        """
+        Post-process evolution
+        """
+        if self.mode.find('feature') >= 0:
+            for idx in list(set(self.best_global_local_idx)):
+                self.evolved_features.extend(self.feature_pairs[idx])
+            self.evolved_features = list(set(self.evolved_features))
+        self._generate_final_model()
+        if self.stopping_reason is not None:
+            Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Best model: {} - {}'.format(self.current_adjustment_meta_data['model_name'][self.best_global_idx], self.current_adjustment_meta_data['param'][self.best_global_idx]))
+            Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness score: {}'.format(self.current_adjustment_meta_data['fitness_score'][self.best_global_idx]))
+            Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness metric: {}'.format(self.current_adjustment_meta_data['fitness_metric'][self.best_global_idx]))
+        self._gather_final_adjustment()
+        if self.deep_learning:
+            self.data_set = dict(y_test=self.population[self.best_global_idx].obs,
+                                 pred=self.population[self.best_global_idx].pred
+                                 )
+        else:
+            if self.mode.find('model') >= 0 and self.plot:
+                self.data_set.update({'pred': self.model.predict(self.data_set.get('x_test'))})
+        self.evolution: dict = dict(model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
+                                    param=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                    param_adjusted=self.current_adjustment_meta_data['param_adjusted'][self.best_global_idx],
+                                    fitness_score=self.current_adjustment_meta_data['fitness_score'][self.best_global_idx],
+                                    fitness_metric=self.current_adjustment_meta_data['fitness_metric'][self.best_global_idx],
+                                    epoch_metric_score=self.population[self.best_global_idx].epoch_eval if self.deep_learning else None,
+                                    features=self.features if self.text_clustering or self.deep_learning else self.current_adjustment_meta_data['features'][self.best_global_idx],
+                                    target=self.target,
+                                    target_type=self.target_type,
+                                    re_split_data=self.re_split_data,
+                                    re_split_cases=self.re_sample_cases,
+                                    re_sample_features=self.re_sample_features,
+                                    id=self.current_adjustment_meta_data['id'][self.best_global_idx],
+                                    mode=self.mode,
+                                    adjustments=self.current_adjustment_meta_data['adjustment'],
+                                    adjustment_prob=self.adjustment_prob,
+                                    adjustment_rate=self.adjustment_rate,
+                                    adjusted_features=self.adjusted_features,
+                                    adjustment_history=self.adjustment_history,
+                                    evolution_history=self.evolution_history,
+                                    evolution_gradient=self.evolution_gradient,
+                                    convergence_check=self.convergence,
+                                    convergence_measure=self.convergence_measure,
+                                    early_stopping=self.early_stopping,
+                                    max_time=self.timer,
+                                    start_time=self.start_time,
+                                    end_time=str(datetime.now()),
+                                    stopping_reason=self.stopping_reason
+                                    )
+        if self.plot:
+            self.visualize(results_table=True,
+                           model_distribution=True,
+                           model_evolution=True,
+                           param_distribution=False,
+                           train_time_distribution=True,
+                           breeding_map=True,
+                           breeding_graph=True,
+                           fitness_distribution=True,
+                           fitness_evolution=True if self.current_adjustment_meta_data['adjustment'] > 0 else False,
+                           fitness_dimensions=True,
+                           per_adjustment=True if self.current_adjustment_meta_data['adjustment'] > 0 else False,
+                           prediction_of_best_model=True,
+                           epoch_stats=True
+                           )
+        if self.output_file_path is not None:
+            if len(self.output_file_path) > 0:
+                self.save_evolution(si=True,
+                                    model=self.deploy_model,
+                                    evolution_history=False,
+                                    adjustment_history=False,
+                                    final_adjustment=False
+                                    )
 
     def _re_populate(self):
         """
@@ -994,7 +1253,10 @@ class SwarmIntelligence:
                 self.current_adjustment_meta_data[gen_cur] = 0
         for evo_gradient in self.evolution_gradient.keys():
             self.evolution_gradient[evo_gradient] = []
-        self._populate()
+        if self.deep_learning:
+            self._populate_networks()
+        else:
+            self._populate()
 
     def _sampling(self, features: List[str] = None):
         """
@@ -1010,6 +1272,12 @@ class SwarmIntelligence:
         else:
             self.data_set = self.sampling_function()
 
+    def _save_checkpoint(self):
+        """
+        Save checkpoint
+        """
+        self._post_processing()
+
     def _select_best_individual(self):
         """
         Select current best global and local individual
@@ -1022,6 +1290,9 @@ class SwarmIntelligence:
             self.best_local_idx += 1
         self.best_global_local_idx.append(self.best_global_idx)
         self.best_global_local_idx.append(self.best_local_idx)
+        if self.verbose:
+            Log(write=self.log, logger_file_path=self.output_file_path).log('Best local individual {}'.format(self.best_local_idx))
+            Log(write=self.log, logger_file_path=self.output_file_path).log('Best global individual {}'.format(self.best_global_idx))
 
     def _trainer(self):
         """
@@ -1101,19 +1372,12 @@ class SwarmIntelligence:
         else:
             self.current_adjustment_meta_data['adjustment'] = 0
         _evolve: bool = True
-        _stopping_reason: str = ''
         if self.deep_learning:
             self._populate_networks()
         else:
-            if self.mode != 'text_clustering':
-                if self.dask_client is None:
-                    self.dask_client = HappyLearningUtils().dask_setup(client_name='swarm_intelligence',
-                                                                       client_address=self.kwargs.get('client_address'),
-                                                                       mode='threads' if self.kwargs.get('client_mode') is None else self.kwargs.get('client_mode')
-                                                                       )
             self._populate()
         while _evolve:
-            Log(write=self.log, logger_file_path=self.output_file_path).log('Adjustment: {} / {}'.format(self.current_adjustment_meta_data['adjustment'], self.max_adjustments))
+            Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Adjustment: {} / {}'.format(self.current_adjustment_meta_data['adjustment'], self.max_adjustments))
             if self.current_adjustment_meta_data['adjustment'] > 0:
                 self.n_threads = self.max_adjustments - 1
             if self.deep_learning:
@@ -1121,146 +1385,34 @@ class SwarmIntelligence:
                     if self.warm_start_strategy == 'monotone':
                         self.warm_start_constant_hidden_layers += 1
             self._trainer()
+            self.current_adjustment_meta_data['adjustment'] += 1
             if (self.mode.find('model') >= 0) and (self.current_adjustment_meta_data['adjustment'] > self.burn_in_adjustments):
                 if self.convergence:
                     if self._is_gradient_converged(compare=self.convergence_measure, threshold=0.05):
                         _evolve = False
-                        _stopping_reason = 'gradient_converged'
-                        Log(write=self.log).log('Fitness metric (gradient) has converged. Therefore the evolution stops at adjustment {}'.format(self.current_adjustment_meta_data.get('adjustment')))
+                        self.stopping_reason = 'gradient_converged'
+                        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness metric (gradient) has converged. Therefore the evolution stops at adjustment {}'.format(self.current_adjustment_meta_data.get('adjustment')))
                 if self.early_stopping > 0:
                     if self._is_gradient_stagnating(min_fitness=True, median_fitness=True, mean_fitness=True, max_fitness=True):
                         _evolve = False
-                        _stopping_reason = 'gradient_stagnating'
-                        Log(write=self.log).log('Fitness metric (gradient) per adjustment has not increased a certain amount of adjustments ({}). Therefore the evolution stops early at adjustment {}'.format(self.early_stopping, self.current_adjustment_meta_data.get('adjustment')))
+                        self.stopping_reason = 'gradient_stagnating'
+                        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness metric (gradient) per adjustment has not increased a certain amount of adjustments ({}). Therefore the evolution stops early at adjustment {}'.format(self.early_stopping, self.current_adjustment_meta_data.get('adjustment')))
             if (datetime.now() - self.start_time).seconds >= self.timer:
                 _evolve = False
-                _stopping_reason = 'time_exceeded'
-                Log(write=self.log).log('Time exceeded:{}'.format(self.timer))
-            if _evolve:
-                self._select_best_individual()
-                self._adjust()
-            self.current_adjustment_meta_data['adjustment'] += 1
+                self.stopping_reason = 'time_exceeded'
+                Log(write=self.log, logger_file_path=self.output_file_path).log('Time exceeded:{}'.format(self.timer))
             if self.current_adjustment_meta_data['adjustment'] > self.max_adjustments:
                 _evolve = False
-                _stopping_reason = 'max_adjustment_evolved'
-                Log(write=self.log).log('Maximum number of adjustments reached: {}'.format(self.max_adjustments))
-        if self.mode.find('feature') >= 0:
+                self.stopping_reason = 'max_adjustment_evolved'
+                Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Maximum number of adjustments reached: {}'.format(self.max_adjustments))
             self._select_best_individual()
-            for idx in list(set(self.best_global_local_idx)):
-                self.evolved_features.extend(self.feature_pairs[idx])
-            self.evolved_features = list(set(self.evolved_features))
-        if self.deep_learning:
-            _net_gen = NetworkGenerator(target=self.target,
-                                        predictors=self.features,
-                                        output_layer_size=self.deep_learning_output_size,
-                                        x_train=self.data_set.get('x_train').values if self.data_set is not None else self.data_set,
-                                        y_train=self.data_set.get('y_train').values if self.data_set is not None else self.data_set,
-                                        x_test=self.data_set.get('x_test').values if self.data_set is not None else self.data_set,
-                                        y_test=self.data_set.get('y_test').values if self.data_set is not None else self.data_set,
-                                        x_val=self.data_set.get('x_val').values if self.data_set is not None else self.data_set,
-                                        y_val=self.data_set.get('y_val').values if self.data_set is not None else self.data_set,
-                                        train_data_path=self.train_data_file_path,
-                                        test_data_path=self.test_data_file_path,
-                                        validation_data_path=self.valid_data_file_path,
-                                        model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
-                                        input_param=self.current_adjustment_meta_data['param'][self.best_global_idx],
-                                        model_param=self.current_adjustment_meta_data['param'][self.best_global_idx],
-                                        hidden_layer_size=self.warm_start_constant_hidden_layers,
-                                        hidden_layer_size_category=self.warm_start_constant_category,
-                                        cloud=self.cloud
-                                        ).generate_model()
-            _net_gen.train()
-            self.model = _net_gen.model
-        else:
-            if self.text_clustering:
-                _cluster_gen = ClusteringGenerator(predictor=self.features[0],
-                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
-                                                   cluster_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
-                                                   tokenize=False,
-                                                   cloud=self.cloud,
-                                                   train_data_path=self.train_data_file_path
-                                                   ).generate_model()
-                _cluster_gen.train()
-                self.model = _cluster_gen.model
-            else:
-                if self.target_type == 'reg':
-                    _model_gen = ModelGeneratorReg(reg_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
-                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx]
-                                                   ).generate_model()
-                else:
-                    _model_gen = ModelGeneratorClf(clf_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
-                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx]
-                                                   ).generate_model()
-                _model_gen.train(x=copy.deepcopy(self.data_set.get('x_train').values),
-                                 y=copy.deepcopy(self.data_set.get('y_train').values),
-                                 validation=dict(x_val=copy.deepcopy(self.data_set.get('x_val').values),
-                                                 y_val=copy.deepcopy(self.data_set.get('y_val').values)
-                                                 )
-                                 )
-                self.model = _model_gen.model
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Best model: {}'.format(self.model))
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness score: {}'.format(self.current_adjustment_meta_data['fitness_score'][self.best_global_idx]))
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness metric: {}'.format(self.current_adjustment_meta_data['fitness_metric'][self.best_global_idx]))
-        self._gather_final_adjustment()
-        if self.deep_learning:
-            self.data_set = dict(y_test=self.population[self.best_global_idx].obs,
-                                 pred=self.population[self.best_global_idx].pred
-                                 )
-        else:
-            if self.mode.find('model') >= 0 and self.plot:
-                self.data_set.update({'pred': self.model.predict(self.data_set.get('x_test'))})
-        self.evolution: dict = dict(model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
-                                    param=self.current_adjustment_meta_data['param'][self.best_global_idx],
-                                    param_moved=self.current_adjustment_meta_data['param_moved'][self.best_global_idx],
-                                    fitness_score=self.current_adjustment_meta_data['fitness_score'][self.best_global_idx],
-                                    fitness_metric=self.current_adjustment_meta_data['fitness_metric'][self.best_global_idx],
-                                    epoch_metric_score=self.population[self.best_global_idx].epoch_eval if self.deep_learning else None,
-                                    features=self.current_adjustment_meta_data['features'][self.best_global_idx],
-                                    target=self.target,
-                                    target_type=self.target_type,
-                                    re_split_data=self.re_split_data,
-                                    re_split_cases=self.re_sample_cases,
-                                    re_sample_features=self.re_sample_features,
-                                    id=self.current_adjustment_meta_data['id'][self.best_global_idx],
-                                    mode=self.mode,
-                                    adjustments=self.current_adjustment_meta_data['adjustment'],
-                                    adjustment_prob=self.adjustment_prob,
-                                    adjustment_rate=self.adjustment_rate,
-                                    adjusted_features=self.adjusted_features,
-                                    adjustment_history=self.adjustment_history,
-                                    evolution_history=self.evolution_history,
-                                    evolution_gradient=self.evolution_gradient,
-                                    convergence_check=self.convergence,
-                                    convergence_measure=self.convergence_measure,
-                                    early_stopping=self.early_stopping,
-                                    max_time=self.timer,
-                                    start_time=self.start_time,
-                                    end_time=str(datetime.now()),
-                                    stopping_reason=_stopping_reason
-                                    )
-        if self.plot:
-            self.visualize(results_table=True,
-                           model_distribution=True,
-                           model_evolution=True,
-                           param_distribution=False,
-                           train_time_distribution=True,
-                           breeding_map=True,
-                           breeding_graph=True,
-                           fitness_distribution=True,
-                           fitness_evolution=True if self.current_adjustment_meta_data['adjustment'] > 0 else False,
-                           fitness_dimensions=True,
-                           per_adjustment=True if self.current_adjustment_meta_data['adjustment'] > 0 else False,
-                           prediction_of_best_model=True,
-                           epoch_stats=True
-                           )
-        if self.output_file_path is not None:
-            if len(self.output_file_path) > 0:
-                self.save_evolution(si=True,
-                                    model=self.deploy_model,
-                                    evolution_history=False,
-                                    adjustment_history=False,
-                                    final_adjustment=False
-                                    )
+            if _evolve:
+                self._adjust()
+            if self.checkpoint and _evolve:
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Save checkpoint ...')
+                self._save_checkpoint()
+        self._post_processing()
 
     def optimize_continue(self, deploy_model: bool = True, max_adjustments: int = 5):
         """
@@ -1275,8 +1427,8 @@ class SwarmIntelligence:
         self.data_set = None
         self.evolution_continue = True
         self.deploy_model = deploy_model
-        _max_gen: int = max_adjustments if max_adjustments > 0 else 5
-        self.max_adjustments: int = self.max_adjustments + _max_gen
+        _max_adjustments: int = max_adjustments if max_adjustments > 0 else 5
+        self.max_adjustments: int = self.max_adjustments + _max_adjustments
         self.burn_in_adjustments += self.current_adjustment_meta_data['adjustment']
         self.optimize()
 
@@ -1312,7 +1464,8 @@ class SwarmIntelligence:
                          create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
-                         bucket_name=self.bucket_name
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
                          ).file()
         # Export adjustment history data:
         if adjustment_history:
@@ -1321,48 +1474,71 @@ class SwarmIntelligence:
                          create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
-                         bucket_name=self.bucket_name
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
                          ).file()
         if final_adjustment:
             DataExporter(obj=self.final_adjustment,
                          file_path=os.path.join(self.output_file_path, 'final_adjustment.p'),
-                         create_dir=True,
-                         overwrite=True,
-                         cloud=self.cloud,
-                         bucket_name=self.bucket_name
-                         ).file()
-        # Export evolved model:
-        if model:
-            if self.deep_learning:
-                self.population[self.best_global_idx].save(file_path=os.path.join(self.output_file_path, 'model.p'))
-            else:
-                DataExporter(obj=self.model,
-                             file_path=os.path.join(self.output_file_path, 'model.p'),
-                             create_dir=False,
-                             overwrite=True,
-                             cloud=self.cloud,
-                             bucket_name=self.bucket_name
-                             ).file()
-        # Export SwarmIntelligence class object:
-        if si:
-            self.df = None
-            self.model = None
-            self.population = []
-            #self.data_set = None
-            self.feature_engineer = None
-            if self.dask_client is not None:
-                try:
-                    self.dask_client.close()
-                except TypeError:
-                    pass
-                finally:
-                    self.dask_client = None
-            DataExporter(obj=self,
-                         file_path=os.path.join(self.output_file_path, 'swarm.p'),
                          create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
-                         bucket_name=self.bucket_name
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
+                         ).file()
+        # Export evolved model:
+        if model:
+            _file_name_extension: str = '' if self.kwargs.get('model_file_name_extension') is None else '_{}'.format(self.kwargs.get('model_file_name_extension'))
+            _file_name: str = 'model{}.p'.format(_file_name_extension)
+            if self.cloud is None:
+                if self.deep_learning:
+                    if self.current_adjustment_meta_data['model_name'][self.best_global_idx] == 'trans':
+                        torch.save(obj=self.model.model, f=os.path.join(self.output_file_path, _file_name))
+                    else:
+                        torch.save(obj=self.model, f=os.path.join(self.output_file_path, _file_name))
+                else:
+                    DataExporter(obj=self.model,
+                                 file_path=os.path.join(self.output_file_path, _file_name),
+                                 create_dir=False,
+                                 overwrite=True
+                                 ).file()
+            else:
+                if self.current_adjustment_meta_data['model_name'][self.best_global_idx] == 'trans':
+                    DataExporter(obj=self.model.model,
+                                 file_path=os.path.join(self.output_file_path, _file_name),
+                                 create_dir=False,
+                                 overwrite=True,
+                                 cloud=self.cloud,
+                                 bucket_name=self.bucket_name,
+                                 region=self.kwargs.get('region')
+                                 ).file()
+                else:
+                    DataExporter(obj=self.model,
+                                 file_path=os.path.join(self.output_file_path, _file_name),
+                                 create_dir=False,
+                                 overwrite=True,
+                                 cloud=self.cloud,
+                                 bucket_name=self.bucket_name,
+                                 region=self.kwargs.get('region')
+                                 ).file()
+        # Export SwarmIntelligence class object:
+        if si:
+            if self.stopping_reason is None:
+                self.feature_engineer = None
+            else:
+                self.df = None
+                self.model = None
+                self.population = []
+                self.feature_engineer = None
+            _file_name_extension: str = '' if self.kwargs.get('si_file_name_extension') is None else '_{}'.format(self.kwargs.get('si_file_name_extension'))
+            _file_name: str = 'swarm{}.p'.format(_file_name_extension)
+            DataExporter(obj=self,
+                         file_path=os.path.join(self.output_file_path, _file_name),
+                         create_dir=False,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
                          ).file()
 
     def visualize(self,

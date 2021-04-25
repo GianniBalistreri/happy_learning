@@ -11,7 +11,8 @@ from typing import List
 
 
 def get_sentence_embedding(text_data: np.array,
-                           lang_model_name: str = 'paraphrase-xlm-r-multilingual-v1'
+                           lang_model_name: str = 'paraphrase-xlm-r-multilingual-v1',
+                           lang_model_path: str = None
                            ) -> np.ndarray:
     """
     Get sentence embedding using sentence-transformer package
@@ -24,12 +25,28 @@ def get_sentence_embedding(text_data: np.array,
             -> paraphrase-distilroberta-base-v1: Distill RoBERTa
             -> paraphrase-xlm-r-multilingual-v1: XLM-RoBERTa
 
+    :param lang_model_path: str
+        Complete file path of the pre-trained language model
+            -> paraphrase-distilroberta-base-v1: Distill RoBERTa
+            -> paraphrase-xlm-r-multilingual-v1: XLM-RoBERTa
+
     :return: np.array
         Sentence embedding vector
     """
-    if lang_model_name not in ['paraphrase-distilroberta-base-v1', 'paraphrase-xlm-r-multilingual-v1']:
+    _lang_model_names: List[str] = ['paraphrase-distilroberta-base-v1', 'paraphrase-xlm-r-multilingual-v1']
+    if lang_model_name not in _lang_model_names:
         raise SelfTaughtShortTextClusteringException('Language model ({}) not supported'.format(lang_model_name))
-    _model = SentenceTransformer(model_name_or_path=lang_model_name, device=None)
+    if lang_model_path is None:
+        _lang_model: str = lang_model_name
+    else:
+        #_i: int = 0
+        #for lang_model in _lang_model_names:
+        #    if lang_model_path.find(lang_model) >= 0:
+        #        _i += 1
+        #if _i == 0:
+        #    raise SelfTaughtShortTextClusteringException('Language model ({}) not supported'.format(lang_model_path))
+        _lang_model: str = lang_model_path
+    _model = SentenceTransformer(model_name_or_path=_lang_model, device=None)
     _embedding = _model.encode(sentences=text_data.tolist(),
                                batch_size=32,
                                convert_to_numpy=True,

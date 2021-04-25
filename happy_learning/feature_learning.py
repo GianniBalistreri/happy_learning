@@ -34,7 +34,7 @@ class FeatureLearning:
                  engineer_time_disparity: bool = True,
                  engineer_categorical: bool = True,
                  engineer_continuous: bool = True,
-                 engineer_text: bool = True,
+                 engineer_text: bool = False,
                  generate_categorical: bool = True,
                  generate_continuous: bool = True,
                  output_path: str = None,
@@ -147,9 +147,9 @@ class FeatureLearning:
                                             minutes=True if kwargs.get('minutes') is None else kwargs.get('minutes'),
                                             seconds=True if kwargs.get('seconds') is None else kwargs.get('seconds')
                                             )
-        #if self.engineer_text:
-        #    self.feature_engineer.text_occurances()
-        #    self.feature_engineer.linguistic_features()
+        if self.engineer_text:
+            self.feature_engineer.text_occurances()
+            self.feature_engineer.linguistic_features()
         self.force_target_type: str = force_target_type
         self.kwargs: dict = kwargs
         self.continuous_learning = None
@@ -348,18 +348,28 @@ class FeatureLearning:
         """
         Generate additional categorical features by processing continuous, date and text features
         """
-        self.feature_engineer.label_encoder(encode=True)
-        self.feature_engineer.date_categorizer()
-        #self.feature_engineer.binning(supervised=True, optimal=True, optimal_meth='bayesian_blocks')
-        self.feature_engineer.one_hot_encoder(threshold=self.kwargs.get('threshold'))
-        _features: List[str] = self.feature_engineer.get_features(feature_type='ordinal') + self.feature_engineer.get_features(feature_type='categorical')
+        _label_encoding: bool = True if self.kwargs.get('label_encoding') is None else self.kwargs.get('label_encoding')
+        _date_categorizer: bool = True if self.kwargs.get('date_categorizer') is None else self.kwargs.get('date_categorizer')
+        _binning: bool = False if self.kwargs.get('binning') is None else self.kwargs.get('binning')
+        _one_hot_encoding: bool = True if self.kwargs.get('one_hot_encoding') is None else self.kwargs.get('one_hot_encoding')
+        if _label_encoding:
+            self.feature_engineer.label_encoder(encode=True)
+        if _date_categorizer:
+            self.feature_engineer.date_categorizer()
+        if _binning:
+            self.feature_engineer.binning(supervised=True, optimal=True, optimal_meth='bayesian_blocks')
+        if _one_hot_encoding:
+            self.feature_engineer.one_hot_encoder(threshold=self.kwargs.get('one_hot_encoding_threshold'))
+        _features: List[str] = self.feature_engineer.get_features(feature_type='categorical')
         self.feature_engineer.set_predictors(features=_features, exclude_original_data=True)
 
     def _generate_continuous_features(self):
         """
         Generate additional continuous features by processing date and text features
         """
-        self.feature_engineer.disparity()
+        _disparity: bool = True if self.kwargs.get('disparity') is None else self.kwargs.get('disparity')
+        if _disparity:
+            self.feature_engineer.disparity()
         _features: List[str] = self.feature_engineer.get_features(feature_type='ordinal') + self.feature_engineer.get_features(feature_type='continuous')
         self.feature_engineer.set_predictors(features=_features, exclude_original_data=False)
 

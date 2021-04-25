@@ -13,7 +13,6 @@ PREDICTORS: List[str] = ['4046', '4225', '4770']
 TARGET_TEXT: str = 'label'
 PREDICTORS_TEXT: List[str] = ['text']
 DATA_SET_REG: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/avocado.csv').loc[0:1000, ]
-print(DATA_SET_REG.shape)
 TRAIN_TEST_REG: dict = MLSampler(df=DATA_SET_REG,
                                  target=TARGET,
                                  features=PREDICTORS,
@@ -33,7 +32,6 @@ pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_REG.get('x_test')), pd.DataFrame(da
 pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_REG.get('x_val')), pd.DataFrame(data=TRAIN_TEST_REG.get('y_val'))], axis=1).to_csv(path_or_buf=VALIDATION_DATA_REG_PATH, index=False)
 DATA_SET_TEXT_CLF: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/tripadvisor_hotel_reviews.csv').loc[0:1000, ]
 DATA_SET_TEXT_CLF = DATA_SET_TEXT_CLF.loc[~DATA_SET_TEXT_CLF.isnull().any(axis=1), :]
-print(DATA_SET_TEXT_CLF.shape)
 TRAIN_TEST_TEXT_CLF: dict = MLSampler(df=DATA_SET_TEXT_CLF,
                                       target=TARGET_TEXT,
                                       features=PREDICTORS_TEXT,
@@ -164,8 +162,18 @@ class NetworkGeneratorTest(unittest.TestCase):
         _net_gen.generate_params(param_rate=0.1, force_param=None)
         self.assertTrue(expr=len(_mutated_param.keys()) < len(_net_gen.model_param_mutated.keys()))
 
-    def test_get_vanilla_network(self):
-        pass
+    def test_get_vanilla_transformer(self):
+        _net_gen: object = NetworkGenerator(target=TARGET_TEXT,
+                                            predictors=PREDICTORS_TEXT,
+                                            output_layer_size=5,
+                                            train_data_path=TRAIN_DATA_PATH_TEXT,
+                                            test_data_path=TEST_DATA_PATH_TEXT,
+                                            validation_data_path=VALIDATION_DATA_PATH_TEXT,
+                                            models=['trans'],
+                                            model_name='trans',
+                                            sep=','
+                                            )
+        _model = _net_gen.get_vanilla_model()
 
     def test_eval(self):
         _net_gen: object = NetworkGenerator(target=TARGET_TEXT,
@@ -176,7 +184,7 @@ class NetworkGeneratorTest(unittest.TestCase):
                                             validation_data_path=VALIDATION_DATA_PATH_TEXT,
                                             models=list(NETWORK_TYPE.keys()),
                                             sep=','
-                                            ).generate_model()
+                                            )
         _model = _net_gen.generate_model()
         _model.train()
         _model.eval(validation=True)
@@ -192,7 +200,7 @@ class NetworkGeneratorTest(unittest.TestCase):
                                             validation_data_path=VALIDATION_DATA_PATH_TEXT,
                                             models=list(NETWORK_TYPE.keys()),
                                             sep=','
-                                            ).generate_model()
+                                            )
         _model = _net_gen.generate_model()
         _model.train()
         _model.predict()
@@ -210,7 +218,7 @@ class NetworkGeneratorTest(unittest.TestCase):
                                             validation_data_path=VALIDATION_DATA_PATH_TEXT,
                                             models=['trans'],#list(NETWORK_TYPE.keys()),
                                             sep=','
-                                            ).generate_model()
+                                            )
         _model = _net_gen.generate_model()
         _model.train()
         self.assertTrue(expr=_model.fitness.get('train') is not None)
