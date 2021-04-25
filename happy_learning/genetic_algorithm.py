@@ -1520,7 +1520,8 @@ class GeneticAlgorithm:
                          create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
-                         bucket_name=self.bucket_name
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
                          ).file()
         # Export generation history data:
         if generation_history:
@@ -1529,7 +1530,8 @@ class GeneticAlgorithm:
                          create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
-                         bucket_name=self.bucket_name
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
                          ).file()
         if final_generation:
             DataExporter(obj=self.final_generation,
@@ -1537,25 +1539,44 @@ class GeneticAlgorithm:
                          create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
-                         bucket_name=self.bucket_name
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
                          ).file()
         # Export evolved model:
         if model:
             _file_name_extension: str = '' if self.kwargs.get('model_file_name_extension') is None else '_{}'.format(self.kwargs.get('model_file_name_extension'))
             _file_name: str = 'model{}.p'.format(_file_name_extension)
-            if self.deep_learning:
-                if self.current_generation_meta_data['model_name'][self.best_individual_idx] == 'trans':
-                    torch.save(obj=self.model.model, f=os.path.join(self.output_file_path, _file_name))
+            if self.cloud is None:
+                if self.deep_learning:
+                    if self.current_generation_meta_data['model_name'][self.best_individual_idx] == 'trans':
+                        torch.save(obj=self.model.model, f=os.path.join(self.output_file_path, _file_name))
+                    else:
+                        torch.save(obj=self.model, f=os.path.join(self.output_file_path, _file_name))
                 else:
-                    torch.save(obj=self.model, f=os.path.join(self.output_file_path, _file_name))
+                    DataExporter(obj=self.model,
+                                 file_path=os.path.join(self.output_file_path, _file_name),
+                                 create_dir=False,
+                                 overwrite=True
+                                 ).file()
             else:
-                DataExporter(obj=self.model,
-                             file_path=os.path.join(self.output_file_path, _file_name),
-                             create_dir=False,
-                             overwrite=True,
-                             cloud=self.cloud,
-                             bucket_name=self.bucket_name
-                             ).file()
+                if self.current_generation_meta_data['model_name'][self.best_individual_idx] == 'trans':
+                    DataExporter(obj=self.model.model,
+                                 file_path=os.path.join(self.output_file_path, _file_name),
+                                 create_dir=False,
+                                 overwrite=True,
+                                 cloud=self.cloud,
+                                 bucket_name=self.bucket_name,
+                                 region=self.kwargs.get('region')
+                                 ).file()
+                else:
+                    DataExporter(obj=self.model,
+                                 file_path=os.path.join(self.output_file_path, _file_name),
+                                 create_dir=False,
+                                 overwrite=True,
+                                 cloud=self.cloud,
+                                 bucket_name=self.bucket_name,
+                                 region=self.kwargs.get('region')
+                                 ).file()
         # Export GeneticAlgorithm class object:
         if ga:
             if self.stopping_reason is None:
@@ -1572,7 +1593,8 @@ class GeneticAlgorithm:
                          create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
-                         bucket_name=self.bucket_name
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
                          ).file()
 
     def visualize(self,
