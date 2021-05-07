@@ -39,16 +39,11 @@ def get_sentence_embedding(text_data: np.array,
     if lang_model_path is None:
         _lang_model: str = lang_model_name
     else:
-        #_i: int = 0
-        #for lang_model in _lang_model_names:
-        #    if lang_model_path.find(lang_model) >= 0:
-        #        _i += 1
-        #if _i == 0:
-        #    raise SelfTaughtShortTextClusteringException('Language model ({}) not supported'.format(lang_model_path))
         _lang_model: str = lang_model_path
     _model = SentenceTransformer(model_name_or_path=_lang_model, device=None)
     _embedding = _model.encode(sentences=text_data.tolist(),
                                batch_size=32,
+                               show_progress_bar=False,
                                convert_to_numpy=True,
                                convert_to_tensor=False,
                                is_pretokenized=False,
@@ -490,6 +485,18 @@ class STC(torch.nn.Module):
         """
         _q: np.ndarray = self.model(x)
         return _q.argmax(1)
+
+    def predict_proba(self, x: np.ndarray) -> np.ndarray:
+        """
+        Predict probabilities from trained STC model
+
+        :param x: np.ndarray
+            Embedding weights
+
+        :return: np.ndarray
+            Probabilities
+        """
+        return self.model(x)
 
     def pre_train_auto_encoder(self):
         """
