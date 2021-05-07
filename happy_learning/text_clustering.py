@@ -111,19 +111,6 @@ class GibbsSamplingDirichletMultinomialModeling:
         """
         return [i for i, entry in enumerate(np.random.multinomial(1, self.probability_vector)) if entry != 0][0]
 
-    def doc_to_label(self, documents: List[str]) -> tuple:
-        """
-        Match highest probability label to document
-
-        :param documents: List[str]
-            The document token stream
-
-        :return: tuple
-            Label and the highest probability
-        """
-        _probability_vector = self._document_scoring(documents=documents)
-        return np.argmax(_probability_vector), max(_probability_vector)
-
     def fit(self, documents: List[List[str]]) -> List[int]:
         """
         Fitting GSDMM clustering algorithm
@@ -181,15 +168,17 @@ class GibbsSamplingDirichletMultinomialModeling:
         self.n_clusters = _n_clusters
         return _document_cluster
 
-    def generate_topic_allocation(self, documents: List[str]) -> Dict[str, List[int]]:
+    def generate_topic_allocation(self, documents: List[List[str]]) -> List[int]:
         """
-        allocates all topics to each document in original dataframe,
-        adding two columns for cluster number and cluster description
+        Allocate cluster labels (topics) to each document
+
+        :return: List[int]
+            Allocated labels
         """
-        _topic_allocations = dict(cluster=[])
+        _topic_allocations = []
         for doc in documents:
-            _topic_label, _score = self.doc_to_label(documents=[doc])
-            _topic_allocations['cluster'].append(_topic_label)
+            _topic_label = self.predict(documents=doc)
+            _topic_allocations.append(_topic_label)
         return _topic_allocations
 
     def get_top_words_each_cluster(self, top_n_words: int = 5) -> dict:
@@ -211,11 +200,37 @@ class GibbsSamplingDirichletMultinomialModeling:
             _top_n_words_each_cluster.update({str(cluster): _sorted_words_current_cluster})
         return _top_n_words_each_cluster
 
-    def word_importance_each_cluster(self):
+    def predict(self, documents: List[str]) -> int:
         """
-        returns a word-topic matrix[phi] where each value represents
-        the word importance for that particular cluster;
-        phi[i][w] would be the importance of word w in topic i.
+        Predict cluster label
+
+        :param documents: List[str]
+            The document token stream
+
+        :return: int
+            Cluster label
+        """
+        return np.array(self._document_scoring(documents=documents)).argmax()
+
+    def predict_proba(self, documents: List[str]) -> List[float]:
+        """
+        Predict probabilities for each document
+
+        :param documents: List[str]
+            The document token stream
+
+        :return: List[np.array]
+            Probability vector for each document
+        """
+        return self._document_scoring(documents=documents)
+
+    def word_importance_each_cluster(self) -> List[dict]:
+        """
+        Generate word importance (phi) for each cluster
+
+        :return: List[dict]
+            Word importance (phi) for each cluster
+                -> phi[cluster][word]
         """
         _phi: List[dict] = [{} for _ in range(0, self.n_clusters, 1)]
         for c in range(0, self.n_clusters, 1):

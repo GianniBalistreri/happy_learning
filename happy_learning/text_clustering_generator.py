@@ -4,7 +4,7 @@ import re
 import pandas as pd
 import torch
 
-from .evaluate_machine_learning import EvalClf
+from .evaluate_machine_learning import EvalClf, EvalCluster
 from .self_taught_short_text_clustering import get_sentence_embedding, STC
 from .text_clustering import GibbsSamplingDirichletMultinomialModeling, LatentDirichletAllocation, \
     LatentSemanticIndexing, NonNegativeMatrixFactorization
@@ -22,7 +22,7 @@ CLUSTER_ALGORITHMS: dict = dict(gsdmm='gibbs_sampling_dirichlet_multinomial_mode
                                 #stc='self_taught_short_text_clustering'
                                 )
 
-EVAL_METH: List[str] = ['stc', 'trans']
+EVAL_METH: List[str] = ['c_uci', 'c_umass', 'stc', 'trans']
 
 
 class ClusteringException(Exception):
@@ -38,15 +38,27 @@ class Clustering:
     """
     def __init__(self,
                  cluster_params: dict = None,
+                 df: pd.DataFrame = None,
                  train_data_path: str = None,
+                 test_data_path: str = None,
+                 validation_data_path: str = None,
                  seed: int = 1234
                  ):
         """
         :param cluster_params: dict
             Pre-configured clustering model parameter
 
+        :param df: pd.DataFrame
+            Data set
+
         :param train_data_path: str
             Complete file path of the training data
+
+        :param test_data_path: str
+            Complete file path of the test data
+
+        :param validation_data_path: str
+            Complete file path of the validation data
 
         :param seed: int
             Seed
@@ -56,7 +68,10 @@ class Clustering:
         self.vocab = None
         self.vocab_size: int = 0
         self.document_term_matrix: list = []
+        self.df: pd.DataFrame = df
         self.train_data_path: str = train_data_path
+        self.test_data_path: str = test_data_path
+        self.validation_data_path: str = validation_data_path
 
     def gibbs_sampling_dirichlet_multinomial_modeling(self) -> GibbsSamplingDirichletMultinomialModeling:
         """
@@ -81,8 +96,8 @@ class Clustering:
         :return: dict
             Parameter config
         """
-        return dict(n_clusters=np.random.randint(low=3, high=15),
-                    n_iterations=np.random.randint(low=5, high=100),
+        return dict(n_clusters=np.random.randint(low=4, high=30),
+                    n_iterations=np.random.randint(low=5, high=50),
                     alpha=np.random.uniform(low=0.05, high=0.95),
                     beta=np.random.uniform(low=0.05, high=0.95),
                     )
@@ -230,12 +245,16 @@ class ClusteringGenerator(Clustering):
                  models: List[str] = None,
                  tokenize: bool = False,
                  random: bool = True,
-                 eval_method: str = 'stc',
+                 eval_method: str = 'c_umass',
                  sep: str = '\t',
                  cloud: str = None,
+                 df: pd.DataFrame = None,
                  train_data_path: str = None,
+                 test_data_path: str = None,
+                 validation_data_path: str = None,
                  sentence_embedding_model_path: str = None,
                  language_model_path: str = None,
+                 top_n_words: int = 10,
                  seed: int = 1234
                  ):
         """
@@ -259,6 +278,8 @@ class ClusteringGenerator(Clustering):
 
         :param eval_method: str
             Name of the evaluation method:
+                -> c_uci: Coherence Analysis UCI (extrinsic)
+                -> c_umass: Coherence Analysis UMASS (intrinsic)
                 -> stc: Self-Taught Short Text Clustering (semi-supervised)
                 -> trans: Transformer (supervised)
 
@@ -270,8 +291,17 @@ class ClusteringGenerator(Clustering):
                 -> google: Google Cloud Storage
                 -> aws: AWS Cloud
 
+        :param df: pd.DataFrame
+            Data set
+
         :param train_data_path: str
             Complete file path of the training data
+
+        :param test_data_path: str
+            Complete file path of the test data
+
+        :param validation_data_path: str
+            Complete file path of the validation data
 
         :param sentence_embedding_model_path: str
             Local path of the pre-trained sentence embedding model (stc)
@@ -279,13 +309,21 @@ class ClusteringGenerator(Clustering):
         :param language_model_path: str
             Local path of the pre-trained language model (transformer)
 
+        :param top_n_words: int
+            Number of top words of each cluster to use for calculating coherence metric
+
         :param seed: int
             Seed
         """
         super(ClusteringGenerator, self).__init__(cluster_params=cluster_params,
+                                                  df=df,
                                                   train_data_path=train_data_path,
+                                                  test_data_path=test_data_path,
+                                                  validation_data_path=validation_data_path,
                                                   seed=seed
                                                   )
+        if self.df is None and self.train_data_path is None:
+            raise ClusteringException('No training data found')
         self.id: int = 0
         self.predictor: str = predictor
         self.model_name: str = model_name
@@ -309,6 +347,7 @@ class ClusteringGenerator(Clustering):
         self.cloud: str = cloud
         self.sentence_embedding_model_path: str = sentence_embedding_model_path
         self.language_model_path: str = language_model_path
+        self.top_n_words: int = top_n_words
         if self.cloud is None:
             self.bucket_name: str = None
         else:
@@ -334,7 +373,19 @@ class ClusteringGenerator(Clustering):
         """
         Internal cluster evaluation using semi-supervised Self-Taught Short Text Clustering algorithm to generate Normalized Mutual Information score
         """
-        if self.eval_method == 'stc':
+        if self.eval_method == 'c_uci':
+            _top_n_words_each_cluster: dict = self.model.get_top_words_each_cluster(top_n_words=self.top_n_words)
+            _top_words: List[List[str]] = []
+            for cluster in _top_n_words_each_cluster.keys():
+                _top_words.append([w[0] for w in _top_n_words_each_cluster.get(cluster)])
+            self.fitness = EvalCluster(obs=self.x, pred=np.array(self.cluster_label)).coherence_score_uci(top_n_words_each_cluster=_top_words, epsilon=1)
+        elif self.eval_method == 'c_umass':
+            _top_n_words_each_cluster: dict = self.model.get_top_words_each_cluster(top_n_words=self.top_n_words)
+            _top_words: List[List[str]] = []
+            for cluster in _top_n_words_each_cluster.keys():
+                _top_words.append([w[0] for w in _top_n_words_each_cluster.get(cluster)])
+            self.fitness = EvalCluster(obs=self.x, pred=np.array(self.cluster_label)).coherence_score_umass(top_n_words_each_cluster=_top_words, epsilon=1)
+        elif self.eval_method == 'stc':
             _embedding: np.ndarray = get_sentence_embedding(text_data=self.x,
                                                             lang_model_name='paraphrase-xlm-r-multilingual-v1' if self.cluster_params.get('lang_model_name') is None else self.cluster_params.get('lang_model_name'),
                                                             lang_model_path=self.sentence_embedding_model_path
@@ -359,9 +410,9 @@ class ClusteringGenerator(Clustering):
                                silent=True
                                )
             _kwargs: dict = dict(cache_dir=self.language_model_path, local_files_only=False if self.language_model_path is None else True)
-            _model_type: str = 'roberta' if self.language_model_path is None else self.language_model_path.split('/')[-2].split('-')[0]
+            _model_type: str = 'xlmroberta' if self.language_model_path is None else self.language_model_path.split('/')[-2].split('-')[0]
             _transformer = ClassificationModel(model_type=_model_type,
-                                               model_name='roberta-large' if self.language_model_path is None else self.language_model_path,
+                                               model_name='xlm-roberta-large' if self.language_model_path is None else self.language_model_path,
                                                tokenizer_type=None,
                                                tokenizer_name=None,
                                                num_labels=len(list(set(self.cluster_label))),
@@ -388,19 +439,20 @@ class ClusteringGenerator(Clustering):
         """
         Import data set
         """
-        _data_set: pd.DataFrame = DataImporter(file_path=self.train_data_path,
-                                               as_data_frame=True,
-                                               use_dask=False,
-                                               create_dir=False,
-                                               sep=self.sep,
-                                               cloud=self.cloud,
-                                               bucket_name=self.bucket_name
-                                               ).file(table_name=None)
+        if self.df is None:
+            self.df = DataImporter(file_path=self.train_data_path,
+                                   as_data_frame=True,
+                                   use_dask=False,
+                                   create_dir=False,
+                                   sep=self.sep,
+                                   cloud=self.cloud,
+                                   bucket_name=self.bucket_name
+                                   ).file(table_name=None)
         if self.tokenize:
-            self.x = _data_set[self.predictor].apply(lambda x: re.split('\s', x)).values
+            self.x = self.df[self.predictor].apply(lambda x: re.split('\s', x)).values
         else:
-            self.x = _data_set[self.predictor].values
-        del _data_set
+            self.x = self.df[self.predictor].values
+        self.df = None
 
     def generate_model(self) -> object:
         """

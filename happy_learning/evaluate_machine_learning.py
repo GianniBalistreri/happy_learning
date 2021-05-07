@@ -1,10 +1,12 @@
 import copy
+import itertools
 import numpy as np
 import pandas as pd
 
 from easyexplore.data_visualizer import DataVisualizer
 from sklearn.metrics import accuracy_score, auc, classification_report, cohen_kappa_score, confusion_matrix, f1_score, precision_score, recall_score, roc_auc_score, roc_curve
 from sklearn.metrics import mean_absolute_error, mean_gamma_deviance, mean_poisson_deviance, mean_squared_error, mean_squared_log_error, mean_tweedie_deviance
+from sklearn.metrics import adjusted_mutual_info_score, normalized_mutual_info_score
 from typing import Dict, List
 
 
@@ -440,6 +442,203 @@ class EvalClf:
             fpr[i], tpr[i], _ = roc_curve(self.obs, self.pred)
             roc_auc[i] = auc(fpr[i], tpr[i])
         return dict(true_positive_rate=tpr, false_positive_rate=fpr, roc_auc=roc_auc)
+
+
+class EvalCluster:
+    """
+    Class for evaluating unsupervised machine learning models for clustering problems
+    """
+    def __init__(self, obs: np.array, pred: np.array):
+        """
+        :param obs: np.array
+            Observations
+
+        :param pred: np.array
+            Predictions
+        """
+        self.obs: list = obs.tolist()
+        self.pred: List[int] = pred.tolist()
+
+    def adjusted_mutual_information_score(self) -> float:
+        """
+        Calculate adjusted mutual information score
+
+        :return: float
+            Adjusted mutual information score
+        """
+        return adjusted_mutual_info_score(self.obs, self.pred)
+
+    def coherence_score_uci(self, top_n_words_each_cluster: List[List[str]], epsilon: float = 1.0) -> float:
+        """
+        Calculate overall coherence score uci (extrinsic) for measuring topic allocation (text clustering)
+
+        :param top_n_words_each_cluster: List[List[str]]
+            Top n words of each cluster to analyse
+
+        :param epsilon: float
+            Epsilon value to avoid ln0 error
+
+        :return: float
+            Coherence score UCI
+        """
+        _coherence_scores = []
+        _df: pd.DataFrame = pd.DataFrame(data=dict(obs=self.obs, pred=self.pred))
+        for i in range(0, len(top_n_words_each_cluster), 1):
+            _words: List[str] = [w for w in top_n_words_each_cluster[i]]
+            _co_occurances: list = [pair for pair in itertools.combinations(iterable=_words, r=2)]
+            _top_n_words: dict = {'{}_{}'.format(w[0], w[1]): 0 for w in _co_occurances}
+            for w in _words:
+                _top_n_words.update({w: 0})
+            for pair in _co_occurances:
+                for case in _df.loc[_df['pred'] == i, 'obs'].values.tolist():
+                    if pair[0] in case:
+                        _top_n_words[pair[0]] += 1
+                    if pair[1] in case:
+                        _top_n_words[pair[1]] += 1
+                    if pair[0] and pair[1] in case:
+                        _top_n_words['{}_{}'.format(pair[0], pair[1])] += 1
+            _c_uci: float = 0
+            for pair in _co_occurances:
+                try:
+                    _c_uci += np.log((_top_n_words['{}_{}'.format(pair[0], pair[1])] + epsilon) / (_top_n_words[pair[0]] * _top_n_words[pair[1]]))
+                except ZeroDivisionError:
+                    continue
+            _c_uci = _c_uci / len(_co_occurances)
+            _coherence_scores.append(_c_uci)
+        return sum(_coherence_scores) / len(_coherence_scores)
+
+    def coherence_score_umass(self, top_n_words_each_cluster: List[List[str]], epsilon: float = 1.0) -> float:
+        """
+        Calculate overall coherence score umass (intrinsic) for measuring topic allocation (text clustering)
+
+        :param top_n_words_each_cluster: List[List[str]]
+            Top n words of each cluster to analyse
+
+        :param epsilon: float
+            Epsilon value to avoid ln0 error
+
+        :return: float
+            Coherence score UMASS
+        """
+        _coherence_scores = []
+        _df: pd.DataFrame = pd.DataFrame(data=dict(obs=self.obs, pred=self.pred))
+        for i in range(0, len(top_n_words_each_cluster), 1):
+            _words: List[str] = [w for w in top_n_words_each_cluster[i]]
+            _co_occurances: list = [pair for pair in itertools.combinations(iterable=_words, r=2)]
+            _top_n_words: dict = {'{}_{}'.format(w[0], w[1]): 0 for w in _co_occurances}
+            for w in _words:
+                _top_n_words.update({w: 0})
+            for pair in _co_occurances:
+                for case in _df.loc[_df['pred'] == i, 'obs'].values.tolist():
+                    if pair[0] in case:
+                        _top_n_words[pair[0]] += 1
+                        if pair[1] in case:
+                            _top_n_words['{}_{}'.format(pair[0], pair[1])] += 1
+            _c_umass = 0
+            for pair in _co_occurances:
+                try:
+                    _c_umass += np.log((_top_n_words['{}_{}'.format(pair[0], pair[1])] + epsilon) / _top_n_words[pair[1]])
+                except ZeroDivisionError:
+                    continue
+            _c_umass = _c_umass / len(_co_occurances)
+            _coherence_scores.append(_c_umass)
+        return sum(_coherence_scores) / len(_coherence_scores)
+
+    def coherence_scores_uci(self, top_n_words_each_cluster: List[List[str]], epsilon: float = 1.0) -> List[float]:
+        """
+        Calculate coherence scores uci (extrinsic) for measuring topic allocation (text clustering)
+
+        :param top_n_words_each_cluster: List[List[str]]
+            Top n words of each cluster to analyse
+
+        :param epsilon: float
+            Epsilon value to avoid ln0 error
+
+        :return: List[float]
+            Coherence scores UCI for each cluster
+        """
+        _coherence_scores = []
+        _df: pd.DataFrame = pd.DataFrame(data=dict(obs=self.obs, pred=self.pred))
+        for i in range(0, len(top_n_words_each_cluster), 1):
+            _words: List[str] = [w for w in top_n_words_each_cluster[i]]
+            _co_occurances: list = [pair for pair in itertools.combinations(iterable=_words, r=2)]
+            _top_n_words: dict = {'{}_{}'.format(w[0], w[1]): 0 for w in _co_occurances}
+            for w in _words:
+                _top_n_words.update({w: 0})
+            for pair in _co_occurances:
+                for case in _df.loc[_df['pred'] == i, 'obs'].values.tolist():
+                    if pair[0] in case:
+                        _top_n_words[pair[0]] += 1
+                    if pair[1] in case:
+                        _top_n_words[pair[1]] += 1
+                    if pair[0] and pair[1] in case:
+                        _top_n_words['{}_{}'.format(pair[0], pair[1])] += 1
+            _c_uci: float = 0
+            for pair in _co_occurances:
+                try:
+                    _c_uci += np.log((_top_n_words['{}_{}'.format(pair[0], pair[1])] + epsilon) / (
+                                _top_n_words[pair[0]] * _top_n_words[pair[1]]))
+                except ZeroDivisionError:
+                    continue
+            _c_uci = _c_uci / len(_co_occurances)
+            _coherence_scores.append(_c_uci)
+        return _coherence_scores
+
+    def coherence_scores_umass(self, top_n_words_each_cluster: List[List[str]], epsilon: float = 1.0) -> List[float]:
+        """
+        Calculate coherence scores uci (extrinsic) for measuring topic allocation (text clustering)
+
+        :param top_n_words_each_cluster: List[List[str]]
+            Top n words of each cluster to analyse
+
+        :param epsilon: float
+            Epsilon value to avoid ln0 error
+
+        :return: List[float]
+            Coherence scores UMASS for each cluster
+        """
+        _coherence_scores = []
+        _df: pd.DataFrame = pd.DataFrame(data=dict(obs=self.obs, pred=self.pred))
+        for i in range(0, len(top_n_words_each_cluster), 1):
+            _words: List[str] = [w for w in top_n_words_each_cluster[i]]
+            _co_occurances: list = [pair for pair in itertools.combinations(iterable=_words, r=2)]
+            _top_n_words: dict = {'{}_{}'.format(w[0], w[1]): 0 for w in _co_occurances}
+            for w in _words:
+                _top_n_words.update({w: 0})
+            for pair in _co_occurances:
+                for case in _df.loc[_df['pred'] == i, 'obs'].values.tolist():
+                    if pair[0] in case:
+                        _top_n_words[pair[0]] += 1
+                        if pair[1] in case:
+                            _top_n_words['{}_{}'.format(pair[0], pair[1])] += 1
+            _c_umass = 0
+            for pair in _co_occurances:
+                try:
+                    _c_umass += np.log(
+                        (_top_n_words['{}_{}'.format(pair[0], pair[1])] + epsilon) / _top_n_words[pair[1]])
+                except ZeroDivisionError:
+                    continue
+            _c_umass = _c_umass / len(_co_occurances)
+            _coherence_scores.append(_c_umass)
+        return _coherence_scores
+
+    def normalized_mutual_information_score(self) -> float:
+        """
+        Calculate normalized mutual information score (nmi)
+
+        :return: float
+            Normalized mutual information score (nmi)
+        """
+        return normalized_mutual_info_score(labels_true=self.obs, labels_pred=self.pred)
+
+    def silhouette_analysis(self) -> float:
+        """
+        Calculate silhouette analysis score (intrinsic)
+
+        :return: float
+            Silhouette analysis score
+        """
+        pass
 
 
 class EvalReg:

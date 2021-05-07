@@ -401,12 +401,12 @@ class SwarmIntelligence:
                         if self.text_clustering:
                             self.population[idx] = ClusteringGenerator(predictor=self.features[0],
                                                                        models=self.models,
-                                                                       model_name=self.models[0],
                                                                        tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
                                                                        cloud=self.cloud,
+                                                                       df=self.df,
                                                                        train_data_path=self.train_data_file_path,
                                                                        sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                                       eval_method='stc' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
+                                                                       eval_method='c_umass' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
                                                                        language_model_path=self.kwargs.get('language_model_path'),
                                                                        sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                                        ).generate_model()
@@ -440,13 +440,12 @@ class SwarmIntelligence:
                         if self.text_clustering:
                             self.population[idx] = ClusteringGenerator(predictor=self.features[0],
                                                                        models=self.models,
-                                                                       model_name=self.models[0],
-                                                                       cluster_params=self.population[self.best_global_idx].model_param,
                                                                        tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
                                                                        cloud=self.cloud,
+                                                                       df=self.df,
                                                                        train_data_path=self.train_data_file_path,
                                                                        sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                                       eval_method='stc' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
+                                                                       eval_method='c_umass' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
                                                                        language_model_path=self.kwargs.get('language_model_path'),
                                                                        sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                                        ).generate_model()
@@ -675,14 +674,13 @@ class SwarmIntelligence:
         else:
             if self.text_clustering:
                 _cluster_gen = ClusteringGenerator(predictor=self.features[0],
-                                                   models=[self.current_adjustment_meta_data['model_name'][self.best_global_idx]],
-                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
-                                                   cluster_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
+                                                   models=self.models,
                                                    tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
                                                    cloud=self.cloud,
+                                                   df=self.df,
                                                    train_data_path=self.train_data_file_path,
                                                    sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                   eval_method='stc' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
+                                                   eval_method='c_umass' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
                                                    language_model_path=self.kwargs.get('language_model_path'),
                                                    sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                    ).generate_model()
@@ -1023,9 +1021,10 @@ class SwarmIntelligence:
                                                   models=self.models,
                                                   tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
                                                   cloud=self.cloud,
+                                                  df=self.df,
                                                   train_data_path=self.train_data_file_path,
                                                   sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                  eval_method='stc' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
+                                                  eval_method='c_umass' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
                                                   language_model_path=self.kwargs.get('language_model_path'),
                                                   sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                   ).get_model_parameter()
@@ -1048,12 +1047,12 @@ class SwarmIntelligence:
                     Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(p))
                 self.population.append(ClusteringGenerator(predictor=self.features[0],
                                                            models=self.models,
-                                                           cluster_params=_params,
                                                            tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
                                                            cloud=self.cloud,
+                                                           df=self.df,
                                                            train_data_path=self.train_data_file_path,
                                                            sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                           eval_method='stc' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
+                                                           eval_method='c_umass' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
                                                            language_model_path=self.kwargs.get('language_model_path'),
                                                            sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
                                                            ).generate_model()

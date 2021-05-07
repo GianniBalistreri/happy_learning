@@ -545,8 +545,11 @@ class HappyLearningUtils:
         """
         Get random permutation
 
-        :param shape: int: Maximum threshold of range to permutate randomly
-        :return: np.random: Randomly permutated range
+        :param shape: int
+            Maximum threshold of range to permute randomly
+
+        :return: np.random
+            Randomly permuted range
         """
         np.random.seed(seed=1234)
         return np.random.permutation(x=shape)
@@ -557,7 +560,9 @@ class HappyLearningUtils:
         Get list of labels based on a list of indices
 
         :param idx: List of integers containing the indices
+
         :param labels: List of integers containing the labels
+
         :return: List of string containing the subset of labels
         """
         return [labels[i] for i in idx]

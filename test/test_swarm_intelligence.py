@@ -15,7 +15,7 @@ DATA_DIR: str = 'data/'
 DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='{}avocado.csv'.format(DATA_DIR))
 DATA_FILE_PATH_CLUSTER: str = 'data/tweets_sample.csv'
 PREDICTOR_CLUSTER: str = 'tweet'
-pd.read_csv(filepath_or_buffer='data/tweets.csv', sep=',').loc[0:1000, ].to_csv(path_or_buf=DATA_FILE_PATH_CLUSTER, index=False)
+pd.read_csv(filepath_or_buffer='data/tweets.csv', sep=',').to_csv(path_or_buf=DATA_FILE_PATH_CLUSTER, index=False)
 N_CLUSTERS: int = 10
 TARGET: str = 'AveragePrice'
 PREDICTORS: List[str] = ['4046', '4225', '4770']
@@ -41,7 +41,7 @@ pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_REG.get('x_test')), pd.DataFrame(da
 pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_REG.get('x_val')), pd.DataFrame(data=TRAIN_TEST_REG.get('y_val'))], axis=1).to_csv(path_or_buf=VALIDATION_DATA_REG_PATH, index=False)
 DATA_SET_TEXT_CLF: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/tripadvisor_hotel_reviews.csv').loc[0:100, ]
 DATA_SET_TEXT_CLF = DATA_SET_TEXT_CLF.loc[~DATA_SET_TEXT_CLF.isnull().any(axis=1), :]
-UNIQUE_LABELS: int = 3 # len(DATA_SET_TEXT_CLF['label'].unique())
+UNIQUE_LABELS: int = len(DATA_SET_TEXT_CLF['label'].unique())
 TRAIN_TEST_TEXT_CLF: dict = MLSampler(df=DATA_SET_TEXT_CLF,
                                       target=TARGET_TEXT,
                                       features=PREDICTORS_TEXT,
@@ -53,9 +53,9 @@ TRAIN_TEST_TEXT_CLF: dict = MLSampler(df=DATA_SET_TEXT_CLF,
 TRAIN_DATA_PATH_TEXT: str = 'data/text_train.csv'
 TEST_DATA_PATH_TEXT: str = 'data/text_test.csv'
 VALIDATION_DATA_PATH_TEXT: str = 'data/text_val.csv'
-#pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_train')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_train'))], axis=1).to_csv(path_or_buf=TRAIN_DATA_PATH_TEXT, index=False)
-#pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_test')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_test'))], axis=1).to_csv(path_or_buf=TEST_DATA_PATH_TEXT, index=False)
-#pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_val')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_val'))], axis=1).to_csv(path_or_buf=VALIDATION_DATA_PATH_TEXT, index=False)
+pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_train')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_train'))], axis=1).to_csv(path_or_buf=TRAIN_DATA_PATH_TEXT, index=False)
+pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_test')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_test'))], axis=1).to_csv(path_or_buf=TEST_DATA_PATH_TEXT, index=False)
+pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('x_val')), pd.DataFrame(data=TRAIN_TEST_TEXT_CLF.get('y_val'))], axis=1).to_csv(path_or_buf=VALIDATION_DATA_PATH_TEXT, index=False)
 
 
 class SwarmIntelligenceTest(unittest.TestCase):
@@ -97,7 +97,7 @@ class SwarmIntelligenceTest(unittest.TestCase):
                                                    adjustment_rate=0.1,
                                                    adjustment_prob=0.85,
                                                    early_stopping=0,
-                                                   convergence=True,
+                                                   convergence=False,
                                                    convergence_measure='median',
                                                    timer_in_seconds=43200,
                                                    force_target_type=None,
@@ -143,7 +143,7 @@ class SwarmIntelligenceTest(unittest.TestCase):
                                                    adjustment_rate=0.5,
                                                    adjustment_prob=0.85,
                                                    early_stopping=0,
-                                                   convergence=True,
+                                                   convergence=False,
                                                    convergence_measure='median',
                                                    timer_in_seconds=43200,
                                                    force_target_type=None,
@@ -183,12 +183,12 @@ class SwarmIntelligenceTest(unittest.TestCase):
                                                    warm_start_strategy='monotone',
                                                    warm_start_constant_hidden_layers=0,
                                                    warm_start_constant_category='very_small',
-                                                   max_adjustments=2,
-                                                   pop_size=3,
+                                                   max_adjustments=1,
+                                                   pop_size=4,
                                                    adjustment_rate=0.5,
                                                    adjustment_prob=0.85,
                                                    early_stopping=0,
-                                                   convergence=True,
+                                                   convergence=False,
                                                    convergence_measure='median',
                                                    timer_in_seconds=43200,
                                                    force_target_type=None,
@@ -197,6 +197,7 @@ class SwarmIntelligenceTest(unittest.TestCase):
                                                    deep_learning_type='batch',
                                                    deep_learning_output_size=None,
                                                    log=False,
+                                                   verbose=True,
                                                    feature_engineer=None,
                                                    sampling_function=None,
                                                    **dict(sep=',', tokenize=True)

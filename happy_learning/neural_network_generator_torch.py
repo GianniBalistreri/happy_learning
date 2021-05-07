@@ -85,9 +85,9 @@ OPTIMIZER: dict = dict(adam=torch.optim.Adam,
                        sgd=torch.optim.SGD
                        )
 EMBEDDING: dict = dict(fast_text=FastText)
-TRANSFORMER: dict = {'roberta': 'roberta-large'
-                     #'xlm': 'xlm-mlm-100-1280',
-                     #'xlm-roberta': 'xlm-roberta-large'
+TRANSFORMER: dict = {'roberta': 'roberta-large',
+                     'xlm': 'xlm-mlm-100-1280',
+                     'xlmroberta': 'xlm-roberta-large'
                      }
 IGNORE_PARAM_FOR_OPTIMIZATION: List[str] = ['embedding_len',
                                             'weights',
