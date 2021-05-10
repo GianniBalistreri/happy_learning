@@ -1916,16 +1916,21 @@ class FeatureEngineer:
         self.save(file_path=kwargs.get('file_path'))
         Log(write=not DATA_PROCESSING.get('show_msg')).log('Finished Auto Engineering')
 
-    def auto_typing(self):
+    def auto_typing(self, ignore_features: List[str] = None):
         """
         Detect automatically whether data types in Pandas DataFrame are correctly typed from an analytical point of view
+
+        :param ignore_features: List[str]
+            Name of the features to ignore
         """
-        _features: List[str] = [feature for feature in DATA_PROCESSING.get('df').columns if feature not in DATA_PROCESSING.get('pre_defined_feature_types').keys()]
-        if list(TEMP_INDEXER.keys())[0] in _features:
-            del _features[_features.index(list(TEMP_INDEXER.keys())[0])]
+        _ignore_features: List[str] = list(TEMP_INDEXER.keys())
+        if ignore_features is not None:
+            for ignore_feature in ignore_features:
+                _ignore_features.append(ignore_feature)
         _check_dtypes: dict = EasyExploreUtils().check_dtypes(df=DATA_PROCESSING.get('df'),
                                                               feature_types=FEATURE_TYPES,
-                                                              date_edges=DATA_PROCESSING.get('date_edges')
+                                                              date_edges=DATA_PROCESSING.get('date_edges'),
+                                                              ignore_features=list(set(_ignore_features))
                                                               )
         if len(DATA_PROCESSING.get('pre_defined_feature_types').keys()) > 0:
             _check_dtypes['conversion'].update(DATA_PROCESSING.get('pre_defined_feature_types'))
