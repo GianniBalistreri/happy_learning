@@ -353,7 +353,10 @@ class ClusteringGenerator(Clustering):
         else:
             if self.cloud not in CLOUD_PROVIDER:
                 raise ClusteringException('Cloud provider ({}) not supported'.format(cloud))
-            self.bucket_name: str = self.train_data_path.split("//")[1].split("/")[0]
+            if self.train_data_path is None:
+                self.bucket_name: str = None
+            else:
+                self.bucket_name: str = self.train_data_path.split("//")[1].split("/")[0]
 
     def _build_vocab(self):
         """
