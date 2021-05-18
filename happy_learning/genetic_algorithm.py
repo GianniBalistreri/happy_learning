@@ -1249,7 +1249,8 @@ class GeneticAlgorithm:
                 self.evolved_features.extend(self.feature_pairs[parent])
             self.evolved_features = list(set(self.evolved_features))
         self.best_individual_idx = np.array(self.current_generation_meta_data['fitness_score']).argmax()
-        self._generate_final_model()
+        if self.deploy_model:
+            self._generate_final_model()
         if self.stopping_reason is not None:
             Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Best model: {} - {}'.format(self.current_generation_meta_data['model_name'][self.best_individual_idx], self.current_generation_meta_data['param'][self.best_individual_idx]))
             Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness score: {}'.format(self.current_generation_meta_data['fitness_score'][self.best_individual_idx]))

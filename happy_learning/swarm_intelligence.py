@@ -675,6 +675,8 @@ class SwarmIntelligence:
             if self.text_clustering:
                 _cluster_gen = ClusteringGenerator(predictor=self.features[0],
                                                    models=self.models,
+                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
+                                                   cluster_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
                                                    tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
                                                    cloud=self.cloud,
                                                    df=self.df,
@@ -1169,7 +1171,8 @@ class SwarmIntelligence:
             for idx in list(set(self.best_global_local_idx)):
                 self.evolved_features.extend(self.feature_pairs[idx])
             self.evolved_features = list(set(self.evolved_features))
-        self._generate_final_model()
+        if self.deploy_model:
+            self._generate_final_model()
         if self.stopping_reason is not None:
             Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Best model: {} - {}'.format(self.current_adjustment_meta_data['model_name'][self.best_global_idx], self.current_adjustment_meta_data['param'][self.best_global_idx]))
             Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Fitness score: {}'.format(self.current_adjustment_meta_data['fitness_score'][self.best_global_idx]))
