@@ -3,7 +3,7 @@ Chaid==5.3.0
 combo==0.1.1
 dask==2020.12.0
 dask-ml==1.7.0
-easyexplore==0.6.9
+easyexplore==0.7.0
 emoji==0.6.0
 fsspec==0.8.5
 gensim==3.8.3
