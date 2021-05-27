@@ -1,3 +1,9 @@
+"""
+
+Text clustering algorithms
+
+"""
+
 import numpy as np
 
 from gensim import corpora
@@ -110,6 +116,64 @@ class GibbsSamplingDirichletMultinomialModeling:
             Index of randomly selected output
         """
         return [i for i, entry in enumerate(np.random.multinomial(1, self.probability_vector)) if entry != 0][0]
+
+    def add_cluster(self,
+                    cluster_word_count: List[int],
+                    cluster_document_count: List[int],
+                    cluster_word_distribution: List[dict]
+                    ):
+        """
+        Add new cluster information
+
+        :param cluster_word_count: List[int]
+            Word counting of each new cluster
+
+        :param cluster_document_count: List[int]
+             Document counting of each new cluster
+
+        :param cluster_word_distribution: List[dict]
+            Word distribution of each new cluster
+        """
+        self.cluster_word_count.extend(cluster_word_count)
+        self.cluster_document_count.extend(cluster_document_count)
+        self.cluster_word_distribution.extend(cluster_word_distribution)
+        self.n_documents = sum(self.cluster_document_count)
+        self.n_clusters = len(self.cluster_document_count)
+        _new_vocabulary: List[str] = []
+        for cluster in range(0, self.n_clusters, 1):
+            _new_vocabulary.extend(list(self.cluster_word_distribution[cluster].keys()))
+        self.vocab_size = len(list(set(_new_vocabulary)))
+
+    def adjust_parameters(self, alpha: float, beta: float):
+        """
+        Adjust model specific hyper parameters
+
+        :param alpha: float
+             Probability of joining an empty cluster
+
+        :param beta: float
+             Affinity of a cluster element with same characteristics as other elements
+        """
+        self.alpha = alpha
+        self.beta = beta
+
+    def delete_cluster(self, cluster_labels: List[int]):
+        """
+        Delete cluster information
+
+        :param cluster_labels: List[int]
+            Cluster labels to delete
+        """
+        for cluster in cluster_labels:
+            self.n_clusters -= 1
+            self.n_documents -= self.cluster_document_count[cluster]
+            del self.cluster_word_count[cluster]
+            del self.cluster_document_count[cluster]
+            del self.cluster_word_distribution[cluster]
+        _new_vocabulary: List[str] = []
+        for i in range(0, self.n_clusters, 1):
+            _new_vocabulary.extend(list(self.cluster_word_distribution[i].keys()))
+        self.vocab_size = len(list(set(_new_vocabulary)))
 
     def fit(self, documents: List[List[str]]) -> List[int]:
         """
