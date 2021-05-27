@@ -1,3 +1,9 @@
+"""
+
+Reinforcement Learning Environment using swarm intelligence
+
+"""
+
 import copy
 import io
 import numpy as np
@@ -323,6 +329,18 @@ class SwarmIntelligence:
                 self.output_file_path = '{}/'.format(self.output_file_path)
         self.sampling_function = sampling_function
         self.kwargs: dict = kwargs
+        self.sep: str = self.kwargs.get('sep')
+        self.tokenize: bool = self.kwargs.get('tokenize')
+        self.eval_method: str = self.kwargs.get('eval_method')
+        self.cache_dir: str = self.kwargs.get('cache_dir')
+        self.language_model_path: str = self.kwargs.get('language_model_path')
+        self.sentence_embedding_model_path: str = self.kwargs.get('sentence_embedding_model_path')
+        self.kwargs.pop('sep', None)
+        self.kwargs.pop('tokenize', None)
+        self.kwargs.pop('eval_method', None)
+        self.kwargs.pop('cache_dir', None)
+        self.kwargs.pop('language_model_path', None)
+        self.kwargs.pop('sentence_embedding_model_path', None)
         self._input_manager()
         self.target_labels: List[str] = labels
         self.log: bool = log
@@ -401,14 +419,15 @@ class SwarmIntelligence:
                         if self.text_clustering:
                             self.population[idx] = ClusteringGenerator(predictor=self.features[0],
                                                                        models=self.models,
-                                                                       tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
+                                                                       tokenize=False if self.tokenize else self.tokenize,
                                                                        cloud=self.cloud,
                                                                        df=self.df,
                                                                        train_data_path=self.train_data_file_path,
-                                                                       sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                                       eval_method='c_umass' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
-                                                                       language_model_path=self.kwargs.get('language_model_path'),
-                                                                       sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
+                                                                       sep='\t' if self.sep is None else self.sep,
+                                                                       eval_method='c_umass' if self.eval_method is None else self.eval_method,
+                                                                       language_model_path=self.language_model_path,
+                                                                       sentence_embedding_model_path=self.sentence_embedding_model_path,
+                                                                       **self.kwargs
                                                                        ).generate_model()
                         else:
                             if self.deep_learning:
@@ -429,25 +448,27 @@ class SwarmIntelligence:
                                                                         models=self.models,
                                                                         hidden_layer_size=_hidden_layer_size,
                                                                         hidden_layer_size_category=self.warm_start_constant_category,
-                                                                        sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                                        cache_dir=self.kwargs.get('cache_dir')
+                                                                        sep='\t' if self.sep is None else self.sep,
+                                                                        cache_dir=self.cache_dir,
+                                                                        **self.kwargs
                                                                         ).generate_model()
                             else:
-                                self.population[idx] = ModelGeneratorReg(models=self.models).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models).generate_model()
+                                self.population[idx] = ModelGeneratorReg(models=self.models, **self.kwargs).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models, **self.kwargs).generate_model()
                     else:
                         if self.verbose:
                             Log(write=self.log, logger_file_path=self.output_file_path).log('Adjust individual {}'.format(idx))
                         if self.text_clustering:
                             self.population[idx] = ClusteringGenerator(predictor=self.features[0],
                                                                        models=self.models,
-                                                                       tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
+                                                                       tokenize=False if self.tokenize else self.tokenize,
                                                                        cloud=self.cloud,
                                                                        df=self.df,
                                                                        train_data_path=self.train_data_file_path,
-                                                                       sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                                       eval_method='c_umass' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
-                                                                       language_model_path=self.kwargs.get('language_model_path'),
-                                                                       sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
+                                                                       sep='\t' if self.sep is None else self.sep,
+                                                                       eval_method='c_umass' if self.eval_method is None else self.eval_method,
+                                                                       language_model_path=self.language_model_path,
+                                                                       sentence_embedding_model_path=self.sentence_embedding_model_path,
+                                                                       **self.kwargs
                                                                        ).generate_model()
                             self.population[idx].generate_params(param_rate=self.adjustment_rate)
                         else:
@@ -474,16 +495,20 @@ class SwarmIntelligence:
                                                                         input_param=self.population[idx].model_param,
                                                                         hidden_layer_size=self.population[idx].hidden_layer_size,
                                                                         hidden_layer_size_category=self.warm_start_constant_category,
-                                                                        sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                                        cache_dir=self.kwargs.get('cache_dir')
+                                                                        sep='\t' if self.sep is None else self.sep,
+                                                                        cache_dir=self.cache_dir,
+                                                                        **self.kwargs
                                                                         ).generate_model()
                                 self.population[idx].generate_params(param_rate=self.adjustment_rate)
                             else:
                                 self.population[idx] = ModelGeneratorReg(reg_params=self.population[self.best_global_idx].model_param,
                                                                          models=self.models,
-                                                                         model_name=self.models[0]
-                                                                         ).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[self.best_global_idx].model_param, models=self.models).generate_model()
+                                                                         model_name=self.models[0],
+                                                                         **self.kwargs
+                                                                         ).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[self.best_global_idx].model_param, models=self.models, **self.kwargs).generate_model()
                                 self.population[idx].generate_params(param_rate=self.adjustment_rate)
+                    if self.verbose:
+                        Log(write=self.log, logger_file_path=self.output_file_path).log('Hyperparameter setting of individual {}: {}'.format(idx, self.population[idx].model_param))
                 elif self.mode.find('feature') >= 0:
                     _new_features: List[str] = []
                     _feature_pool: List[str] = list(set(self.feature_pairs[np.random.choice(a=[self.best_global_idx, self.best_local_idx])]))
@@ -511,6 +536,8 @@ class SwarmIntelligence:
                         elif self.mode == 'feature_selector':
                             _new_features.append(feature)
                     self.feature_pairs[idx] = copy.deepcopy(_new_features)
+                    if self.verbose:
+                        Log(write=self.log, logger_file_path=self.output_file_path).log('Feature setting of individual {}: {}'.format(idx, self.feature_pairs[idx]))
 
     def _collect_meta_data(self, current_adjustment: bool, idx: int = None):
         """
@@ -666,8 +693,9 @@ class SwarmIntelligence:
                                         hidden_layer_size=self.warm_start_constant_hidden_layers,
                                         hidden_layer_size_category=self.warm_start_constant_category,
                                         cloud=self.cloud,
-                                        sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                        cache_dir=self.kwargs.get('cache_dir')
+                                        sep='\t' if self.sep is None else self.sep,
+                                        cache_dir=self.cache_dir,
+                                        **self.kwargs
                                         ).generate_model()
             _net_gen.train()
             self.model = _net_gen.model
@@ -677,25 +705,28 @@ class SwarmIntelligence:
                                                    models=self.models,
                                                    model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
                                                    cluster_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
-                                                   tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
+                                                   tokenize=False if self.tokenize else self.tokenize,
                                                    cloud=self.cloud,
                                                    df=self.df,
                                                    train_data_path=self.train_data_file_path,
-                                                   sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                   eval_method='c_umass' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
-                                                   language_model_path=self.kwargs.get('language_model_path'),
-                                                   sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
+                                                   sep='\t' if self.sep is None else self.sep,
+                                                   eval_method='c_umass' if self.eval_method is None else self.eval_method,
+                                                   language_model_path=self.language_model_path,
+                                                   sentence_embedding_model_path=self.sentence_embedding_model_path,
+                                                   **self.kwargs
                                                    ).generate_model()
                 _cluster_gen.train()
                 self.model = _cluster_gen.model
             else:
                 if self.target_type == 'reg':
                     _model_gen = ModelGeneratorReg(reg_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
-                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx]
+                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
+                                                   **self.kwargs
                                                    ).generate_model()
                 else:
                     _model_gen = ModelGeneratorClf(clf_params=self.current_adjustment_meta_data['param'][self.best_global_idx],
-                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx]
+                                                   model_name=self.current_adjustment_meta_data['model_name'][self.best_global_idx],
+                                                   **self.kwargs
                                                    ).generate_model()
                 _model_gen.train(x=copy.deepcopy(self.data_set.get('x_train').values),
                                  y=copy.deepcopy(self.data_set.get('y_train').values),
@@ -1021,14 +1052,15 @@ class SwarmIntelligence:
             if self.warm_start:
                 _warm_model = ClusteringGenerator(predictor=self.features[0],
                                                   models=self.models,
-                                                  tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
+                                                  tokenize=False if self.tokenize else self.tokenize,
                                                   cloud=self.cloud,
                                                   df=self.df,
                                                   train_data_path=self.train_data_file_path,
-                                                  sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                  eval_method='c_umass' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
-                                                  language_model_path=self.kwargs.get('language_model_path'),
-                                                  sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
+                                                  sep='\t' if self.sep is None else self.sep,
+                                                  eval_method='c_umass' if self.eval_method is None else self.eval_method,
+                                                  language_model_path=self.language_model_path,
+                                                  sentence_embedding_model_path=self.sentence_embedding_model_path,
+                                                  **self.kwargs
                                                   ).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.evolution_continue:
@@ -1049,23 +1081,26 @@ class SwarmIntelligence:
                     Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(p))
                 self.population.append(ClusteringGenerator(predictor=self.features[0],
                                                            models=self.models,
-                                                           tokenize=False if self.kwargs.get('tokenize') else self.kwargs.get('tokenize'),
+                                                           tokenize=False if self.tokenize else self.tokenize,
                                                            cloud=self.cloud,
                                                            df=self.df,
                                                            train_data_path=self.train_data_file_path,
-                                                           sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                           eval_method='c_umass' if self.kwargs.get('eval_method') is None else self.kwargs.get('eval_method'),
-                                                           language_model_path=self.kwargs.get('language_model_path'),
-                                                           sentence_embedding_model_path=self.kwargs.get('sentence_embedding_model_path')
+                                                           sep='\t' if self.sep is None else self.sep,
+                                                           eval_method='c_umass' if self.eval_method is None else self.eval_method,
+                                                           language_model_path=self.language_model_path,
+                                                           sentence_embedding_model_path=self.sentence_embedding_model_path,
+                                                           **self.kwargs
                                                            ).generate_model()
                                        )
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Hyperparameter setting of individual {}: {}'.format(p, self.population[p].model_param))
         else:
             _warm_model: dict = {}
             if self.warm_start:
                 if self.target_type == 'reg':
-                    _warm_model = ModelGeneratorReg(models=self.models).get_model_parameter()
+                    _warm_model = ModelGeneratorReg(models=self.models, **self.kwargs).get_model_parameter()
                 else:
-                    _warm_model = ModelGeneratorClf(models=self.models).get_model_parameter()
+                    _warm_model = ModelGeneratorClf(models=self.models, **self.kwargs).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.mode.find('feature') >= 0:
                     if self.verbose:
@@ -1088,9 +1123,11 @@ class SwarmIntelligence:
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(p))
                 if self.target_type == 'reg':
-                    self.population.append(ModelGeneratorReg(reg_params=_params, models=self.models).generate_model())
+                    self.population.append(ModelGeneratorReg(reg_params=_params, models=self.models, **self.kwargs).generate_model())
                 else:
-                    self.population.append(ModelGeneratorClf(clf_params=_params, models=self.models).generate_model())
+                    self.population.append(ModelGeneratorClf(clf_params=_params, models=self.models, **self.kwargs).generate_model())
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Hyperparameter setting of individual {}: {}'.format(p, self.population[p].model_param))
 
     def _populate_networks(self):
         """
@@ -1105,6 +1142,8 @@ class SwarmIntelligence:
                 while _p <= _n_vanilla_networks_per_model:
                     if self.evolution_continue:
                         _model_param: dict = self.final_adjustment[str(_p)].get('param')
+                    if self.verbose:
+                        Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(_p))
                     _p += 1
                     self.population.append(NetworkGenerator(target=self.target,
                                                             predictors=self.features,
@@ -1122,10 +1161,13 @@ class SwarmIntelligence:
                                                             input_param=_model_param,
                                                             hidden_layer_size=self.warm_start_constant_hidden_layers,
                                                             hidden_layer_size_category=self.warm_start_constant_category,
-                                                            sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                            cache_dir=self.kwargs.get('cache_dir')
+                                                            sep='\t' if self.sep is None else self.sep,
+                                                            cache_dir=self.cache_dir,
+                                                            **self.kwargs
                                                             ).get_vanilla_model()
                                            )
+                    if self.verbose:
+                        Log(write=self.log, logger_file_path=self.output_file_path).log('Hyperparameter setting of individual {}: {}'.format(_p - 1, self.population[_p - 1].model_param))
         else:
             _n_vanilla_networks: int = 0
         for p in range(0, self.pop_size - _n_vanilla_networks - 1, 1):
@@ -1158,10 +1200,13 @@ class SwarmIntelligence:
                                                           input_param=_model_param,
                                                           hidden_layer_size=self.warm_start_constant_hidden_layers,
                                                           hidden_layer_size_category=self.warm_start_constant_category,
-                                                          sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                          cache_dir=self.kwargs.get('cache_dir')
+                                                          sep='\t' if self.sep is None else self.sep,
+                                                          cache_dir=self.cache_dir,
+                                                          **self.kwargs
                                                           )
             self.population.append(_net_gen.generate_model())
+            if self.verbose:
+                Log(write=self.log, logger_file_path=self.output_file_path).log('Hyperparameter setting of individual {}: {}'.format(p, self.population[p].model_param))
 
     def _post_processing(self):
         """
@@ -1410,7 +1455,7 @@ class SwarmIntelligence:
             self._select_best_individual()
             if _evolve:
                 self._adjust()
-            if self.checkpoint and _evolve:
+            if self.checkpoint and _evolve and self.mode.find('feature') < 0:
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Save checkpoint ...')
                 self._save_checkpoint()
