@@ -1,3 +1,9 @@
+"""
+
+Text clustering model generator
+
+"""
+
 import copy
 import numpy as np
 import re
@@ -42,7 +48,8 @@ class Clustering:
                  train_data_path: str = None,
                  test_data_path: str = None,
                  validation_data_path: str = None,
-                 seed: int = 1234
+                 seed: int = 1234,
+                 **kwargs
                  ):
         """
         :param cluster_params: dict
@@ -62,6 +69,9 @@ class Clustering:
 
         :param seed: int
             Seed
+
+        :param kwargs: dict
+            Key-word arguments
         """
         self.cluster_params: dict = {} if cluster_params is None else cluster_params
         self.seed: int = seed
@@ -72,6 +82,7 @@ class Clustering:
         self.train_data_path: str = train_data_path
         self.test_data_path: str = test_data_path
         self.validation_data_path: str = validation_data_path
+        self.kwargs: dict = kwargs
 
     def gibbs_sampling_dirichlet_multinomial_modeling(self) -> GibbsSamplingDirichletMultinomialModeling:
         """
@@ -88,18 +99,25 @@ class Clustering:
             beta=0.5 if self.cluster_params.get('beta') is None else self.cluster_params.get('beta'),
             )
 
-    @staticmethod
-    def gibbs_sampling_dirichlet_multinomial_modeling_param():
+    def gibbs_sampling_dirichlet_multinomial_modeling_param(self):
         """
         Generate Gibbs Sampling Dirichlet Multinomial Modeling clustering parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(n_clusters=np.random.randint(low=4, high=30),
-                    n_iterations=np.random.randint(low=5, high=50),
-                    alpha=np.random.uniform(low=0.05, high=0.95),
-                    beta=np.random.uniform(low=0.05, high=0.95),
+        return dict(n_clusters=np.random.randint(low=4 if self.kwargs.get('n_clusters_low') is None else self.kwargs.get('n_clusters_low'),
+                                                 high=30 if self.kwargs.get('n_clusters_high') is None else self.kwargs.get('n_clusters_high')
+                                                 ),
+                    n_iterations=np.random.randint(low=5 if self.kwargs.get('n_iterations_low') is None else self.kwargs.get('n_iterations_low'),
+                                                   high=50 if self.kwargs.get('n_iterations_high') is None else self.kwargs.get('n_iterations_high')
+                                                   ),
+                    alpha=np.random.uniform(low=0.05 if self.kwargs.get('alpha_low') is None else self.kwargs.get('alpha_low'),
+                                            high=0.95 if self.kwargs.get('alpha_high') is None else self.kwargs.get('alpha_high')
+                                            ),
+                    beta=np.random.uniform(low=0.05 if self.kwargs.get('beta_low') is None else self.kwargs.get('beta_low'),
+                                           high=0.95 if self.kwargs.get('beta_high') is None else self.kwargs.get('beta_high')
+                                           ),
                     )
 
     def latent_dirichlet_allocation(self) -> LatentDirichletAllocation:
@@ -119,16 +137,21 @@ class Clustering:
                                              'decay') is None else self.cluster_params.get('decay'),
                                          )
 
-    @staticmethod
-    def latent_dirichlet_allocation_param() -> dict:
+    def latent_dirichlet_allocation_param(self) -> dict:
         """
         Generate Latent Dirichlet Allocation clustering parameter configuration randomly
 
         :return: dict
         """
-        return dict(n_clusters=np.random.randint(low=5, high=30),
-                    n_iterations=np.random.randint(low=5, high=100),
-                    decay=np.random.uniform(low=0.1, high=1.0)
+        return dict(n_clusters=np.random.randint(low=4 if self.kwargs.get('n_clusters_low') is None else self.kwargs.get('n_clusters_low'),
+                                                 high=30 if self.kwargs.get('n_clusters_high') is None else self.kwargs.get('n_clusters_high')
+                                                 ),
+                    n_iterations=np.random.randint(low=5 if self.kwargs.get('n_iterations_low') is None else self.kwargs.get('n_iterations_low'),
+                                                   high=50 if self.kwargs.get('n_iterations_high') is None else self.kwargs.get('n_iterations_high')
+                                                   ),
+                    decay=np.random.uniform(low=0.1 if self.kwargs.get('decay_low') is None else self.kwargs.get('decay_low'),
+                                            high=1.0 if self.kwargs.get('decay_high') is None else self.kwargs.get('decay_high')
+                                            )
                     )
 
     def latent_semantic_indexing(self) -> LatentSemanticIndexing:
@@ -151,17 +174,22 @@ class Clustering:
                                           'training_algorithm'),
                                       )
 
-    @staticmethod
-    def latent_semantic_indexing_param() -> dict:
+    def latent_semantic_indexing_param(self) -> dict:
         """
         Generate Latent Semantic Indexing clustering parameter configuration randomly
 
         :return: dict
         """
-        return dict(n_clusters=np.random.randint(low=5, high=30),
-                    n_iterations=np.random.randint(low=5, high=100),
-                    decay=np.random.uniform(low=0.1, high=1.0),
-                    training_algorithm=np.random.choice(a=['one_pass', 'multi_pass_stochastic'])
+        return dict(n_clusters=np.random.randint(low=4 if self.kwargs.get('n_clusters_low') is None else self.kwargs.get('n_clusters_low'),
+                                                 high=30 if self.kwargs.get('n_clusters_high') is None else self.kwargs.get('n_clusters_high')
+                                                 ),
+                    n_iterations=np.random.randint(low=5 if self.kwargs.get('n_iterations_low') is None else self.kwargs.get('n_iterations_low'),
+                                                   high=50 if self.kwargs.get('n_iterations_high') is None else self.kwargs.get('n_iterations_high')
+                                                   ),
+                    decay=np.random.uniform(low=0.1 if self.kwargs.get('decay_low') is None else self.kwargs.get('decay_low'),
+                                            high=1.0 if self.kwargs.get('decay_high') is None else self.kwargs.get('decay_high')
+                                            ),
+                    training_algorithm=np.random.choice(a=['one_pass', 'multi_pass_stochastic'] if self.kwargs.get('training_algorithm_choice') is None else self.kwargs.get('training_algorithm_choice'))
                     )
 
     def non_negative_matrix_factorization(self) -> NonNegativeMatrixFactorization:
@@ -178,15 +206,18 @@ class Clustering:
                                                   'n_iterations') is None else self.cluster_params.get('n_iterations'),
                                               )
 
-    @staticmethod
-    def non_negative_matrix_factorization_param() -> dict:
+    def non_negative_matrix_factorization_param(self) -> dict:
         """
         Generate Non-Negative Matrix Factorization clustering parameter configuration randomly
 
         :return: dict
         """
-        return dict(n_clusters=np.random.randint(low=5, high=30),
-                    n_iterations=np.random.randint(low=5, high=100)
+        return dict(n_clusters=np.random.randint(low=4 if self.kwargs.get('n_clusters_low') is None else self.kwargs.get('n_clusters_low'),
+                                                 high=30 if self.kwargs.get('n_clusters_high') is None else self.kwargs.get('n_clusters_high')
+                                                 ),
+                    n_iterations=np.random.randint(low=5 if self.kwargs.get('n_iterations_low') is None else self.kwargs.get('n_iterations_low'),
+                                                   high=50 if self.kwargs.get('n_iterations_high') is None else self.kwargs.get('n_iterations_high')
+                                                   )
                     )
 
     def self_taught_short_text_clustering(self) -> STC:
@@ -219,18 +250,27 @@ class Clustering:
                        'update_interval') is None else self.cluster_params.get('update_interval')
                    )
 
-    @staticmethod
-    def self_taught_short_text_clustering_param() -> dict:
+    def self_taught_short_text_clustering_param(self) -> dict:
         """
         Generate Self-Taught Short Text Clustering parameter configuration randomly
 
         :return: dict
         """
-        return dict(n_clusters=np.random.randint(low=5, high=30),
-                    n_iterations=np.random.randint(low=5, high=100),
-                    max_iterations=np.random.randint(low=1000, high=5000),
-                    update_interval=np.random.randint(low=50, high=1000),
-                    alpha=np.random.uniform(low=0.1, high=1.0),
+        return dict(n_clusters=np.random.randint(low=4 if self.kwargs.get('n_clusters_low') is None else self.kwargs.get('n_clusters_low'),
+                                                 high=30 if self.kwargs.get('n_clusters_high') is None else self.kwargs.get('n_clusters_high')
+                                                 ),
+                    n_iterations=np.random.randint(low=5 if self.kwargs.get('n_iterations_low') is None else self.kwargs.get('n_iterations_low'),
+                                                   high=100 if self.kwargs.get('n_iterations_high') is None else self.kwargs.get('n_iterations_high')
+                                                   ),
+                    max_iterations=np.random.randint(low=1000 if self.kwargs.get('max_iterations_low') is None else self.kwargs.get('max_iterations_low'),
+                                                     high=5000 if self.kwargs.get('max_iterations_high') is None else self.kwargs.get('max_iterations_high')
+                                                     ),
+                    update_interval=np.random.randint(low=50 if self.kwargs.get('update_interval_low') is None else self.kwargs.get('update_interval_low'),
+                                                      high=1000 if self.kwargs.get('update_interval_high') is None else self.kwargs.get('update_interval_high')
+                                                      ),
+                    alpha=np.random.uniform(low=0.1 if self.kwargs.get('alpha_low') is None else self.kwargs.get('alpha_low'),
+                                            high=1.0 if self.kwargs.get('alpha_high') is None else self.kwargs.get('alpha_high')
+                                            )
                     )
 
 
@@ -255,7 +295,8 @@ class ClusteringGenerator(Clustering):
                  sentence_embedding_model_path: str = None,
                  language_model_path: str = None,
                  top_n_words: int = 10,
-                 seed: int = 1234
+                 seed: int = 1234,
+                 **kwargs
                  ):
         """
         :param predictor: str
@@ -314,13 +355,17 @@ class ClusteringGenerator(Clustering):
 
         :param seed: int
             Seed
+
+        :param kwargs: dict
+            Key-word arguments
         """
         super(ClusteringGenerator, self).__init__(cluster_params=cluster_params,
                                                   df=df,
                                                   train_data_path=train_data_path,
                                                   test_data_path=test_data_path,
                                                   validation_data_path=validation_data_path,
-                                                  seed=seed
+                                                  seed=seed,
+                                                  **kwargs
                                                   )
         if self.df is None and self.train_data_path is None:
             raise ClusteringException('No training data found')
@@ -473,7 +518,7 @@ class ClusteringGenerator(Clustering):
         else:
             _model = copy.deepcopy(CLUSTER_ALGORITHMS.get(self.model_name))
         if len(self.cluster_params.keys()) == 0:
-            self.model_param = getattr(Clustering(), '{}_param'.format(_model))()
+            self.model_param = getattr(Clustering(**self.kwargs), '{}_param'.format(_model))()
             self.cluster_params = copy.deepcopy(self.model_param)
             _idx: int = 0 if len(self.model_param_mutated.keys()) == 0 else len(self.model_param_mutated.keys()) + 1
             self.model_param_mutated.update({str(_idx): {copy.deepcopy(self.model_name): {}}})
@@ -483,7 +528,7 @@ class ClusteringGenerator(Clustering):
         else:
             self.model_param = copy.deepcopy(self.cluster_params)
         self.model_param_mutation = 'params'
-        self.model = copy.deepcopy(getattr(Clustering(cluster_params=self.cluster_params), _model)())
+        self.model = copy.deepcopy(getattr(Clustering(cluster_params=self.cluster_params, **self.kwargs), _model)())
         return self
 
     def generate_params(self, param_rate: float = 0.1, force_param: dict = None) -> object:
@@ -506,7 +551,7 @@ class ClusteringGenerator(Clustering):
                 _rate: float = param_rate
             else:
                 _rate: float = 0.1
-        _params: dict = getattr(Clustering(), '{}_param'.format(CLUSTER_ALGORITHMS.get(self.model_name)))()
+        _params: dict = getattr(Clustering(**self.kwargs), '{}_param'.format(CLUSTER_ALGORITHMS.get(self.model_name)))()
         _force_param: dict = {} if force_param is None else force_param
         _param_choices: List[str] = [p for p in _params.keys() if p not in _force_param.keys()]
         _gen_n_params: int = round(len(_params.keys()) * _rate)
@@ -525,7 +570,7 @@ class ClusteringGenerator(Clustering):
         self.model_param_mutation = 'new_model'
         self.model_param = copy.deepcopy(_new_model_params)
         self.cluster_params = self.model_param
-        self.model = getattr(Clustering(cluster_params=self.cluster_params), CLUSTER_ALGORITHMS.get(self.model_name))()
+        self.model = getattr(Clustering(cluster_params=self.cluster_params, **self.kwargs), CLUSTER_ALGORITHMS.get(self.model_name))()
         return self
 
     def get_model_parameter(self) -> dict:
@@ -541,8 +586,8 @@ class ClusteringGenerator(Clustering):
         else:
             for model in self.models:
                 if model in CLUSTER_ALGORITHMS.keys():
-                    _model = getattr(Clustering(), CLUSTER_ALGORITHMS.get(model))()
-                    _param: dict = getattr(Clustering(), '{}_param'.format(CLUSTER_ALGORITHMS.get(model)))()
+                    _model = getattr(Clustering(**self.kwargs), CLUSTER_ALGORITHMS.get(model))()
+                    _param: dict = getattr(Clustering(**self.kwargs), '{}_param'.format(CLUSTER_ALGORITHMS.get(model)))()
                     _model_random_param: dict = _model.__dict__.items()
                     for param in _model_random_param:
                         if param[0] in _param.keys():

@@ -1,3 +1,9 @@
+"""
+
+Neural network generator using PyTorch deep learning framework
+
+"""
+
 import copy
 import numpy as np
 import pandas as pd
@@ -235,6 +241,7 @@ class NeuralNetwork:
         self.sequential_type: str = sequential_type
         self.cache_dir: str = cache_dir
         self.seed: int = 1234 if seed <= 0 else seed
+        self.kwargs: dict = kwargs
 
     def attention_network(self) -> Attention:
         """
@@ -404,14 +411,25 @@ class NeuralNetwork:
             Parameter config
         """
         _model_type: str = np.random.choice(a=list(TRANSFORMER.keys())) if self.cache_dir is None else self.cache_dir.split('/')[-2].split('-')[0]
-        _num_attention_heads: int = np.random.randint(low=2, high=20)
-        _hidden_size: int = _num_attention_heads * np.random.randint(low=100, high=1000)
-        _batch_size: int = int(np.random.choice(a=HappyLearningUtils().geometric_progression(n=6))) if torch.cuda.is_available() else int(np.random.choice(a=HappyLearningUtils().geometric_progression(n=8)))
+        _num_attention_heads: int = np.random.randint(low=2 if self.kwargs.get('num_attention_heads_low') is None else self.kwargs.get('num_attention_heads_low'),
+                                                      high=20 if self.kwargs.get('num_attention_heads_high') is None else self.kwargs.get('num_attention_heads_high')
+                                                      )
+        _hidden_size: int = _num_attention_heads * np.random.randint(low=100 if self.kwargs.get('hidden_size_low') is None else self.kwargs.get('hidden_size_low'),
+                                                                     high=1000 if self.kwargs.get('hidden_size_high') is None else self.kwargs.get('hidden_size_high')
+                                                                     )
+        if self.kwargs.get('batch_size_choice') is None:
+            _batch_size: int = int(np.random.choice(a=HappyLearningUtils().geometric_progression(n=6))) if torch.cuda.is_available() else int(np.random.choice(a=HappyLearningUtils().geometric_progression(n=8)))
+        else:
+            _batch_size: int = int(np.random.choice(a=self.kwargs.get('batch_size_choice')))
         return dict(model_type=_model_type,
                     model_name=TRANSFORMER.get(_model_type) if self.cache_dir is None else self.cache_dir,
-                    epoch=np.random.randint(low=1, high=20),
+                    epoch=np.random.randint(low=1 if self.kwargs.get('epoch_low') is None else self.kwargs.get('epoch_low'),
+                                            high=20 if self.kwargs.get('epoch_high') is None else self.kwargs.get('epoch_high')
+                                            ),
                     batch_size=_batch_size,
-                    learning_rate=np.random.uniform(low=0.00001, high=0.4),
+                    learning_rate=np.random.uniform(low=0.00001 if self.kwargs.get('learning_rate_low') is None else self.kwargs.get('learning_rate_low'),
+                                                    high=0.5 if self.kwargs.get('learning_rate_high') is None else self.kwargs.get('learning_rate_high')
+                                                    ),
                     #adafactor_beta1=np.random.uniform(low=0.0, high=1),
                     #adafactor_clip_threshold=np.random.uniform(low=0.001, high=1),
                     #adafactor_decay_rate=np.random.uniform(low=-0.001, high=0.999),
@@ -419,28 +437,56 @@ class NeuralNetwork:
                     #adafactor_relative_step=False,#np.random.choice(a=[False, True]),
                     #adafactor_scale_parameter=np.random.choice(a=[False, True]),
                     #adafactor_warmup_init=False,#np.random.choice(a=[False, True]),
-                    adam_epsilon=np.random.uniform(low=1e-10, high=1e-5),
-                    cosine_schedule_num_cycles=np.random.uniform(low=0.3, high=0.7),
+                    adam_epsilon=np.random.uniform(low=1e-10 if self.kwargs.get('adam_epsilon_low') is None else self.kwargs.get('adam_epsilon_low'),
+                                                   high=1e-5 if self.kwargs.get('adam_epsilon_high') is None else self.kwargs.get('adam_epsilon_high')
+                                                   ),
+                    cosine_schedule_num_cycles=np.random.uniform(low=0.3 if self.kwargs.get('cosine_schedule_num_cycles_low') is None else self.kwargs.get('cosine_schedule_num_cycles_low'),
+                                                                 high=0.7 if self.kwargs.get('cosine_schedule_num_cycles_high') is None else self.kwargs.get('cosine_schedule_num_cycles_high')
+                                                                 ),
                     dynamic_quantize=False,#np.random.choice(a=[False, True]),
-                    early_stopping_consider_epochs=np.random.choice(a=[False, True]),
-                    use_early_stopping=np.random.choice(a=[False, True]),
-                    early_stopping_delta=np.random.uniform(low=0, high=0.3),
-                    early_stopping_patience=np.random.randint(low=3, high=10),
-                    attention_probs_dropout_prob=np.random.uniform(low=0.05, high=0.95),
+                    early_stopping_consider_epochs=np.random.choice(a=[False, True] if self.kwargs.get('early_stopping_consider_epochs_choice') is None else self.kwargs.get('early_stopping_consider_epochs_choice')),
+                    use_early_stopping=np.random.choice(a=[False, True] if self.kwargs.get('use_early_stopping_choice') is None else self.kwargs.get('use_early_stopping_choice')),
+                    early_stopping_delta=np.random.uniform(low=0 if self.kwargs.get('early_stopping_delta_low') is None else self.kwargs.get('early_stopping_delta_low'),
+                                                           high=0.3 if self.kwargs.get('early_stopping_delta_high') is None else self.kwargs.get('early_stopping_delta_high')
+                                                           ),
+                    early_stopping_patience=np.random.randint(low=3 if self.kwargs.get('early_stopping_patience_low') is None else self.kwargs.get('early_stopping_patience_low'),
+                                                              high=10 if self.kwargs.get('early_stopping_patience_high') is None else self.kwargs.get('early_stopping_patience_high')
+                                                              ),
+                    attention_probs_dropout_prob=np.random.uniform(low=0.05 if self.kwargs.get('attention_probs_dropout_prob_low') is None else self.kwargs.get('attention_probs_dropout_prob_low'),
+                                                                   high=0.95 if self.kwargs.get('attention_probs_dropout_prob_high') is None else self.kwargs.get('attention_probs_dropout_prob_high')
+                                                                   ),
                     hidden_size=_hidden_size,
-                    hidden_dropout_prob=np.random.uniform(low=0.05, high=0.95),
+                    hidden_dropout_prob=np.random.uniform(low=0.05 if self.kwargs.get('hidden_dropout_prob_low') is None else self.kwargs.get('hidden_dropout_prob_low'),
+                                                          high=0.95 if self.kwargs.get('hidden_dropout_prob_high') is None else self.kwargs.get('hidden_dropout_prob_high')
+                                                          ),
                     gradient_accumulation_steps=1,#np.random.randint(low=1, high=3),
-                    initializer_range=np.random.uniform(low=0.05, high=0.95),
-                    layer_norm_eps=np.random.uniform(low=0.05, high=0.5),
+                    initializer_range=np.random.uniform(low=0.05 if self.kwargs.get('initializer_range_low') is None else self.kwargs.get('initializer_range_low'),
+                                                        high=0.95 if self.kwargs.get('initializer_range_high') is None else self.kwargs.get('initializer_range_high')
+                                                        ),
+                    layer_norm_eps=np.random.uniform(low=0.05 if self.kwargs.get('layer_norm_eps_low') is None else self.kwargs.get('layer_norm_eps_low'),
+                                                     high=0.5 if self.kwargs.get('layer_norm_eps_high') is None else self.kwargs.get('layer_norm_eps_high')
+                                                     ),
                     num_attention_heads=_num_attention_heads,
-                    num_hidden_layers=np.random.randint(low=2, high=30),
-                    warmup_ratio=np.random.uniform(low=0.03, high=0.15),
+                    num_hidden_layers=np.random.randint(low=2 if self.kwargs.get('num_hidden_layers_low') is None else self.kwargs.get('num_hidden_layers_low'),
+                                                        high=30 if self.kwargs.get('num_hidden_layers_high') is None else self.kwargs.get('num_hidden_layers_high')
+                                                        ),
+                    warmup_ratio=np.random.uniform(low=0.03 if self.kwargs.get('warmup_ratio_low') is None else self.kwargs.get('warmup_ratio_low'),
+                                                   high=0.15 if self.kwargs.get('warmup_ratio_high') is None else self.kwargs.get('warmup_ratio_high')
+                                                   ),
                     optimizer='AdamW',#np.random.choice(a=['AdamW', 'Adafactor']),
-                    scheduler='linear_schedule_with_warmup',#np.random.choice(a=['constant_schedule', 'constant_schedule_with_warmup', 'linear_schedule_with_warmup', 'cosine_schedule_with_warmup', 'cosine_with_hard_restarts_schedule_with_warmup', 'polynomial_decay_schedule_with_warmup']),
-                    polynomial_decay_schedule_lr_end=np.random.uniform(low=1e-8, high=1e-4),
-                    polynomial_decay_schedule_power=np.random.uniform(low=0.5, high=1.0),
-                    max_grad_norm=np.random.uniform(low=0.01, high=1.0),
-                    weight_decay=np.random.randint(low=0, high=1)
+                    scheduler=np.random.choice(a=['constant_schedule', 'constant_schedule_with_warmup', 'linear_schedule_with_warmup', 'cosine_schedule_with_warmup', 'cosine_with_hard_restarts_schedule_with_warmup', 'polynomial_decay_schedule_with_warmup'] if self.kwargs.get('scheduler') is None else self.kwargs.get('scheduler')),
+                    polynomial_decay_schedule_lr_end=np.random.uniform(low=1e-8 if self.kwargs.get('polynomial_decay_schedule_lr_end_low') is None else self.kwargs.get('polynomial_decay_schedule_lr_end_low'),
+                                                                       high=1e-4 if self.kwargs.get('polynomial_decay_schedule_lr_end_high') is None else self.kwargs.get('polynomial_decay_schedule_lr_end_high')
+                                                                       ),
+                    polynomial_decay_schedule_power=np.random.uniform(low=0.5 if self.kwargs.get('polynomial_decay_schedule_power_low') is None else self.kwargs.get('polynomial_decay_schedule_power_low'),
+                                                                      high=1.0 if self.kwargs.get('polynomial_decay_schedule_power_high') is None else self.kwargs.get('polynomial_decay_schedule_power_high')
+                                                                      ),
+                    max_grad_norm=np.random.uniform(low=0.01 if self.kwargs.get('max_grad_norm_low') is None else self.kwargs.get('max_grad_norm_low'),
+                                                    high=1.0 if self.kwargs.get('max_grad_norm_high') is None else self.kwargs.get('max_grad_norm_high')
+                                                    ),
+                    weight_decay=np.random.randint(low=0 if self.kwargs.get('weight_decay_low') is None else self.kwargs.get('weight_decay_low'),
+                                                   high=1 if self.kwargs.get('weight_decay_high') is None else self.kwargs.get('weight_decay_high')
+                                                   )
                     )
 
 
@@ -472,7 +518,8 @@ class NetworkGenerator(NeuralNetwork):
                  sep: str = '\t',
                  cloud: str = None,
                  cache_dir: str = None,
-                 seed: int = 1234
+                 seed: int = 1234,
+                 **kwargs
                  ):
         """
         :param models: List[str]
@@ -507,6 +554,9 @@ class NetworkGenerator(NeuralNetwork):
 
         :param seed: int
             Seed
+
+        :param kwargs: dict
+            Key-word arguments
         """
         super().__init__(target=target,
                          predictors=predictors,
@@ -523,7 +573,8 @@ class NetworkGenerator(NeuralNetwork):
                          sequential_type=sequential_type,
                          model_param=model_param,
                          input_param=input_param,
-                         seed=seed
+                         seed=seed,
+                         **kwargs
                          )
         self.id: int = 0
         self.fitness_score: float = 0.0
@@ -1219,7 +1270,8 @@ class NetworkGenerator(NeuralNetwork):
                                                      train_data_path=self.train_data_path,
                                                      test_data_path=self.test_data_path,
                                                      validation_data_path=self.validation_data_path,
-                                                     model_param=self.model_param
+                                                     model_param=self.model_param,
+                                                     **self.kwargs
                                                      ),
                                        '{}_param'.format(_model)
                                        )()
@@ -1254,7 +1306,8 @@ class NetworkGenerator(NeuralNetwork):
                                            train_data_path=self.train_data_path,
                                            test_data_path=self.test_data_path,
                                            validation_data_path=self.validation_data_path,
-                                           model_param=self.model_param
+                                           model_param=self.model_param,
+                                           **self.kwargs
                                            ),
                              _model
                              )()
@@ -1295,7 +1348,8 @@ class NetworkGenerator(NeuralNetwork):
                                               sequential_type=self.sequential_type,
                                               input_param=self.input_param,
                                               model_param=self.model_param,
-                                              seed=self.seed
+                                              seed=self.seed,
+                                              **self.kwargs
                                               ),
                                 '{}_param'.format(NETWORK_TYPE.get(self.model_name))
                                 )()
@@ -1374,7 +1428,8 @@ class NetworkGenerator(NeuralNetwork):
                                            train_data_path=self.train_data_path,
                                            test_data_path=self.test_data_path,
                                            validation_data_path=self.validation_data_path,
-                                           model_param=self.model_param
+                                           model_param=self.model_param,
+                                           **self.kwargs
                                            ),
                              NETWORK_TYPE.get(self.model_name)
                              )()
@@ -1403,7 +1458,8 @@ class NetworkGenerator(NeuralNetwork):
                                                              y_val=self.y_val,
                                                              train_data_path=self.train_data_path,
                                                              test_data_path=self.test_data_path,
-                                                             validation_data_path=self.validation_data_path
+                                                             validation_data_path=self.validation_data_path,
+                                                             **self.kwargs
                                                              ),
                                                '{}_param'.format(NETWORK_TYPE.get(self.model_name))
                                                )()
@@ -1428,7 +1484,8 @@ class NetworkGenerator(NeuralNetwork):
                                                    train_data_path=self.train_data_path,
                                                    test_data_path=self.test_data_path,
                                                    validation_data_path=self.validation_data_path,
-                                                   model_param=self.model_param
+                                                   model_param=self.model_param,
+                                                   **self.kwargs
                                                    ),
                                      NETWORK_TYPE.get(self.model_name)
                                      )()
@@ -1445,7 +1502,8 @@ class NetworkGenerator(NeuralNetwork):
                                                              y_val=self.y_val,
                                                              train_data_path=self.train_data_path,
                                                              test_data_path=self.test_data_path,
-                                                             validation_data_path=self.validation_data_path
+                                                             validation_data_path=self.validation_data_path,
+                                                             **self.kwargs
                                                              ),
                                                '{}_param'.format(NETWORK_TYPE.get(self.model_name))
                                                )()
@@ -1474,7 +1532,8 @@ class NetworkGenerator(NeuralNetwork):
                                                train_data_path=self.train_data_path,
                                                test_data_path=self.test_data_path,
                                                validation_data_path=self.validation_data_path,
-                                               model_param=self.model_param
+                                               model_param=self.model_param,
+                                               **self.kwargs
                                                ),
                                  NETWORK_TYPE.get(self.model_name)
                                  )()
