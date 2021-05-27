@@ -1,3 +1,9 @@
+"""
+
+Reinforced feature engineering for structured (tabular) data
+
+"""
+
 import dask.dataframe as dd
 import pandas as pd
 

@@ -1,3 +1,9 @@
+"""
+
+Feature tournament for measuring feature importance of structured (tabular) data using shapley additive explanation
+
+"""
+
 import numpy as np
 import dask.dataframe as dd
 import pandas as pd

@@ -1,3 +1,9 @@
+"""
+
+Evaluation metrics of machine learning models (Classification, Regression & Clustering)
+
+"""
+
 import copy
 import itertools
 import numpy as np

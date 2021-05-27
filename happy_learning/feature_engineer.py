@@ -1,3 +1,9 @@
+"""
+
+Feature engineer for structured (tabular) data
+
+"""
+
 import copy
 import dask.dataframe as dd
 import gc

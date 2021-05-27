@@ -1,3 +1,9 @@
+"""
+
+Feature selection of structured (tabular) features
+
+"""
+
 import dask.dataframe as dd
 import os
 import pandas as pd
