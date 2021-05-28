@@ -1,3 +1,9 @@
+"""
+
+Self-taught short text clustering (semi-supervised)
+
+"""
+
 import numpy as np
 import torch
 

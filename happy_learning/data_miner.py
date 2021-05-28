@@ -1,3 +1,9 @@
+"""
+
+Reinforced prototyping of machine learning models (Data Mining)
+
+"""
+
 import dask.dataframe as dd
 import numpy as np
 import os

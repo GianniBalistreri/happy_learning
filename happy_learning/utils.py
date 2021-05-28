@@ -1,3 +1,9 @@
+"""
+
+Happy Learning utility functions
+
+"""
+
 import dask
 import geocoder
 import inspect

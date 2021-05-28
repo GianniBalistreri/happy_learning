@@ -1,3 +1,9 @@
+"""
+
+Text miner for generating categorical and continuous features from structured (tabular) text features
+
+"""
+
 import copy
 import dask.dataframe as dd
 import emoji

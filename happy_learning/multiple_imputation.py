@@ -1,3 +1,9 @@
+"""
+
+Multiple imputation of missing data with missing at random (MAR) pattern
+
+"""
+
 import dask.dataframe as dd
 import pandas as pd
 

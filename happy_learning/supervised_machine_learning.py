@@ -1,3 +1,9 @@
+"""
+
+Supervised machine learning model generator (Classification & Regression)
+
+"""
+
 import copy
 import joblib
 import numpy as np
@@ -261,7 +267,12 @@ class Classification:
     """
     Class for handling classification algorithms
     """
-    def __init__(self, clf_params: dict = None, cpu_cores: int = 0, seed: int = 1234):
+    def __init__(self,
+                 clf_params: dict = None,
+                 cpu_cores: int = 0,
+                 seed: int = 1234,
+                 **kwargs
+                 ):
         """
         :param clf_params: dict
             Pre-configured classification model parameter
@@ -271,6 +282,9 @@ class Classification:
 
         :param seed: int
             Seed
+
+        :param kwargs: dict
+            Key-word arguments
         """
         self.clf_params: dict = {} if clf_params is None else clf_params
         self.seed: int = 1234 if seed <= 0 else seed
@@ -281,6 +295,7 @@ class Classification:
                 self.cpu_cores: int = cpu_cores
             else:
                 self.cpu_cores: int = os.cpu_count() - 1 if os.cpu_count() > 1 else os.cpu_count()
+        self.kwargs: dict = kwargs
 
     def ada_boosting(self) -> AdaBoostClassifier:
         """
@@ -304,8 +319,7 @@ class Classification:
                                   random_state=self.seed
                                   )
 
-    @staticmethod
-    def ada_boosting_param() -> dict:
+    def ada_boosting_param(self) -> dict:
         """
         Generate Ada Boosting classifier parameter configuration randomly
 
@@ -313,8 +327,12 @@ class Classification:
             Parameter config
         """
         return dict(#base_estimator=np.random.choice(a=[None, 'base_decision_tree', 'decision_tree_classifier', 'extra_tree_classifier']),
-                    n_estimators=np.random.randint(low=5, high=500),
-                    learning_rate=np.random.uniform(low=0.01, high=1.0)
+                    n_estimators=np.random.randint(low=5 if self.kwargs.get('n_estimators_low') is None else self.kwargs.get('n_estimators_low'),
+                                                   high=500 if self.kwargs.get('n_estimators_high') is None else self.kwargs.get('n_estimators_high')
+                                                   ),
+                    learning_rate=np.random.uniform(low=0.01 if self.kwargs.get('learning_rate_low') is None else self.kwargs.get('learning_rate_low'),
+                                                    high=1.0 if self.kwargs.get('learning_rate_high') is None else self.kwargs.get('learning_rate_high')
+                                                    )
                     #algorithm=np.random.choice(a=['SAMME', 'SAMME.R'])
                     )
 
@@ -440,32 +458,43 @@ class Classification:
                                   embedding_features=self.clf_params.get('embedding_features')
                                   )
 
-    @staticmethod
-    def cat_boost_param() -> dict:
+    def cat_boost_param(self) -> dict:
         """
         Generate Cat Boosting classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(n_estimators=np.random.randint(low=5, high=100),
-                    learning_rate=np.random.uniform(low=0.01, high=1.0),
-                    l2_leaf_reg=np.random.uniform(low=0.1, high=1.0),
-                    depth=np.random.randint(low=3, high=16),
+        return dict(n_estimators=np.random.randint(low=5 if self.kwargs.get('n_estimators_low') is None else self.kwargs.get('n_estimators_low'),
+                                                   high=100 if self.kwargs.get('n_estimators_high') is None else self.kwargs.get('n_estimators_high')
+                                                   ),
+                    learning_rate=np.random.uniform(low=0.0001 if self.kwargs.get('learning_rate_low') is None else self.kwargs.get('learning_rate_low'),
+                                                    high=0.5 if self.kwargs.get('learning_rate_high') is None else self.kwargs.get('learning_rate_high')
+                                                    ),
+                    l2_leaf_reg=np.random.uniform(low=0.1 if self.kwargs.get('l2_leaf_reg_low') is None else self.kwargs.get('l2_leaf_reg_low'),
+                                                  high=1.0 if self.kwargs.get('l2_leaf_reg_high') is None else self.kwargs.get('l2_leaf_reg_high')
+                                                  ),
+                    depth=np.random.randint(low=3 if self.kwargs.get('depth_low') is None else self.kwargs.get('depth_low'),
+                                            high=16 if self.kwargs.get('depth_high') is None else self.kwargs.get('depth_high')
+                                            ),
                     #sampling_frequency=np.random.choice(a=['PerTree', 'PerTreeLevel']),
                     #sampling_unit=np.random.choice(a=['Object', 'Group']),
-                    grow_policy=np.random.choice(a=['SymmetricTree', 'Depthwise', 'Lossguide']),
-                    min_data_in_leaf=np.random.randint(low=1, high=20),
+                    grow_policy=np.random.choice(a=['SymmetricTree', 'Depthwise', 'Lossguide'] if self.kwargs.get('grow_policy_choice') is None else self.kwargs.get('grow_policy_choice'),),
+                    min_data_in_leaf=np.random.randint(low=1 if self.kwargs.get('min_data_in_leaf_low') is None else self.kwargs.get('min_data_in_leaf_low'),
+                                                       high=20 if self.kwargs.get('min_data_in_leaf_high') is None else self.kwargs.get('min_data_in_leaf_high')
+                                                       ),
                     #max_leaves=np.random.randint(low=10, high=64),
-                    rsm=np.random.uniform(low=0.1, high=1),
+                    rsm=np.random.uniform(low=0.1 if self.kwargs.get('rsm_low') is None else self.kwargs.get('rsm_low'),
+                                          high=1 if self.kwargs.get('rsm_high') is None else self.kwargs.get('rsm_high')
+                                          ),
                     #fold_len_multiplier=np.random.randint(low=2, high=4),
                     #approx_on_full_history=np.random.choice(a=[False, True]),
-                    auto_class_weights=np.random.choice(a=[None, 'Balanced', 'SqrtBalanced']),
+                    auto_class_weights=np.random.choice(a=[None, 'Balanced', 'SqrtBalanced'] if self.kwargs.get('auto_class_weights_choice') is None else self.kwargs.get('auto_class_weights_choice')),
                     #boosting_type=np.random.choice(a=['Ordered', 'Plain']),
                     #score_function=np.random.choice(a=['Cosine', 'L2', 'NewtonCosine', 'NewtonL2']),
                     #model_shrink_mode=np.random.choice(a=['Constant', 'Decreasing']),
                     #border_count=np.random.randint(low=1, high=65535),
-                    feature_border_type=np.random.choice(a=['Median', 'Uniform', 'UniformAndQuantiles', 'MaxLogSum', 'MinEntropy', 'GreedyLogSum'])
+                    feature_border_type=np.random.choice(a=['Median', 'Uniform', 'UniformAndQuantiles', 'MaxLogSum', 'MinEntropy', 'GreedyLogSum'] if self.kwargs.get('feature_border_type_choice') is None else self.kwargs.get('feature_border_type_choice'))
                     )
 
     def extreme_gradient_boosting_tree(self) -> XGBClassifier:
@@ -496,26 +525,47 @@ class Classification:
                              random_state=self.seed
                              )
 
-    @staticmethod
-    def extreme_gradient_boosting_tree_param() -> dict:
+    def extreme_gradient_boosting_tree_param(self) -> dict:
         """
         Generate Extreme Gradient Boosting Decision Tree classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(learning_rate=np.random.uniform(low=0.0001, high=0.5),
-                    n_estimators=np.random.randint(low=5, high=100),
-                    min_samples_split=np.random.randint(low=2, high=6),
-                    min_samples_leaf=np.random.randint(low=1, high=6),
-                    max_depth=np.random.randint(low=3, high=12),
+        return dict(learning_rate=np.random.uniform(low=0.0001 if self.kwargs.get('learning_rate_low') is None else self.kwargs.get('learning_rate_low'),
+                                                    high=0.5 if self.kwargs.get('learning_rate_high') is None else self.kwargs.get('learning_rate_high')
+                                                    ),
+                    n_estimators=np.random.randint(low=5 if self.kwargs.get('n_estimators_low') is None else self.kwargs.get('n_estimators_low'),
+                                                   high=100 if self.kwargs.get('n_estimators_high') is None else self.kwargs.get('n_estimators_high')
+                                                   ),
+                    min_samples_split=np.random.randint(low=2 if self.kwargs.get('min_samples_split_low') is None else self.kwargs.get('min_samples_split_low'),
+                                                        high=6 if self.kwargs.get('min_samples_split_high') is None else self.kwargs.get('min_samples_split_high')
+                                                        ),
+                    min_samples_leaf=np.random.randint(low=1 if self.kwargs.get('min_samples_leaf_low') is None else self.kwargs.get('min_samples_leaf_low'),
+                                                       high=6 if self.kwargs.get('min_samples_leaf_high') is None else self.kwargs.get('min_samples_leaf_high')
+                                                       ),
+                    max_depth=np.random.randint(low=3 if self.kwargs.get('max_depth_low') is None else self.kwargs.get('max_depth_low'),
+                                                high=12 if self.kwargs.get('max_depth_high') is None else self.kwargs.get('max_depth_high')
+                                                ),
                     #booster=np.random.choice(a=['gbtree', 'gblinear']),
-                    gamma=np.random.uniform(low=0.01, high=0.99),
-                    min_child_weight=np.random.randint(low=1, high=12),
-                    reg_alpha=np.random.uniform(low=0.0, high=0.9),
-                    reg_lambda=np.random.uniform(low=0.1, high=1.0),
-                    subsample=np.random.uniform(low=0.0, high=1.0),
-                    colsample_bytree=np.random.uniform(low=0.5, high=0.99),
+                    gamma=np.random.uniform(low=0.01 if self.kwargs.get('gamma_low') is None else self.kwargs.get('gamma_low'),
+                                            high=0.99 if self.kwargs.get('gamma_high') is None else self.kwargs.get('gamma_high')
+                                            ),
+                    min_child_weight=np.random.randint(low=1 if self.kwargs.get('min_child_weight_low') is None else self.kwargs.get('min_child_weight_low'),
+                                                       high=12 if self.kwargs.get('min_child_weight_high') is None else self.kwargs.get('min_child_weight_high')
+                                                       ),
+                    reg_alpha=np.random.uniform(low=0.0 if self.kwargs.get('reg_alpha_low') is None else self.kwargs.get('reg_alpha_low'),
+                                                high=0.9 if self.kwargs.get('reg_alpha_high') is None else self.kwargs.get('reg_alpha_high')
+                                                ),
+                    reg_lambda=np.random.uniform(low=0.1 if self.kwargs.get('reg_lambda_low') is None else self.kwargs.get('reg_lambda_low'),
+                                                 high=1.0 if self.kwargs.get('reg_lambda_high') is None else self.kwargs.get('reg_lambda_high')
+                                                 ),
+                    subsample=np.random.uniform(low=0.0 if self.kwargs.get('subsample_low') is None else self.kwargs.get('subsample_low'),
+                                                high=1.0 if self.kwargs.get('subsample_high') is None else self.kwargs.get('subsample_high')
+                                                ),
+                    colsample_bytree=np.random.uniform(low=0.5 if self.kwargs.get('colsample_bytree_low') is None else self.kwargs.get('colsample_bytree_low'),
+                                                       high=0.99 if self.kwargs.get('colsample_bytree_high') is None else self.kwargs.get('colsample_bytree_high')
+                                                       ),
                     #scale_pos_weight=np.random.uniform(low=0.01, high=1.0),
                     #base_score=np.random.uniform(low=0.01, high=0.99)
                     )
@@ -549,25 +599,42 @@ class Classification:
                                           ccp_alpha=0.0 if self.clf_params.get('ccp_alpha') is None else self.clf_params.get('ccp_alpha')
                                           )
 
-    @staticmethod
-    def gradient_boosting_tree_param() -> dict:
+    def gradient_boosting_tree_param(self) -> dict:
         """
         Generate Gradient Boosting Tree classifier parameter randomly
 
         :return: dict
             Parameter config
         """
-        return dict(learning_rate=np.random.uniform(low=0.0001, high=0.4),
-                    loss=np.random.choice(a=['deviance', 'exponential']),
-                    n_estimators=np.random.randint(low=5, high=100),
-                    subsample=np.random.uniform(low=0.0, high=1.0),
-                    criterion=np.random.choice(a=['friedman_mse', 'mse', 'mae']),
-                    min_samples_split=np.random.randint(low=2, high=6),
-                    min_samples_leaf=np.random.randint(low=1, high=6),
-                    max_depth=np.random.randint(low=3, high=12),
-                    validation_fraction=np.random.uniform(low=0.05, high=0.4),
-                    n_iter_no_change=np.random.randint(low=2, high=10),
-                    ccp_alpha=np.random.uniform(low=0.0, high=1.0)
+        return dict(learning_rate=np.random.uniform(low=0.0001 if self.kwargs.get('learning_rate_low') is None else self.kwargs.get('learning_rate_low'),
+                                                    high=0.5 if self.kwargs.get('learning_rate_high') is None else self.kwargs.get('learning_rate_high')
+                                                    ),
+                    loss=np.random.choice(a=['deviance', 'exponential'] if self.kwargs.get('loss_choice') is None else self.kwargs.get('loss_choice')),
+                    n_estimators=np.random.randint(low=5 if self.kwargs.get('n_estimators_low') is None else self.kwargs.get('n_estimators_low'),
+                                                   high=100 if self.kwargs.get('n_estimators_high') is None else self.kwargs.get('n_estimators_high')
+                                                   ),
+                    subsample=np.random.uniform(low=0.0 if self.kwargs.get('subsample_low') is None else self.kwargs.get('subsample_low'),
+                                                high=1.0 if self.kwargs.get('subsample_high') is None else self.kwargs.get('subsample_high')
+                                                ),
+                    criterion=np.random.choice(a=['friedman_mse', 'mse', 'mae'] if self.kwargs.get('criterion_choice') is None else self.kwargs.get('criterion_choice')),
+                    min_samples_split=np.random.randint(low=2 if self.kwargs.get('min_samples_split_low') is None else self.kwargs.get('min_samples_split_low'),
+                                                        high=6 if self.kwargs.get('min_samples_split_high') is None else self.kwargs.get('min_samples_split_high')
+                                                        ),
+                    min_samples_leaf=np.random.randint(low=1 if self.kwargs.get('min_samples_leaf_low') is None else self.kwargs.get('min_samples_leaf_low'),
+                                                       high=6 if self.kwargs.get('min_samples_leaf_high') is None else self.kwargs.get('min_samples_leaf_high')
+                                                       ),
+                    max_depth=np.random.randint(low=3 if self.kwargs.get('max_depth_low') is None else self.kwargs.get('max_depth_low'),
+                                                high=12 if self.kwargs.get('max_depth_high') is None else self.kwargs.get('max_depth_high')
+                                                ),
+                    validation_fraction=np.random.uniform(low=0.05 if self.kwargs.get('validation_fraction_low') is None else self.kwargs.get('validation_fraction_low'),
+                                                          high=0.4 if self.kwargs.get('validation_fraction_high') is None else self.kwargs.get('validation_fraction_high')
+                                                          ),
+                    n_iter_no_change=np.random.randint(low=2 if self.kwargs.get('n_iter_no_change_low') is None else self.kwargs.get('n_iter_no_change_low'),
+                                                       high=10 if self.kwargs.get('n_iter_no_change_high') is None else self.kwargs.get('n_iter_no_change_high')
+                                                       ),
+                    ccp_alpha=np.random.uniform(low=0.0 if self.kwargs.get('ccp_alpha_low') is None else self.kwargs.get('ccp_alpha_low'),
+                                                high=1.0 if self.kwargs.get('ccp_alpha_high') is None else self.kwargs.get('ccp_alpha_high')
+                                                )
                     )
 
     def k_nearest_neighbor(self) -> KNeighborsClassifier:
@@ -587,19 +654,22 @@ class Classification:
                                     n_jobs=self.cpu_cores
                                     )
 
-    @staticmethod
-    def k_nearest_neighbor_param() -> dict:
+    def k_nearest_neighbor_param(self) -> dict:
         """
         Generate K-Nearest Neighbor classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(n_neighbors=np.random.randint(low=2, high=12),
-                    weights=np.random.choice(a=['uniform', 'distance']),
-                    algorithm=np.random.choice(a=['auto', 'ball_tree', 'kd_tree', 'brute']),
-                    leaf_size=np.random.randint(low=15, high=100),
-                    p=np.random.choice(a=[1, 2, 3]),
+        return dict(n_neighbors=np.random.randint(low=2 if self.kwargs.get('n_neighbors_low') is None else self.kwargs.get('n_neighbors_low'),
+                                                  high=12 if self.kwargs.get('n_neighbors_high') is None else self.kwargs.get('n_neighbors_high')
+                                                  ),
+                    weights=np.random.choice(a=['uniform', 'distance'] if self.kwargs.get('weights_choice') is None else self.kwargs.get('weights_choice')),
+                    algorithm=np.random.choice(a=['auto', 'ball_tree', 'kd_tree', 'brute'] if self.kwargs.get('algorithm_choice') is None else self.kwargs.get('algorithm_choice')),
+                    leaf_size=np.random.randint(low=15 if self.kwargs.get('leaf_size_low') is None else self.kwargs.get('leaf_size_low'),
+                                                high=100 if self.kwargs.get('leaf_size_high') is None else self.kwargs.get('leaf_size_high')
+                                                ),
+                    p=np.random.choice(a=[1, 2, 3] if self.kwargs.get('p_choice') is None else self.kwargs.get('p_choice')),
                     #metric=np.random.choice(a=['minkowski', 'precomputed'])
                     )
 
@@ -618,16 +688,17 @@ class Classification:
                                           tol=0.0001 if self.clf_params.get('tol') is None else self.clf_params.get('tol')
                                           )
 
-    @staticmethod
-    def linear_discriminant_analysis_param() -> dict:
+    def linear_discriminant_analysis_param(self) -> dict:
         """
         Generate Linear Discriminant Analysis classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(shrinkage=np.random.uniform(low=0.0001, high=0.9999),
-                    solver=np.random.choice(a=['svd', 'eigen'])
+        return dict(shrinkage=np.random.uniform(low=0.0001 if self.kwargs.get('shrinkage_low') is None else self.kwargs.get('shrinkage_low'),
+                                                high=0.9999 if self.kwargs.get('shrinkage_high') is None else self.kwargs.get('shrinkage_high')
+                                                ),
+                    solver=np.random.choice(a=['svd', 'eigen'] if self.kwargs.get('solver_choice') is None else self.kwargs.get('solver_choice'))
                     )
 
     def logistic_regression(self) -> LogisticRegression:
@@ -655,18 +726,21 @@ class Classification:
                                   n_jobs=self.cpu_cores
                                   )
 
-    @staticmethod
-    def logistic_regression_param() -> dict:
+    def logistic_regression_param(self) -> dict:
         """
         Generate Logistic Regression classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(C=np.random.uniform(low=0.0001, high=1.0),
-                    penalty=np.random.choice(a=['l1', 'l2', 'elasticnet', 'none']),
+        return dict(C=np.random.uniform(low=0.0001 if self.kwargs.get('C_low') is None else self.kwargs.get('C_low'),
+                                        high=1.0 if self.kwargs.get('C_high') is None else self.kwargs.get('C_high')
+                                        ),
+                    penalty=np.random.choice(a=['l1', 'l2', 'elasticnet', 'none'] if self.kwargs.get('penalty_choice') is None else self.kwargs.get('penalty_choice')),
                     #solver=np.random.choice(a=['liblinear', 'lbfgs', 'sag', 'saga', 'newton-cg']),
-                    max_iter=np.random.randint(low=5, high=500)
+                    max_iter=np.random.randint(low=5 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=500 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                                               )
                     )
 
     def quadratic_discriminant_analysis(self) -> QuadraticDiscriminantAnalysis:
@@ -682,15 +756,16 @@ class Classification:
                                              tol=0.0001 if self.clf_params.get('tol') is None else self.clf_params.get('tol')
                                              )
 
-    @staticmethod
-    def quadratic_discriminant_analysis_param() -> dict:
+    def quadratic_discriminant_analysis_param(self) -> dict:
         """
         Generate Quadratic Discriminant Analysis classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(reg_param=np.random.uniform(low=0.0001, high=0.9999))
+        return dict(reg_param=np.random.uniform(low=0.0001 if self.kwargs.get('reg_param_low') is None else self.kwargs.get('reg_param_low'),
+                                                high=0.9999 if self.kwargs.get('reg_param_high') is None else self.kwargs.get('reg_param_high')
+                                                ))
 
     def random_forest(self) -> RandomForestClassifier:
         """
@@ -717,20 +792,27 @@ class Classification:
                                       warm_start=False if self.clf_params.get('warm_start') is None else self.clf_params.get('warm_start'),
                                       )
 
-    @staticmethod
-    def random_forest_param() -> dict:
+    def random_forest_param(self) -> dict:
         """
         Generate Random Forest classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(n_estimators=np.random.randint(low=5, high=100),
-                    criterion=np.random.choice(a=['gini', 'entropy']),
-                    max_depth=np.random.randint(low=1, high=12),
-                    min_samples_split=np.random.randint(low=2, high=6),
-                    min_samples_leaf=np.random.randint(low=1, high=6),
-                    bootstrap=np.random.choice(a=[True, False])
+        return dict(n_estimators=np.random.randint(low=5 if self.kwargs.get('n_estimators_low') is None else self.kwargs.get('n_estimators_low'),
+                                                   high=100 if self.kwargs.get('n_estimators_high') is None else self.kwargs.get('n_estimators_high')
+                                                   ),
+                    criterion=np.random.choice(a=['gini', 'entropy'] if self.kwargs.get('criterion_choice') is None else self.kwargs.get('criterion_choice')),
+                    max_depth=np.random.randint(low=1 if self.kwargs.get('max_depth_low') is None else self.kwargs.get('max_depth_low'),
+                                                high=12 if self.kwargs.get('max_depth_high') is None else self.kwargs.get('max_depth_high')
+                                                ),
+                    min_samples_split=np.random.randint(low=2 if self.kwargs.get('min_samples_split_low') is None else self.kwargs.get('min_samples_split_low'),
+                                                        high=6 if self.kwargs.get('min_samples_split_high') is None else self.kwargs.get('min_samples_split_high')
+                                                        ),
+                    min_samples_leaf=np.random.randint(low=1 if self.kwargs.get('min_samples_leaf_low') is None else self.kwargs.get('min_samples_leaf_low'),
+                                                       high=6 if self.kwargs.get('min_samples_leaf_high') is None else self.kwargs.get('min_samples_leaf_high')
+                                                       ),
+                    bootstrap=np.random.choice(a=[True, False] if self.kwargs.get('bootstrap_choice') is None else self.kwargs.get('bootstrap_choice'))
                     )
 
     def support_vector_machine(self) -> SVC:
@@ -755,21 +837,26 @@ class Classification:
                    probability=False if self.clf_params.get('probability') is None else self.clf_params.get('probability')
                    )
 
-    @staticmethod
-    def support_vector_machine_param() -> dict:
+    def support_vector_machine_param(self) -> dict:
         """
         Generate Support Vector Machine classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(C=np.random.uniform(low=0.0001, high=1.0),
-                    kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid']), #'precomputed'
+        return dict(C=np.random.uniform(low=0.0001 if self.kwargs.get('C_low') is None else self.kwargs.get('C_low'),
+                                        high=1.0 if self.kwargs.get('C_high') is None else self.kwargs.get('C_high')
+                                        ),
+                    kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid'] if self.kwargs.get('kernel_choice') is None else self.kwargs.get('kernel_choice')), #'precomputed'
                     #gamma=np.random.choice(a=['auto', 'scale']),
-                    shrinking=np.random.choice(a=[True, False]),
-                    cache_size=np.random.randint(low=100, high=500),
-                    decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
-                    max_iter=np.random.randint(low=10, high=100)
+                    shrinking=np.random.choice(a=[True, False] if self.kwargs.get('shrinking_choice') is None else self.kwargs.get('shrinking_choice')),
+                    cache_size=np.random.randint(low=100 if self.kwargs.get('cache_size_low') is None else self.kwargs.get('cache_size_low'),
+                                                 high=500 if self.kwargs.get('cache_size_high') is None else self.kwargs.get('cache_size_high')
+                                                 ),
+                    decision_function_shape=np.random.choice(a=['ovo', 'ovr'] if self.kwargs.get('decision_function_shape_choice') is None else self.kwargs.get('decision_function_shape_choice')),
+                    max_iter=np.random.randint(low=10 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=100 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                                               )
                     )
 
     def linear_support_vector_machine(self) -> LinearSVC:
@@ -793,19 +880,22 @@ class Classification:
                          max_iter=500 if self.clf_params.get('max_iter') is None else self.clf_params.get('max_iter')
                          )
 
-    @staticmethod
-    def linear_support_vector_machine_param() -> dict:
+    def linear_support_vector_machine_param(self) -> dict:
         """
         Generate Linear Support Vector Machine classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(C=np.random.uniform(low=0.0001, high=1.0),
-                    penalty=np.random.choice(a=['l1', 'l2']),
-                    loss=np.random.choice(a=['hinge', 'squared_hinge']),
-                    multi_class=np.random.choice(a=['ovr', 'crammer_singer']),
-                    max_iter=np.random.randint(low=10, high=100)
+        return dict(C=np.random.uniform(low=0.0001 if self.kwargs.get('C_low') is None else self.kwargs.get('C_low'),
+                                        high=1.0 if self.kwargs.get('C_high') is None else self.kwargs.get('C_high')
+                                        ),
+                    penalty=np.random.choice(a=['l1', 'l2'] if self.kwargs.get('penalty_choice') is None else self.kwargs.get('penalty_choice')),
+                    loss=np.random.choice(a=['hinge', 'squared_hinge'] if self.kwargs.get('loss_choice') is None else self.kwargs.get('loss_choice')),
+                    multi_class=np.random.choice(a=['ovr', 'crammer_singer'] if self.kwargs.get('multi_class_choice') is None else self.kwargs.get('multi_class_choice')),
+                    max_iter=np.random.randint(low=10 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=100 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                                               )
                     )
 
     def nu_support_vector_machine(self) -> NuSVC:
@@ -830,22 +920,29 @@ class Classification:
                      probability=True if self.clf_params.get('probability') is None else self.clf_params.get('probability')
                      )
 
-    @staticmethod
-    def nu_support_vector_machine_param() -> dict:
+    def nu_support_vector_machine_param(self) -> dict:
         """
         Generate Nu-Support Vector Machine classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(C=np.random.uniform(low=0.0001, high=1.0),
-                    nu=np.random.uniform(low=0.01, high=0.99),
-                    kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid']), #'precomputed'
+        return dict(C=np.random.uniform(low=0.0001 if self.kwargs.get('C_low') is None else self.kwargs.get('C_low'),
+                                        high=1.0 if self.kwargs.get('C_high') is None else self.kwargs.get('C_high')
+                                        ),
+                    nu=np.random.uniform(low=0.01 if self.kwargs.get('nu_low') is None else self.kwargs.get('nu_low'),
+                                         high=0.99 if self.kwargs.get('nu_high') is None else self.kwargs.get('nu_high')
+                                         ),
+                    kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid'] if self.kwargs.get('kernel_choice') is None else self.kwargs.get('kernel_choice')), #'precomputed'
                     #gamma=np.random.choice(a=['auto', 'scale']),
-                    shrinking=np.random.choice(a=[True, False]),
-                    cache_size=np.random.randint(low=100, high=500),
-                    decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
-                    max_iter=np.random.randint(low=10, high=100)
+                    shrinking=np.random.choice(a=[True, False] if self.kwargs.get('shrinking_choice') is None else self.kwargs.get('shrinking_choice')),
+                    cache_size=np.random.randint(low=100 if self.kwargs.get('cache_size_low') is None else self.kwargs.get('cache_size_low'),
+                                                 high=500 if self.kwargs.get('cache_size_high') is None else self.kwargs.get('cache_size_high')
+                                                 ),
+                    decision_function_shape=np.random.choice(a=['ovo', 'ovr'] if self.kwargs.get('decision_function_shape_choice') is None else self.kwargs.get('decision_function_shape_choice')),
+                    max_iter=np.random.randint(low=10 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=100 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                                               )
                     )
 
 
@@ -853,7 +950,12 @@ class Regression:
     """
     Class for handling regression algorithms
     """
-    def __init__(self, reg_params: dict = None, cpu_cores: int = 0, seed: int = 1234):
+    def __init__(self,
+                 reg_params: dict = None,
+                 cpu_cores: int = 0,
+                 seed: int = 1234,
+                 **kwargs
+                 ):
         """
         :param reg_params: dict
             Pre-configured regression model parameter
@@ -863,6 +965,9 @@ class Regression:
 
         :param seed: int
             Seed
+
+        :param kwargs: dict
+            Key-word arguments
         """
         self.reg_params: dict = {} if reg_params is None else reg_params
         self.seed: int = 1234 if seed <= 0 else seed
@@ -873,6 +978,7 @@ class Regression:
                 self.cpu_cores: int = cpu_cores
             else:
                 self.cpu_cores: int = os.cpu_count() - 1 if os.cpu_count() > 1 else os.cpu_count()
+        self.kwargs: dict = kwargs
 
     def ada_boosting(self) -> AdaBoostRegressor:
         """
@@ -888,19 +994,22 @@ class Regression:
                                  random_state=self.seed
                                  )
 
-    @staticmethod
-    def ada_boosting_param() -> dict:
+    def ada_boosting_param(self) -> dict:
         """
         Generate Ada Boosting regressor parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(#base_estimator=np.random.choice(a=[None, BaseDecisionTree, DecisionTreeRegressor, ExtraTreeRegressor]),
-                    n_estimators=np.random.randint(low=5, high=1000),
-                    learning_rate=np.random.uniform(low=0.01, high=1.0),
-                    loss=np.random.choice(a=['linear', 'square', 'exponential']),
-                    algorithm=np.random.choice(a=['SAMME', 'SAMME.R'])
+        return dict(n_estimators=np.random.randint(low=5 if self.kwargs.get('n_estimators_low') is None else self.kwargs.get('n_estimators_low'),
+                                                   high=500 if self.kwargs.get('n_estimators_high') is None else self.kwargs.get('n_estimators_high')
+                                                   ),
+                    learning_rate=np.random.uniform(low=0.01 if self.kwargs.get('learning_rate_low') is None else self.kwargs.get('learning_rate_low'),
+                                                    high=1.0 if self.kwargs.get('learning_rate_high') is None else self.kwargs.get('learning_rate_high')
+                                                    ),
+                    # base_estimator=np.random.choice(a=[None, BaseDecisionTree, DecisionTreeRegressor, ExtraTreeRegressor]),
+                    loss=np.random.choice(a=['linear', 'square', 'exponential'] if self.kwargs.get('loss_choice') is None else self.kwargs.get('loss_choice')),
+                    algorithm=np.random.choice(a=['SAMME', 'SAMME.R'] if self.kwargs.get('algorithm_choice') is None else self.kwargs.get('algorithm_choice'))
                     )
 
     def cat_boost(self) -> CatBoostRegressor:
@@ -1013,31 +1122,42 @@ class Regression:
                                  boost_from_average=self.reg_params.get('boost_from_average')
                                  )
 
-    @staticmethod
-    def cat_boost_param() -> dict:
+    def cat_boost_param(self) -> dict:
         """
-        Generate Cat Boosting regressor parameter configuration randomly
+        Generate Cat Boost regressor parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(n_estimators=np.random.randint(low=5, high=100),
-                    learning_rate=np.random.uniform(low=0.01, high=1.0),
-                    l2_leaf_reg=np.random.uniform(low=0.1, high=1.0),
-                    depth=np.random.randint(low=3, high=16),
+        return dict(n_estimators=np.random.randint(low=5 if self.kwargs.get('n_estimators_low') is None else self.kwargs.get('n_estimators_low'),
+                                                   high=100 if self.kwargs.get('n_estimators_high') is None else self.kwargs.get('n_estimators_high')
+                                                   ),
+                    learning_rate=np.random.uniform(low=0.0001 if self.kwargs.get('learning_rate_low') is None else self.kwargs.get('learning_rate_low'),
+                                                    high=0.5 if self.kwargs.get('learning_rate_high') is None else self.kwargs.get('learning_rate_high')
+                                                    ),
+                    l2_leaf_reg=np.random.uniform(low=0.1 if self.kwargs.get('l2_leaf_reg_low') is None else self.kwargs.get('l2_leaf_reg_low'),
+                                                  high=1.0 if self.kwargs.get('l2_leaf_reg_high') is None else self.kwargs.get('l2_leaf_reg_high')
+                                                  ),
+                    depth=np.random.randint(low=3 if self.kwargs.get('depth_low') is None else self.kwargs.get('depth_low'),
+                                            high=16 if self.kwargs.get('depth_high') is None else self.kwargs.get('depth_high')
+                                            ),
                     #sampling_frequency=np.random.choice(a=['PerTree', 'PerTreeLevel']),
                     #sampling_unit=np.random.choice(a=['Object', 'Group']),
-                    grow_policy=np.random.choice(a=['SymmetricTree', 'Depthwise', 'Lossguide']),
-                    min_data_in_leaf=np.random.randint(low=1, high=20),
+                    grow_policy=np.random.choice(a=['SymmetricTree', 'Depthwise', 'Lossguide'] if self.kwargs.get('grow_policy_choice') is None else self.kwargs.get('grow_policy_choice'), ),
+                    min_data_in_leaf=np.random.randint(low=1 if self.kwargs.get('min_data_in_leaf_low') is None else self.kwargs.get('min_data_in_leaf_low'),
+                                                       high=20 if self.kwargs.get('min_data_in_leaf_high') is None else self.kwargs.get('min_data_in_leaf_high')
+                                                       ),
                     #max_leaves=np.random.randint(low=10, high=64),
-                    rsm=np.random.uniform(low=0.1, high=1),
+                    rsm=np.random.uniform(low=0.1 if self.kwargs.get('rsm_low') is None else self.kwargs.get('rsm_low'),
+                                          high=1 if self.kwargs.get('rsm_high') is None else self.kwargs.get('rsm_high')
+                                          ),
                     #fold_len_multiplier=np.random.randint(low=2, high=4),
                     #approx_on_full_history=np.random.choice(a=[False, True]),
                     #boosting_type=np.random.choice(a=['Ordered', 'Plain']),
                     #score_function=np.random.choice(a=['Cosine', 'L2', 'NewtonCosine', 'NewtonL2']),
                     #model_shrink_mode=np.random.choice(a=['Constant', 'Decreasing']),
                     #border_count=np.random.randint(low=1, high=65535),
-                    feature_border_type=np.random.choice(a=['Median', 'Uniform', 'UniformAndQuantiles', 'MaxLogSum', 'MinEntropy', 'GreedyLogSum'])
+                    feature_border_type=np.random.choice(a=['Median', 'Uniform', 'UniformAndQuantiles', 'MaxLogSum', 'MinEntropy', 'GreedyLogSum'] if self.kwargs.get('feature_border_type_choice') is None else self.kwargs.get('feature_border_type_choice'))
                     )
 
     def elastic_net(self) -> ElasticNet:
@@ -1061,21 +1181,26 @@ class Regression:
                           selection='cyclic' if self.reg_params.get('selection') is None else self.reg_params.get('selection')
                           )
 
-    @staticmethod
-    def elastic_net_param() -> dict:
+    def elastic_net_param(self) -> dict:
         """
         Generate Elastic Net regressor parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(alpha=np.random.uniform(low=0.0, high=1.0),
-                    l1_ratio=np.random.uniform(low=0.0, high=1.0),
-                    normalize=np.random.choice(a=[True, False]),
+        return dict(alpha=np.random.uniform(low=0.0 if self.kwargs.get('alpha_low') is None else self.kwargs.get('alpha_low'),
+                                            high=1.0 if self.kwargs.get('alpha_high') is None else self.kwargs.get('alpha_high')
+                                            ),
+                    l1_ratio=np.random.uniform(low=0.0 if self.kwargs.get('l1_ratio_low') is None else self.kwargs.get('l1_ratio_low'),
+                                               high=1.0 if self.kwargs.get('l1_ratio_high') is None else self.kwargs.get('l1_ratio_high')
+                                               ),
+                    normalize=np.random.choice(a=[True, False] if self.kwargs.get('normalize_choice') is None else self.kwargs.get('normalize_choice')),
                     #precompute=np.random.choice(a=[True, False]),
-                    max_iter=np.random.randint(low=5, high=1000),
-                    fit_intercept=np.random.choice(a=[True, False]),
-                    selection=np.random.choice(a=['cyclic', 'random'])
+                    max_iter=np.random.randint(low=5 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=1000 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                                               ),
+                    fit_intercept=np.random.choice(a=[True, False] if self.kwargs.get('fit_intercept_choice') is None else self.kwargs.get('fit_intercept_choice')),
+                    selection=np.random.choice(a=['cyclic', 'random'] if self.kwargs.get('selection_choice') is None else self.kwargs.get('selection_choice'))
                     )
 
     def extreme_gradient_boosting_tree(self) -> XGBRegressor:
@@ -1107,29 +1232,50 @@ class Regression:
                             importance_type='gain' if self.reg_params.get('importance_type') is None else self.reg_params.get('importance_type')
                             )
 
-    @staticmethod
-    def extreme_gradient_boosting_tree_param() -> dict:
+    def extreme_gradient_boosting_tree_param(self) -> dict:
         """
         Generate Extreme Gradient Boosting Decision Tree regressor parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(learning_rate=np.random.uniform(low=0.005, high=0.5),
-                    n_estimators=np.random.randint(low=5, high=100),
-                    min_samples_split=np.random.randint(low=2, high=6),
-                    min_samples_leaf=np.random.randint(low=1, high=6),
-                    max_depth=np.random.randint(low=3, high=12),
+        return dict(learning_rate=np.random.uniform(low=0.0001 if self.kwargs.get('learning_rate_low') is None else self.kwargs.get('learning_rate_low'),
+                                                    high=0.5 if self.kwargs.get('learning_rate_high') is None else self.kwargs.get('learning_rate_high')
+                                                    ),
+                    n_estimators=np.random.randint(low=5 if self.kwargs.get('n_estimators_low') is None else self.kwargs.get('n_estimators_low'),
+                                                   high=100 if self.kwargs.get('n_estimators_high') is None else self.kwargs.get('n_estimators_high')
+                                                   ),
+                    min_samples_split=np.random.randint(low=2 if self.kwargs.get('min_samples_split_low') is None else self.kwargs.get('min_samples_split_low'),
+                                                        high=6 if self.kwargs.get('min_samples_split_high') is None else self.kwargs.get('min_samples_split_high')
+                                                        ),
+                    min_samples_leaf=np.random.randint(low=1 if self.kwargs.get('min_samples_leaf_low') is None else self.kwargs.get('min_samples_leaf_low'),
+                                                       high=6 if self.kwargs.get('min_samples_leaf_high') is None else self.kwargs.get('min_samples_leaf_high')
+                                                       ),
+                    max_depth=np.random.randint(low=3 if self.kwargs.get('max_depth_low') is None else self.kwargs.get('max_depth_low'),
+                                                high=12 if self.kwargs.get('max_depth_high') is None else self.kwargs.get('max_depth_high')
+                                                ),
                     #booster=np.random.choice(a=['gbtree', 'gblinear', 'gbdart']),
-                    gamma=np.random.uniform(low=0.01, high=0.99),
-                    min_child_weight=np.random.randint(low=1, high=12),
-                    reg_alpha=np.random.uniform(low=0.0, high=0.9),
-                    reg_lambda=np.random.uniform(low=0.1, high=1.0),
-                    subsample=np.random.uniform(low=0.0, high=1.0),
-                    colsample_bytree=np.random.uniform(low=0.5, high=0.99),
+                    gamma=np.random.uniform(low=0.01 if self.kwargs.get('gamma_low') is None else self.kwargs.get('gamma_low'),
+                                            high=0.99 if self.kwargs.get('gamma_high') is None else self.kwargs.get('gamma_high')
+                                            ),
+                    min_child_weight=np.random.randint(low=1 if self.kwargs.get('min_child_weight_low') is None else self.kwargs.get('min_child_weight_low'),
+                                                       high=12 if self.kwargs.get('min_child_weight_high') is None else self.kwargs.get('min_child_weight_high')
+                                                       ),
+                    reg_alpha=np.random.uniform(low=0.0 if self.kwargs.get('reg_alpha_low') is None else self.kwargs.get('reg_alpha_low'),
+                                                high=0.9 if self.kwargs.get('reg_alpha_high') is None else self.kwargs.get('reg_alpha_high')
+                                                ),
+                    reg_lambda=np.random.uniform(low=0.1 if self.kwargs.get('reg_lambda_low') is None else self.kwargs.get('reg_lambda_low'),
+                                                 high=1.0 if self.kwargs.get('reg_lambda_high') is None else self.kwargs.get('reg_lambda_high')
+                                                 ),
+                    subsample=np.random.uniform(low=0.0 if self.kwargs.get('subsample_low') is None else self.kwargs.get('subsample_low'),
+                                                high=1.0 if self.kwargs.get('subsample_high') is None else self.kwargs.get('subsample_high')
+                                                ),
+                    colsample_bytree=np.random.uniform(low=0.5 if self.kwargs.get('colsample_bytree_low') is None else self.kwargs.get('colsample_bytree_low'),
+                                                       high=0.99 if self.kwargs.get('colsample_bytree_high') is None else self.kwargs.get('colsample_bytree_high')
+                                                       ),
                     #scale_pos_weight=np.random.uniform(low=0.01, high=1.0),
                     #base_score=np.random.uniform(low=0.01, high=0.99),
-                    early_stopping=np.random.choice(a=[True, False])
+                    early_stopping=np.random.choice(a=[True, False] if self.kwargs.get('early_stopping_choice') is None else self.kwargs.get('early_stopping_choice'))
                     )
 
     @staticmethod
@@ -1150,18 +1296,21 @@ class Regression:
                    verbose=False
                    )
 
-    @staticmethod
-    def generalized_additive_models_param() -> dict:
+    def generalized_additive_models_param(self) -> dict:
         """
         Config Generalized Additive Model regressor
 
         :return: dict
             Parameter config
         """
-        return dict(max_iter=np.random.randint(low=10, high=500),
-                    tol=np.random.uniform(low=0.00001, high=0.001),
-                    distribution=np.random.choice(a=['normal', 'binomial', 'poisson', 'gamma', 'invgauss']),
-                    link=np.random.choice(a=['identity', 'logit', 'log', 'inverse', 'inverse-squared'])
+        return dict(max_iter=np.random.randint(low=10 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=500 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                                               ),
+                    tol=np.random.uniform(low=0.00001 if self.kwargs.get('tol_low') is None else self.kwargs.get('tol_low'),
+                                          high=0.001 if self.kwargs.get('tol_high') is None else self.kwargs.get('tol_high')
+                                          ),
+                    distribution=np.random.choice(a=['normal', 'binomial', 'poisson', 'gamma', 'invgauss'] if self.kwargs.get('distribution_choice') is None else self.kwargs.get('distribution_choice')),
+                    link=np.random.choice(a=['identity', 'logit', 'log', 'inverse', 'inverse-squared'] if self.kwargs.get('link_choice') is None else self.kwargs.get('link_choice'))
                     )
 
     def gradient_boosting_tree(self) -> GradientBoostingRegressor:
@@ -1195,26 +1344,45 @@ class Regression:
                                          ccp_alpha=0.0 if self.reg_params.get('ccp_alpha') is None else self.reg_params.get('ccp_alpha')
                                          )
 
-    @staticmethod
-    def gradient_boosting_tree_param() -> dict:
+    def gradient_boosting_tree_param(self) -> dict:
         """
         Generate Gradient Boosting Tree regressor parameter randomly
 
         :return: dict
             Parameter config
         """
-        return dict(learning_rate=np.random.uniform(low=0.01, high=0.4),
+        return dict(learning_rate=np.random.uniform(low=0.0001 if self.kwargs.get('learning_rate_low') is None else self.kwargs.get('learning_rate_low'),
+                                                    high=0.5 if self.kwargs.get('learning_rate_high') is None else self.kwargs.get('learning_rate_high')
+                                                    ),
                     loss=np.random.choice(a=['ls', 'lad', 'huber', 'quantile']),
-                    n_estimators=np.random.randint(low=5, high=100),
-                    subsample=np.random.uniform(low=0.0, high=1.0),
-                    criterion=np.random.choice(a=['friedman_mse', 'mse', 'mae']),
-                    min_samples_split=np.random.randint(low=2, high=6),
-                    min_samples_leaf=np.random.randint(low=1, high=6),
-                    max_depth=np.random.randint(low=3, high=12),
-                    validation_fraction=np.random.uniform(low=0.05, high=0.4),
-                    n_iter_no_change=np.random.randint(low=2, high=10),
-                    alpha=np.random.uniform(low=0.01, high=0.99),
-                    ccp_alpha=np.random.uniform(low=0.0, high=1.0)
+                    n_estimators=np.random.randint(low=5 if self.kwargs.get('n_estimators_low') is None else self.kwargs.get('n_estimators_low'),
+                                                   high=100 if self.kwargs.get('n_estimators_high') is None else self.kwargs.get('n_estimators_high')
+                                                   ),
+                    subsample=np.random.uniform(low=0.0 if self.kwargs.get('subsample_low') is None else self.kwargs.get('subsample_low'),
+                                                high=1.0 if self.kwargs.get('subsample_high') is None else self.kwargs.get('subsample_high')
+                                                ),
+                    criterion=np.random.choice(a=['friedman_mse', 'mse', 'mae'] if self.kwargs.get('criterion_choice') is None else self.kwargs.get('criterion_choice')),
+                    min_samples_split=np.random.randint(low=2 if self.kwargs.get('min_samples_split_low') is None else self.kwargs.get('min_samples_split_low'),
+                                                        high=6 if self.kwargs.get('min_samples_split_high') is None else self.kwargs.get('min_samples_split_high')
+                                                        ),
+                    min_samples_leaf=np.random.randint(low=1 if self.kwargs.get('min_samples_leaf_low') is None else self.kwargs.get('min_samples_leaf_low'),
+                                                       high=6 if self.kwargs.get('min_samples_leaf_high') is None else self.kwargs.get('min_samples_leaf_high')
+                                                       ),
+                    max_depth=np.random.randint(low=3 if self.kwargs.get('max_depth_low') is None else self.kwargs.get('max_depth_low'),
+                                                high=12 if self.kwargs.get('max_depth_high') is None else self.kwargs.get('max_depth_high')
+                                                ),
+                    validation_fraction=np.random.uniform(low=0.05 if self.kwargs.get('validation_fraction_low') is None else self.kwargs.get('validation_fraction_low'),
+                                                          high=0.4 if self.kwargs.get('validation_fraction_high') is None else self.kwargs.get('validation_fraction_high')
+                                                          ),
+                    n_iter_no_change=np.random.randint(low=2 if self.kwargs.get('n_iter_no_change_low') is None else self.kwargs.get('n_iter_no_change_low'),
+                                                       high=10 if self.kwargs.get('n_iter_no_change_high') is None else self.kwargs.get('n_iter_no_change_high')
+                                                       ),
+                    alpha=np.random.uniform(low=0.01 if self.kwargs.get('alpha_low') is None else self.kwargs.get('alpha_low'),
+                                            high=0.99 if self.kwargs.get('alpha_high') is None else self.kwargs.get('alpha_high')
+                                            ),
+                    ccp_alpha=np.random.uniform(low=0.0 if self.kwargs.get('ccp_alpha_low') is None else self.kwargs.get('ccp_alpha_low'),
+                                                high=1.0 if self.kwargs.get('ccp_alpha_high') is None else self.kwargs.get('ccp_alpha_high')
+                                                )
                     )
 
     def k_nearest_neighbor(self) -> KNeighborsRegressor:
@@ -1234,19 +1402,22 @@ class Regression:
                                    n_jobs=self.cpu_cores
                                    )
 
-    @staticmethod
-    def k_nearest_neighbor_param() -> dict:
+    def k_nearest_neighbor_param(self) -> dict:
         """
         Generate K-Nearest Neighbor regressor parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(n_neighbors=np.random.randint(low=2, high=12),
-                    weights=np.random.choice(a=['uniform', 'distance']),
-                    algorithm=np.random.choice(a=['auto', 'ball_tree', 'kd_tree', 'brute']),
-                    leaf_size=np.random.randint(low=15, high=100),
-                    p=np.random.choice(a=[1, 2, 3]),
+        return dict(n_neighbors=np.random.randint(low=2 if self.kwargs.get('n_neighbors_low') is None else self.kwargs.get('n_neighbors_low'),
+                                                  high=12 if self.kwargs.get('n_neighbors_high') is None else self.kwargs.get('n_neighbors_high')
+                                                  ),
+                    weights=np.random.choice(a=['uniform', 'distance'] if self.kwargs.get('weights_choice') is None else self.kwargs.get('weights_choice')),
+                    algorithm=np.random.choice(a=['auto', 'ball_tree', 'kd_tree', 'brute'] if self.kwargs.get('algorithm_choice') is None else self.kwargs.get('algorithm_choice')),
+                    leaf_size=np.random.randint(low=15 if self.kwargs.get('leaf_size_low') is None else self.kwargs.get('leaf_size_low'),
+                                                high=100 if self.kwargs.get('leaf_size_high') is None else self.kwargs.get('leaf_size_high')
+                                                ),
+                    p=np.random.choice(a=[1, 2, 3] if self.kwargs.get('p_choice') is None else self.kwargs.get('p_choice')),
                     #metric=np.random.choice(a=['minkowski', 'precomputed'])
                     )
 
@@ -1270,20 +1441,23 @@ class Regression:
                      selection='cyclic' if self.reg_params.get('selection') is None else self.reg_params.get('selection')
                      )
 
-    @staticmethod
-    def lasso_regression_param() -> dict:
+    def lasso_regression_param(self) -> dict:
         """
         Generate Lasso Regression parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(alpha=np.random.uniform(low=0.0, high=1.0),
-                    normalize=np.random.choice(a=[True, False]),
-                    precompute=np.random.choice(a=[True, False]),
-                    max_iter=np.random.randint(low=5, high=1000),
-                    fit_intercept=np.random.choice(a=[True, False]),
-                    selection=np.random.choice(a=['cyclic', 'random'])
+        return dict(alpha=np.random.uniform(low=0.0 if self.kwargs.get('alpha_low') is None else self.kwargs.get('alpha_low'),
+                                            high=1.0 if self.kwargs.get('alpha_high') is None else self.kwargs.get('alpha_high')
+                                            ),
+                    normalize=np.random.choice(a=[True, False] if self.kwargs.get('normalize_choice') is None else self.kwargs.get('normalize_choice')),
+                    precompute=np.random.choice(a=[True, False] if self.kwargs.get('precompute_choice') is None else self.kwargs.get('precompute_choice')),
+                    max_iter=np.random.randint(low=5 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=1000 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                                               ),
+                    fit_intercept=np.random.choice(a=[True, False] if self.kwargs.get('fit_intercept_choice') is None else self.kwargs.get('fit_intercept_choice')),
+                    selection=np.random.choice(a=['cyclic', 'random'] if self.kwargs.get('selection_choice') is None else self.kwargs.get('selection_choice'))
                     )
 
     def linear_regression(self) -> OLS:
@@ -1331,20 +1505,27 @@ class Regression:
                                      warm_start=False if self.reg_params.get('warm_start') is None else self.reg_params.get('warm_start'),
                                      )
 
-    @staticmethod
-    def random_forest_param() -> dict:
+    def random_forest_param(self) -> dict:
         """
         Generate Random Forest regressor parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(n_estimators=np.random.randint(low=5, high=100),
-                    criterion=np.random.choice(a=['mse', 'mae']),
-                    max_depth=np.random.randint(low=1, high=12),
-                    min_samples_split=np.random.randint(low=2, high=6),
-                    min_samples_leaf=np.random.randint(low=1, high=6),
-                    bootstrap=np.random.choice(a=[True, False])
+        return dict(n_estimators=np.random.randint(low=5 if self.kwargs.get('n_estimators_low') is None else self.kwargs.get('n_estimators_low'),
+                                                   high=100 if self.kwargs.get('n_estimators_high') is None else self.kwargs.get('n_estimators_high')
+                                                   ),
+                    criterion=np.random.choice(a=['mse', 'mae'] if self.kwargs.get('criterion_choice') is None else self.kwargs.get('criterion_choice')),
+                    max_depth=np.random.randint(low=1 if self.kwargs.get('max_depth_low') is None else self.kwargs.get('max_depth_low'),
+                                                high=12 if self.kwargs.get('max_depth_high') is None else self.kwargs.get('max_depth_high')
+                                                ),
+                    min_samples_split=np.random.randint(low=2 if self.kwargs.get('min_samples_split_low') is None else self.kwargs.get('min_samples_split_low'),
+                                                        high=6 if self.kwargs.get('min_samples_split_high') is None else self.kwargs.get('min_samples_split_high')
+                                                        ),
+                    min_samples_leaf=np.random.randint(low=1 if self.kwargs.get('min_samples_leaf_low') is None else self.kwargs.get('min_samples_leaf_low'),
+                                                       high=6 if self.kwargs.get('min_samples_leaf_high') is None else self.kwargs.get('min_samples_leaf_high')
+                                                       ),
+                    bootstrap=np.random.choice(a=[True, False] if self.kwargs.get('bootstrap_choice') is None else self.kwargs.get('bootstrap_choice'))
                     )
 
     def support_vector_machine(self) -> SVR:
@@ -1367,21 +1548,26 @@ class Regression:
                    max_iter=-1 if self.reg_params.get('max_iter') is None else self.reg_params.get('max_iter')
                    )
 
-    @staticmethod
-    def support_vector_machine_param() -> dict:
+    def support_vector_machine_param(self) -> dict:
         """
         Generate Support Vector Machine regressor parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(C=np.random.uniform(low=0.0001, high=1.0),
-                    kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid']),
+        return dict(C=np.random.uniform(low=0.0001 if self.kwargs.get('C_low') is None else self.kwargs.get('C_low'),
+                                        high=1.0 if self.kwargs.get('C_high') is None else self.kwargs.get('C_high')
+                                        ),
+                    kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid'] if self.kwargs.get('kernel_choice') is None else self.kwargs.get('kernel_choice')), #'precomputed'
                     #gamma=np.random.choice(a=['auto', 'scale']),
-                    shrinking=np.random.choice(a=[True, False]),
-                    cache_size=np.random.randint(low=100, high=500),
-                    decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
-                    max_iter=np.random.randint(low=10, high=500)
+                    shrinking=np.random.choice(a=[True, False] if self.kwargs.get('shrinking_choice') is None else self.kwargs.get('shrinking_choice')),
+                    cache_size=np.random.randint(low=100 if self.kwargs.get('cache_size_low') is None else self.kwargs.get('cache_size_low'),
+                                                 high=500 if self.kwargs.get('cache_size_high') is None else self.kwargs.get('cache_size_high')
+                                                 ),
+                    decision_function_shape=np.random.choice(a=['ovo', 'ovr'] if self.kwargs.get('decision_function_shape_choice') is None else self.kwargs.get('decision_function_shape_choice')),
+                    max_iter=np.random.randint(low=10 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=100 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                                               )
                     )
 
     def linear_support_vector_machine(self) -> LinearSVR:
@@ -1403,19 +1589,22 @@ class Regression:
                          max_iter=1000 if self.reg_params.get('max_iter') is None else self.reg_params.get('max_iter'),
                          )
 
-    @staticmethod
-    def linear_support_vector_machine_param() -> dict:
+    def linear_support_vector_machine_param(self) -> dict:
         """
         Generate Linear Support Vector Machine regressor parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(C=np.random.uniform(low=0.0001, high=1.0),
-                    penalty=np.random.choice(a=['l1', 'l2']),
-                    loss=np.random.choice(a=['hinge', 'squared_hinge']),
-                    multi_class=np.random.choice(a=['ovr', 'crammer_singer']),
-                    max_iter=np.random.randint(low=10, high=500)
+        return dict(C=np.random.uniform(low=0.0001 if self.kwargs.get('C_low') is None else self.kwargs.get('C_low'),
+                                        high=1.0 if self.kwargs.get('C_high') is None else self.kwargs.get('C_high')
+                                        ),
+                    penalty=np.random.choice(a=['l1', 'l2'] if self.kwargs.get('penalty_choice') is None else self.kwargs.get('penalty_choice')),
+                    loss=np.random.choice(a=['hinge', 'squared_hinge'] if self.kwargs.get('loss_choice') is None else self.kwargs.get('loss_choice')),
+                    multi_class=np.random.choice(a=['ovr', 'crammer_singer'] if self.kwargs.get('multi_class_choice') is None else self.kwargs.get('multi_class_choice')),
+                    max_iter=np.random.randint(low=10 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=100 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                                               )
                     )
 
     def nu_support_vector_machine(self) -> NuSVR:
@@ -1438,22 +1627,29 @@ class Regression:
                      max_iter=-1 if self.reg_params.get('max_iter') is None else self.reg_params.get('max_iter')
                      )
 
-    @staticmethod
-    def nu_support_vector_machine_param() -> dict:
+    def nu_support_vector_machine_param(self) -> dict:
         """
         Generate Nu-Support Vector Machine regressor parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(C=np.random.uniform(low=0.0001, high=1.0),
-                    nu=np.random.uniform(low=0.01, high=0.99),
-                    kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid']),
+        return dict(C=np.random.uniform(low=0.0001 if self.kwargs.get('C_low') is None else self.kwargs.get('C_low'),
+                                        high=1.0 if self.kwargs.get('C_high') is None else self.kwargs.get('C_high')
+                                        ),
+                    nu=np.random.uniform(low=0.01 if self.kwargs.get('nu_low') is None else self.kwargs.get('nu_low'),
+                                         high=0.99 if self.kwargs.get('nu_high') is None else self.kwargs.get('nu_high')
+                                         ),
+                    kernel=np.random.choice(a=['rbf', 'linear', 'poly', 'sigmoid'] if self.kwargs.get('kernel_choice') is None else self.kwargs.get('kernel_choice')), #'precomputed'
                     #gamma=np.random.choice(a=['auto', 'scale']),
-                    shrinking=np.random.choice(a=[True, False]),
-                    cache_size=np.random.randint(low=100, high=500),
-                    decision_function_shape=np.random.choice(a=['ovo', 'ovr']),
-                    max_iter=np.random.randint(low=10, high=500)
+                    shrinking=np.random.choice(a=[True, False] if self.kwargs.get('shrinking_choice') is None else self.kwargs.get('shrinking_choice')),
+                    cache_size=np.random.randint(low=100 if self.kwargs.get('cache_size_low') is None else self.kwargs.get('cache_size_low'),
+                                                 high=500 if self.kwargs.get('cache_size_high') is None else self.kwargs.get('cache_size_high')
+                                                 ),
+                    decision_function_shape=np.random.choice(a=['ovo', 'ovr'] if self.kwargs.get('decision_function_shape_choice') is None else self.kwargs.get('decision_function_shape_choice')),
+                    max_iter=np.random.randint(low=10 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=100 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                                               )
                     )
 
 
@@ -1466,7 +1662,8 @@ class ModelGeneratorClf(Classification):
                  clf_params: dict = None,
                  models: List[str] = None,
                  cpu_cores: int = 0,
-                 seed: int = 1234
+                 seed: int = 1234,
+                 **kwargs
                  ):
         """
         :param clf_params: dict
@@ -1480,8 +1677,11 @@ class ModelGeneratorClf(Classification):
 
         :param seed: int
             Seed
+
+        :param kwargs: dict
+            Key-word arguments
         """
-        super().__init__(clf_params=clf_params, cpu_cores=cpu_cores, seed=seed)
+        super().__init__(clf_params=clf_params, cpu_cores=cpu_cores, seed=seed, **kwargs)
         self.id: int = 0
         self.fitness: dict = {}
         self.fitness_score: float = 0.0
@@ -1721,7 +1921,8 @@ class ModelGeneratorReg(Regression):
                  reg_params: dict = None,
                  models: List[str] = None,
                  cpu_cores: int = 0,
-                 seed: int = 1234
+                 seed: int = 1234,
+                 **kwargs
                  ):
         """
         :param reg_params: dict
@@ -1735,8 +1936,11 @@ class ModelGeneratorReg(Regression):
 
         :param seed: int
             Seed
+
+        :param kwargs: dict
+            Key-word arguments
         """
-        super().__init__(reg_params=reg_params, cpu_cores=cpu_cores, seed=seed)
+        super().__init__(reg_params=reg_params, cpu_cores=cpu_cores, seed=seed, **kwargs)
         self.id: int = 0
         self.fitness: dict = {}
         self.fitness_score: float = 0.0
@@ -1771,7 +1975,7 @@ class ModelGeneratorReg(Regression):
         else:
             _model = copy.deepcopy(REG_ALGORITHMS.get(self.model_name))
         if len(self.reg_params.keys()) == 0:
-            self.model_param = getattr(Regression(), '{}_param'.format(_model))()
+            self.model_param = getattr(Regression(**self.kwargs), '{}_param'.format(_model))()
             self.reg_params = copy.deepcopy(self.model_param)
             _idx: int = 0 if len(self.model_param_mutated.keys()) == 0 else len(self.model_param_mutated.keys()) + 1
             self.model_param_mutated.update({str(_idx): {copy.deepcopy(self.model_name): {}}})
@@ -1781,7 +1985,7 @@ class ModelGeneratorReg(Regression):
         else:
             self.model_param = copy.deepcopy(self.reg_params)
         self.model_param_mutation = 'params'
-        self.model = getattr(Regression(reg_params=self.reg_params), _model)()
+        self.model = getattr(Regression(reg_params=self.reg_params, **self.kwargs), _model)()
         return self
 
     def generate_params(self, param_rate: float = 0.1, force_param: dict = None) -> object:
@@ -1804,7 +2008,7 @@ class ModelGeneratorReg(Regression):
                 _rate: float = param_rate
             else:
                 _rate: float = 0.1
-        _params: dict = getattr(Regression(), '{}_param'.format(REG_ALGORITHMS.get(self.model_name)))()
+        _params: dict = getattr(Regression(**self.kwargs), '{}_param'.format(REG_ALGORITHMS.get(self.model_name)))()
         _force_param: dict = {} if force_param is None else force_param
         _param_choices: List[str] = [p for p in _params.keys() if p not in _force_param.keys()]
         _gen_n_params: int = round(len(_params.keys()) * _rate)
@@ -1825,7 +2029,7 @@ class ModelGeneratorReg(Regression):
         self.model_param_mutation = 'new_model'
         self.model_param = copy.deepcopy(_new_model_params)
         self.reg_params = self.model_param
-        self.model = getattr(Regression(reg_params=self.reg_params), REG_ALGORITHMS.get(self.model_name))()
+        self.model = getattr(Regression(reg_params=self.reg_params, **self.kwargs), REG_ALGORITHMS.get(self.model_name))()
         return self
 
     def get_model_parameter(self) -> dict:
@@ -1841,8 +2045,8 @@ class ModelGeneratorReg(Regression):
         else:
             for model in self.models:
                 if model in REG_ALGORITHMS.keys():
-                    _model = getattr(Regression(), REG_ALGORITHMS.get(model))()
-                    _param: dict = getattr(Regression(), '{}_param'.format(REG_ALGORITHMS.get(model)))()
+                    _model = getattr(Regression(**self.kwargs), REG_ALGORITHMS.get(model))()
+                    _param: dict = getattr(Regression(**self.kwargs), '{}_param'.format(REG_ALGORITHMS.get(model)))()
                     _model_random_param: dict = _model.__dict__.items()
                     for param in _model_random_param:
                         if param[0] in _param.keys():

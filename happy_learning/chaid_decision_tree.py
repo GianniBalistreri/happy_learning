@@ -1,3 +1,9 @@
+"""
+
+Chi-square Automatic Interaction Detectors algorithm (CHAID)
+
+"""
+
 import numpy as np
 
 from CHAID import Tree
@@ -5,9 +11,7 @@ from CHAID import Tree
 
 class CHAIDDecisionTree:
     """
-
     Class for unify CHAID algorithm into auto-ml framework
-
     """
     def __init__(self,
                  alpha_merge: float = 0.05,
