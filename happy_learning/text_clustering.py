@@ -434,7 +434,8 @@ class GibbsSamplingDirichletMultinomialModeling:
         DataExporter(obj=vis_data,
                      file_path=file_path,
                      bucket_name=kwargs.get('bucket'),
-                     region=kwargs.get('region')
+                     region=kwargs.get('region'),
+                     **dict(topic_clustering=True)
                      ).file()
 
     def word_importance_each_cluster(self) -> List[dict]:
