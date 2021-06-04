@@ -461,7 +461,7 @@ class HappyLearningUtils:
                     else:
                         if len(_feature_data) == len(_feature_data.unique()):
                             return {'id_text': feature}
-                        if len(_feature_data.unique().values) <= 3:
+                        if len(_feature_data.unique()) <= 3:
                             return {'categorical': feature}
                         else:
                             _len_of_feature = pd.DataFrame()
@@ -478,7 +478,7 @@ class HappyLearningUtils:
                                 if len(_feature_data.unique()) >= (len(_feature_data) * 0.5):
                                     return {'id_text': feature}
                                 else:
-                                    if len(_feature_data.unique().values) > max_categories:
+                                    if len(_feature_data.unique()) > max_categories:
                                         return {'ordinal': feature}
                                     else:
                                         return {'categorical': feature}
