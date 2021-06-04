@@ -3,7 +3,7 @@ Chaid==5.3.0
 combo==0.1.1
 dask==2020.12.0
 dask-ml==1.7.0
-easyexplore==0.7.0
+easyexplore==0.7.1
 emoji==0.6.0
 fsspec==0.8.5
 gensim==3.8.3
@@ -11,8 +11,8 @@ geocoder==1.38.1
 googletrans==3.0.0
 joblib==0.14.1
 nltk==3.5
-numpy==1.19.2
-pandas==1.1.4
+numpy==1.20.0
+pandas==1.2.0
 pygam==0.8.0
 pyLDAvis==3.3.1
 pyod==0.8.2
