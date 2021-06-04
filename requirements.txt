@@ -14,6 +14,7 @@ nltk==3.5
 numpy==1.19.2
 pandas==1.1.4
 pygam==0.8.0
+pyLDAvis==3.3.1
 pyod==0.8.2
 requests==2.24.0
 scipy==1.5.2
