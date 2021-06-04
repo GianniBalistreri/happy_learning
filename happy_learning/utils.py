@@ -5,6 +5,7 @@ Happy Learning utility functions
 """
 
 import dask
+import dateutil
 import geocoder
 import inspect
 import itertools
@@ -484,7 +485,7 @@ class HappyLearningUtils:
                                         return {'categorical': feature}
                             else:
                                 return {'categorical': feature}
-                except (TypeError, ValueError):
+                except Exception as e:
                     if len(_feature_data) == len(_unique):
                         return {'id_text': feature}
                     if len(_feature_data.unique()) <= 3:
