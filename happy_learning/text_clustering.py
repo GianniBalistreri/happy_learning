@@ -5,12 +5,16 @@ Text clustering algorithms
 """
 
 import numpy as np
+import math
+import pandas as pd
+import pyLDAvis
 
+from easyexplore.data_import_export import DataExporter
 from gensim import corpora
 from gensim.models import LdaModel, LsiModel
 from sklearn.decomposition import NMF
 from sklearn.feature_extraction.text import TfidfVectorizer
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 
 def _rank_clusters(model, text_data: List[str], vocab: corpora.Dictionary) -> tuple:
@@ -157,6 +161,41 @@ class GibbsSamplingDirichletMultinomialModeling:
         self.alpha = alpha
         self.beta = beta
 
+    def cluster_similarity(self, cluster_labels: List[int] = None, top_n_words: int = 10, last_n_words: int = 0) -> Dict[str, Dict[str, float]]:
+        """
+        Calculate similarity of learned clusters using top-n-words and last-n-words
+
+        :param cluster_labels: List[int]
+            Cluster labels to delete
+
+        :param top_n_words: int
+            Number of top words to compare
+
+        :param last_n_words: int
+            Number of last words to compare
+
+        :return: Dict[str, Dict[str, float]]
+            Similarity score based on comparison of top-n-words and last-n-words
+        """
+        _cluster_labels: List[int] = [i for i in range(0, self.n_clusters, 1)] if cluster_labels is None else cluster_labels
+        _top_n_words_each_cluster: dict = self.get_top_words_each_cluster(top_n_words=top_n_words if top_n_words > 0 else 10)
+        _last_n_words_each_cluster: dict = self.get_last_words_each_cluster(last_n_words=last_n_words if last_n_words > 0 else 0)
+        _cluster_similarity: Dict[str, Dict[str, float]] = {}
+        for first_cluster in _cluster_labels:
+            _cluster_similarity.update({str(first_cluster): {}})
+            _first_cluster_top_n_words: List[str] = [w[0] for w in _top_n_words_each_cluster.get(str(first_cluster))]
+            for second_cluster in _cluster_labels:
+                if first_cluster == second_cluster:
+                    continue
+                _second_cluster_top_n_words: List[str] = [w[0] for w in _top_n_words_each_cluster.get(str(second_cluster))]
+                _similarity: float = 0
+                for top in _first_cluster_top_n_words:
+                    if top in _second_cluster_top_n_words:
+                        _similarity += 1
+                _similarity = 0 if _similarity == 0 else _similarity / len(_first_cluster_top_n_words)
+                _cluster_similarity[str(first_cluster)].update({str(second_cluster): _similarity})
+        return _cluster_similarity
+
     def delete_cluster(self, cluster_labels: List[int]):
         """
         Delete cluster information
@@ -180,7 +219,7 @@ class GibbsSamplingDirichletMultinomialModeling:
         Fitting GSDMM clustering algorithm
 
         :param documents: List[List[str]]
-            The document token stream
+            Tokenized documents
 
         :return: List[int]
             Cluster labels
@@ -245,15 +284,34 @@ class GibbsSamplingDirichletMultinomialModeling:
             _topic_allocations.append(_topic_label)
         return _topic_allocations
 
-    def get_top_words_each_cluster(self, top_n_words: int = 5) -> dict:
+    def get_last_words_each_cluster(self, last_n_words: int = 5) -> Dict[str, Tuple[str, int]]:
         """
-        Get top n words of each cluster
+        Get last-n-words of each cluster
+
+        :param last_n_words: int
+            Number of last words of each cluster
+
+        :return: Dict[str, Tuple[str, int]]
+            Last-n-words and frequency of each cluster
+        """
+        _last_n_words_each_cluster: dict = {}
+        for cluster in range(0, self.n_clusters, 1):
+            _sorted_words_current_cluster = sorted(self.cluster_word_distribution[cluster].items(),
+                                                   key=lambda c: c[1],
+                                                   reverse=True
+                                                   )[last_n_words:]
+            _last_n_words_each_cluster.update({str(cluster): _sorted_words_current_cluster})
+        return _last_n_words_each_cluster
+
+    def get_top_words_each_cluster(self, top_n_words: int = 5) -> Dict[str, Tuple[str, int]]:
+        """
+        Get top-n-words of each cluster
 
         :param top_n_words: int
-            Number of top n words of each cluster
+            Number of top words of each cluster
 
-        :return: dict
-            Top n words of each cluster
+        :return: Dict[str, Tuple[str, int]]
+            Top-n-words and frequency of each cluster
         """
         _top_n_words_each_cluster: dict = {}
         for cluster in range(0, self.n_clusters, 1):
@@ -263,6 +321,26 @@ class GibbsSamplingDirichletMultinomialModeling:
                                                    )[:top_n_words]
             _top_n_words_each_cluster.update({str(cluster): _sorted_words_current_cluster})
         return _top_n_words_each_cluster
+
+    def merge_cluster(self, cluster_labels: List[int]):
+        """
+        Merge clusters
+
+        :param cluster_labels: List[int]
+            Cluster labels to merge (first cluster label will be used as base)
+        """
+        for i, cluster in enumerate(cluster_labels):
+            if i > 0:
+                self.n_clusters -= 1
+                self.cluster_word_count[cluster_labels[0]] += self.cluster_word_count[cluster]
+                self.cluster_document_count[cluster_labels[0]] += self.cluster_document_count[cluster]
+                for word, freq in self.cluster_word_distribution[cluster].items():
+                    if word in self.cluster_word_distribution[cluster_labels[0]].keys():
+                        self.cluster_word_distribution[cluster_labels[0]][word] += freq
+                    else:
+                        self.cluster_word_distribution[cluster_labels[0]].update({word: freq})
+                del self.cluster_word_count[cluster]
+                del self.cluster_word_distribution[cluster]
 
     def predict(self, documents: List[str]) -> int:
         """
@@ -287,6 +365,78 @@ class GibbsSamplingDirichletMultinomialModeling:
             Probability vector for each document
         """
         return self._document_scoring(documents=documents)
+
+    def prepare_visualization(self, documents: List[List[str]]) -> pyLDAvis:
+        """
+        Prepare documents for visualization from trained model
+
+        :param documents: List[List[str]]
+            Tokenized documents
+
+        :return: pyLDAvis
+            Prepared word matrix, documents distances, vocabulary and word counts using pyLDAvis library
+        """
+        _voc: List[str] = []
+        for cluster in self.cluster_word_distribution:
+            _voc.extend(list(cluster.keys()))
+        _vocabulary: List[str] = list(set(_voc))
+        _doc_topic_distances: List[List[float]] = [self.predict_proba(doc) for doc in documents]
+        for doc in _doc_topic_distances:
+            for word in doc:
+                assert not isinstance(word, complex)
+        _doc_len = [len(doc) for doc in documents]
+        _word_counts_map: dict = {}
+        for doc in documents:
+            for word in doc:
+                _word_counts_map[word] = _word_counts_map.get(word, 0) + 1
+        _word_counts: list = [_word_counts_map[term] for term in _vocabulary]
+        _doc_topic_distances_ext: list = [[v if not math.isnan(v) else 1 / self.n_clusters for v in d] for d in _doc_topic_distances]
+        _doc_topic_distances_ext = [d if sum(d) > 0 else [1 / self.n_clusters] * self.n_clusters for d in _doc_topic_distances_ext]
+        for doc in _doc_topic_distances_ext:
+            for f in doc:
+                assert not isinstance(f, complex)
+        assert (pd.DataFrame(_doc_topic_distances_ext).sum(axis=1) < 0.999).sum() == 0
+        _word_matrix: list = []
+        for cluster in self.cluster_word_distribution:
+            _total: float = sum([frequency for word, frequency in cluster.items()])
+            assert not math.isnan(_total)
+            if _total == 0:
+                _row: list = [(1 / len(_vocabulary))] * len(_vocabulary)
+            else:
+                _row: list = [cluster.get(word, 0) / _total for word in _vocabulary]
+            for word in _row:
+                assert not isinstance(word, complex)
+            _word_matrix.append(_row)
+        return pyLDAvis.prepare(topic_term_dists=_word_matrix,
+                                doc_topic_dists=_doc_topic_distances_ext,
+                                doc_lengths=_doc_len,
+                                vocab=_vocabulary,
+                                term_frequency=_word_counts,
+                                R=30,
+                                lambda_step=0.01,
+                                sort_topics=False
+                                )
+
+    @staticmethod
+    def save_visualization(file_path: str, vis_data, **kwargs):
+        """
+        Save topic visualization as interactive html file
+
+        :param file_path: str
+            Complete file path
+
+        :param vis_data: pyLDAvis
+            Prepared data using pyLDAvis library
+
+        :param kwargs: dict
+            Key-word arguments for handling cloud information
+        """
+        DataExporter(obj=vis_data,
+                     file_path=file_path,
+                     bucket_name=kwargs.get('bucket'),
+                     region=kwargs.get('region'),
+                     **dict(topic_clustering=True)
+                     ).file()
 
     def word_importance_each_cluster(self) -> List[dict]:
         """
