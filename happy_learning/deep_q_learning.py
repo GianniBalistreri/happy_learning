@@ -1,3 +1,9 @@
+"""
+
+Train Reinforcement Learning Algorithm: Deep-Q-Learning Network
+
+"""
+
 import math
 import pandas as pd
 import random
@@ -16,7 +22,6 @@ TRANSITION: namedtuple = namedtuple('Transition', ('state', 'action', 'next_stat
 
 # TODO:
 #  categorize metric parameters into very small, small, medium, high, very high
-#  adjust parameter action and state in env.step
 
 
 class ReplayMemory:
@@ -82,6 +87,7 @@ class DQNAgent:
                  eps_decay: int = 200,
                  target_update: int = 10,
                  optimizer: str = 'rmsprop',
+                 use_clipped_reward: bool = False,
                  **kwargs
                  ):
         """
@@ -105,6 +111,9 @@ class DQNAgent:
         :param optimizer: str
             Abbreviate name of the optimizer
 
+        :param use_clipped_reward: bool
+            Whether to use clipped reward (categorical) or metric reward
+
         :param kwargs: dict
             Key-word arguments
         """
@@ -120,30 +129,86 @@ class DQNAgent:
         self.eps_end: float = eps_end
         self.eps_decay: float = eps_decay
         self.target_update: int = target_update
+        self.use_clipped_reward: bool = use_clipped_reward
         self.exploration_phase: bool = True
         self.exploration_phase_end: int = -1
         self.kwargs: dict = kwargs
 
-    def _select_action(self, state: torch.tensor) -> torch.tensor:
+    def _select_action(self, state: torch.tensor) -> dict:
         """
         Select action by the agent
 
         :param state: torch.tensor
             Tensor representing current state
 
-        :return: torch.tensor
-            Tensor representing new action
+        :return: dict
+            New action
         """
         _eps_threshold: float = self.eps_end + (self.eps_start - self.eps_end) * math.exp(-1.0 * self.env.n_steps / self.eps_decay)
         _sample: float = random.random()
+        print('Random Sample', _sample)
+        print('EPS Threshold', _eps_threshold)
+        _model_name: str = random.choice(seq=list(self.env.action_space['param_to_value'].keys()))
+        _action_names: List[str] = self.env.action_space['action']
+        #_action_names: List[str] = list(self.env.action_space['param_to_value'][_model_name].keys())
         if _sample > _eps_threshold:
             with torch.no_grad():
                 # t.max(1) will return largest column value of each row.
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
-                return self.policy_net(state).max(1)[1].view(1, 1)
+                _new_action_exploitation: torch.tensor = self.policy_net(state).max(1)[1].view(1, 1)
+                print('Exploitation action', _new_action_exploitation)
+                _idx: int = _new_action_exploitation.tolist()[0][0]
+                if _idx in list(self.env.action_space['categorical_action'].keys()):
+                    _action_name: str = _action_names[_idx].replace(f'_{self.env.action_space["categorical_action"][_idx]}', '')
+                    return {_model_name: {_action_name: self.env.action_space['categorical_action'][_idx],
+                                          'idx': _idx
+                                          }
+                            }
+                elif _idx in list(self.env.action_space['ordinal_action'].keys()):
+                    return {_model_name: {_action_names[_idx]: random.randint(a=self.env.action_space['ordinal_action'][_idx][0],
+                                                                              b=self.env.action_space['ordinal_action'][_idx][1]
+                                                                              ),
+                                          'idx': _idx
+                                          }
+                            }
+                elif _idx in list(self.env.action_space['continuous_action'].keys()):
+                    return {_model_name: {_action_names[_idx]: random.uniform(a=self.env.action_space['continuous_action'][_idx][0],
+                                                                              b=self.env.action_space['continuous_action'][_idx][1]
+                                                                              ),
+                                          'idx': _idx
+                                          }
+                            }
+                else:
+                    raise DQNAgentException(f'Type of action ({_action_names[_idx]}) not supported')
         else:
-            return torch.tensor([[random.randrange(self.env.n_actions)]], device=DEVICE, dtype=torch.long)
+            _new_state: List[float] = []
+            _idx: int = random.randint(a=0, b=len(_action_names) - 1)
+            if _idx in list(self.env.action_space['categorical_action'].keys()):
+                _action_name: str = _action_names[_idx].replace(f'_{self.env.action_space["categorical_action"][_idx]}',
+                                                                '')
+                return {_model_name: {_action_name: self.env.action_space['categorical_action'][_idx],
+                                      'idx': _idx
+                                      }
+                        }
+            elif _idx in list(self.env.action_space['ordinal_action'].keys()):
+                return {_model_name: {
+                    _action_names[_idx]: random.randint(a=self.env.action_space['ordinal_action'][_idx][0],
+                                                        b=self.env.action_space['ordinal_action'][_idx][1]
+                                                        ),
+                    'idx': _idx
+                    }
+                        }
+            elif _idx in list(self.env.action_space['continuous_action'].keys()):
+                return {_model_name: {
+                    _action_names[_idx]: random.uniform(a=self.env.action_space['continuous_action'][_idx][0],
+                                                        b=self.env.action_space['continuous_action'][_idx][1]
+                                                        ),
+                    'idx': _idx
+                    }
+                        }
+            else:
+                raise DQNAgentException(f'Type of action ({_action_names[_idx]}) not supported')
 
     def _train(self, data_sets: dict):
         """
@@ -152,29 +217,31 @@ class DQNAgent:
         :param data_sets: dict
             Train, test and validation data set
         """
-        _init_state: List[float] = [0.0] * self.env.n_actions
-        _init_action: int = random.randint(0, self.env.n_actions)
-        _init_state[_init_action] = 1.0
-        _state: List[float] = _init_state
         for i_episode in range(0, self.episodes, 1):
-            # Initialize the environment and state
-            self.env.reset()
-            while self.env.n_steps % self.env.n_actions != 0:
+            print('Episode:', i_episode)
+            for a in range(0, self.env.n_actions, 1):
                 # Select and perform an action
-                _action: torch.tensor = self._select_action(state=_state)
+                if self.env.n_steps == 0:
+                    _action: dict = None
+                else:
+                    _action: dict = self._select_action(state=self.env.state)
                 # Observe new state and reward
-                _next_state, reward, clipped_reward = self.env.step(act=_action.item(),
-                                                                    new_state=None,
-                                                                    data_sets=data_sets
-                                                                    )
-                _reward: torch.tensor = torch.tensor([reward], device=DEVICE)
+                _state, _next_state, _reward, _clipped_reward = self.env.step(action=_action, data_sets=data_sets)
+                print('Reward', _reward)
                 # Store the transition in memory
-                self.memory.push(_state, _action, _next_state, _reward)
+                if _action is not None:
+                    _model_name: str = list(_action.keys())[0]
+                    self.memory.push(_state,
+                                     torch.tensor([[_action[_model_name]['idx']]]),
+                                     _next_state,
+                                     _clipped_reward if self.use_clipped_reward else _reward
+                                     )
 
                 # Move to the next state
                 _state = _next_state
 
                 # Perform one step of the optimization (on the policy network)
+                print('Length Memory', len(self.memory))
                 if len(self.memory) >= self.batch_size:
                     transitions = self.memory.sample(self.batch_size)
                     # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
@@ -208,7 +275,7 @@ class DQNAgent:
 
                     # Compute Huber loss
                     criterion = torch.nn.SmoothL1Loss()
-                    loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
+                    loss = criterion(state_action_values.to(dtype=torch.float64), expected_state_action_values.unsqueeze(1))
 
                     # Optimize the model
                     self.optimizer.zero_grad()
@@ -249,11 +316,11 @@ class DQNAgent:
         self.env: EnvironmentModeling = EnvironmentModeling(sml_problem=HappyLearningUtils().get_ml_type(values=df[target].values),
                                                             sml_algorithm=self.kwargs.get('sml_algorithm')
                                                             )
-        self.policy_net: DQNFC = DQNFC(input_size=_n_features,
+        self.policy_net: DQNFC = DQNFC(input_size=self.env.n_actions,
                                        hidden_size=100,
                                        output_size=self.env.n_actions
                                        ).to(DEVICE)
-        self.target_net: DQNFC = DQNFC(input_size=_n_features,
+        self.target_net: DQNFC = DQNFC(input_size=self.env.n_actions,
                                        hidden_size=100,
                                        output_size=self.env.n_actions
                                        ).to(DEVICE)
@@ -261,6 +328,7 @@ class DQNAgent:
         self.target_net.eval()
         self.optimizer: torch.optim = torch.optim.RMSprop(self.policy_net.parameters())
         self.memory: ReplayMemory = ReplayMemory(10000)
+        print('Training started')
         self._train(data_sets=data_sets)
 
     def save(self):

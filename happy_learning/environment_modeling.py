@@ -1,15 +1,20 @@
 """
 
-Reinforcement Learning Environment for Hyper-Parameter Optimization
+Reinforcement Learning Environment for Hyper-Parameter Optimization of Supervised Machine Learning Algorithms
 
 """
 
 import numpy as np
+import random
+import torch
 
 from .evaluate_machine_learning import sml_fitness_score, SML_SCORE
 from .supervised_machine_learning import (
-    CLF_ALGORITHMS, ModelGeneratorClf, ModelGeneratorReg, REG_ALGORITHMS, PARAM_SPACE_CLF, PARAM_SPACE_REG
+    ModelGeneratorClf, ModelGeneratorReg, Q_TABLE_PARAM_SPACE_CLF, Q_TABLE_PARAM_SPACE_REG
 )
+from typing import List
+
+DEVICE: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 class EnvironmentModelingException(Exception):
@@ -33,49 +38,156 @@ class EnvironmentModeling:
         """
         if sml_problem not in ['clf_binary', 'clf_multi', 'reg']:
             raise EnvironmentModelingException(f'Machine learning problem ({sml_problem}) not supported')
-        self.action_space: dict = {}
+        self.action_space: dict = dict(param_to_value={},
+                                       action=[],
+                                       categorical_action={},
+                                       ordinal_action={},
+                                       continuous_action={},
+                                       model_names=[]
+                                       )
         if sml_algorithm is None:
             if sml_problem.find('clf') >= 0:
-                for algorithm in CLF_ALGORITHMS.keys():
-                    self.action_space.update({algorithm: PARAM_SPACE_CLF.get(algorithm)})
+                for algorithm in Q_TABLE_PARAM_SPACE_CLF.keys():
+                    self.action_space['param_to_value'].update({algorithm: Q_TABLE_PARAM_SPACE_CLF.get(algorithm)})
             else:
-                for algorithm in REG_ALGORITHMS.keys():
-                    self.action_space.update({algorithm: PARAM_SPACE_REG.get(algorithm)})
+                for algorithm in Q_TABLE_PARAM_SPACE_REG.keys():
+                    self.action_space['param_to_value'].update({algorithm: Q_TABLE_PARAM_SPACE_REG.get(algorithm)})
         else:
             if sml_problem.find('clf') >= 0:
-                if sml_algorithm in CLF_ALGORITHMS.keys():
-                    self.action_space.update({sml_algorithm: PARAM_SPACE_CLF.get(sml_algorithm)})
+                if sml_algorithm in Q_TABLE_PARAM_SPACE_CLF.keys():
+                    self.action_space['param_to_value'].update({sml_algorithm: Q_TABLE_PARAM_SPACE_CLF.get(sml_algorithm)})
                 else:
                     raise EnvironmentModelingException(f'Classification algorithm ({sml_algorithm}) not supported')
             else:
-                if sml_algorithm in REG_ALGORITHMS.keys():
-                    self.action_space.update({sml_algorithm: PARAM_SPACE_REG.get(sml_algorithm)})
+                if sml_algorithm in Q_TABLE_PARAM_SPACE_REG.keys():
+                    self.action_space['param_to_value'].update({sml_algorithm: Q_TABLE_PARAM_SPACE_REG.get(sml_algorithm)})
                 else:
                     raise EnvironmentModelingException(f'Regression algorithm ({sml_algorithm}) not supported')
         self.sml_problem: str = sml_problem
         self.sml_algorithm: str = sml_algorithm
         self.n_steps: int = 0
         self.n_actions: int = 0
-        for algorithm in self.action_space.keys():
-            for param in self.action_space.get(algorithm):
-                if isinstance(self.action_space[algorithm][param], list):
-                    self.n_actions += len(self.action_space[algorithm][param])
-                else:
+        _n_params: int = 0
+        for algorithm in self.action_space['param_to_value'].keys():
+            for param in self.action_space['param_to_value'].get(algorithm):
+                if isinstance(self.action_space['param_to_value'][algorithm][param], list):
+                    for value in self.action_space['param_to_value'][algorithm][param]:
+                        self.action_space['categorical_action'].update({_n_params: value})
+                        self.action_space['action'].append(f'{param}_{value}')
+                        _n_params += 1
+                    self.action_space['model_names'].extend([algorithm] * len(self.action_space['param_to_value'][algorithm][param]))
+                    self.n_actions += len(self.action_space['param_to_value'][algorithm][param])
+                elif isinstance(self.action_space['param_to_value'][algorithm][param], tuple):
+                    self.action_space['action'].append(param)
+                    self.action_space['model_names'].append(algorithm)
                     self.n_actions += 1
-        self.last_reward: float = 0.0
-        self.profit: float = 0
+                    if isinstance(self.action_space['param_to_value'][algorithm][param][0], float):
+                        self.action_space['continuous_action'].update({_n_params: tuple([self.action_space['param_to_value'][algorithm][param][0],
+                                                                                         self.action_space['param_to_value'][algorithm][param][1]
+                                                                                         ]
+                                                                                        )
+                                                                       })
+                    elif isinstance(self.action_space['param_to_value'][algorithm][param][0], int):
+                        self.action_space['ordinal_action'].update({_n_params: tuple([self.action_space['param_to_value'][algorithm][param][0],
+                                                                                      self.action_space['param_to_value'][algorithm][param][1]
+                                                                                      ]
+                                                                                     )
+                                                                    })
+                    _n_params += 1
+                else:
+                    raise EnvironmentModelingException(f'Type of action ({self.action_space["param_to_value"][algorithm][param]}) not supported')
+        self.state: torch.tensor = None
+        self.observations: dict = dict(action=[],
+                                       state=[],
+                                       reward=[],
+                                       reward_clipped=[],
+                                       fitness=[],
+                                       transition_gain=[]
+                                       )
 
-    def reset(self):
+    def _action_to_state(self, action: dict) -> dict:
         """
-        Reset reinforcement learning environment settings
-        """
-        self.profit = 0
+        Convert action to state
 
-    def step(self, act: dict, data_sets: dict) -> tuple:
+        :param action: dict
+            Selected action by agent
+
+        :return: dict
+            New hyper-parameter configuration (state)
+        """
+        _model_name: str = list(action.keys())[0]
+        _idx: int = action[_model_name]['idx']
+        _model_param: str = list(action[_model_name].keys())[0]
+        _current_state: dict = self.observations['state'][-1]
+        _current_state[_model_name].update({_model_param: action[_model_name][_model_param]})
+        return _current_state
+
+    def _initial_state(self, model_name: str) -> dict:
+        """
+        Initialize state
+
+        :param model_name: str
+            Abbreviated name of the model
+
+        :return: dict
+            Initial hyper-parameter configuration (state)
+        """
+        _state: dict = {model_name: {}}
+        for action in self.action_space['param_to_value'][model_name].keys():
+            if isinstance(self.action_space['param_to_value'][model_name].get(action), tuple):
+                if isinstance(self.action_space['param_to_value'][model_name].get(action)[0], float):
+                    _state[model_name].update({action: random.uniform(a=self.action_space['param_to_value'][model_name].get(action)[0],
+                                                                      b=self.action_space['param_to_value'][model_name].get(action)[1]
+                                                                      )
+                                               })
+                elif isinstance(self.action_space['param_to_value'][model_name].get(action)[0], int):
+                    _state[model_name].update({action: random.randint(a=self.action_space['param_to_value'][model_name].get(action)[0],
+                                                                      b=self.action_space['param_to_value'][model_name].get(action)[1]
+                                                                      )
+                                               })
+                else:
+                    raise EnvironmentModelingException(f'Type of action ({self.action_space["param_to_value"][model_name].get(action)}) not supported')
+            elif isinstance(self.action_space['param_to_value'][model_name].get(action), list):
+                _state[model_name].update({action: random.choice(seq=self.action_space['param_to_value'][model_name].get(action))})
+            else:
+                raise EnvironmentModelingException(f'Type of action ({self.action_space["param_to_value"][model_name].get(action)}) not supported')
+        self.observations['state'].append(_state)
+        return _state
+
+    def _state_to_tensor(self, model_name, state: dict) -> torch.tensor:
+        """
+        Convert state (hyper-parameter configuration) to tensor
+
+        :param model_name: str
+            Abbreviate name of the model
+
+        :param state: dict
+            Hyper-parameter configuration (state)
+
+        :return: torch.tensor
+            Tensor representing new state
+        """
+        _new_state: List[float] = []
+        for action in self.action_space['param_to_value'][model_name].keys():
+            if isinstance(self.action_space['param_to_value'][model_name].get(action), tuple):
+                _new_state.append(state[model_name][action])
+            elif isinstance(self.action_space['param_to_value'][model_name].get(action), list):
+                for cat in enumerate(self.action_space['param_to_value'][model_name].get(action)):
+                    if cat == state[model_name][action]:
+                        _new_state.append(1.0)
+                    else:
+                        _new_state.append(0.0)
+            else:
+                raise EnvironmentModelingException(
+                    f'Type of action ({self.action_space["param_to_value"][model_name].get(action)}) not supported')
+        print('--- State ---', _new_state)
+        return torch.tensor([_new_state], device=DEVICE)
+
+    def step(self, action: dict, data_sets: dict) -> tuple:
         """
         Reaction step of the environment to given action
 
-        :param act: dict
+        :param action: dict
             Hyper-parameter configuration
 
         :param data_sets: dict
@@ -85,25 +197,31 @@ class EnvironmentModeling:
             State, reward (sml-score), clipped reward
         """
         self.n_steps += 1
-        _model_name: str = list(act.keys())[0]
-        if self.sml_problem.find('clf') >= 0:
-            _model: ModelGeneratorClf = ModelGeneratorClf(model_name=_model_name,
-                                                          clf_params=act.get(_model_name),
-                                                          models=[_model_name]
-                                                          )
+        if action is None:
+            _model_name: str = random.choice(seq=self.action_space['model_names'])
+            _current_state: torch.tensor = torch.tensor(data=[[0.0] * self.n_actions], device=DEVICE)
+            _state: dict = self._initial_state(model_name=_model_name)
         else:
-            _model: ModelGeneratorReg = ModelGeneratorReg(model_name=_model_name,
-                                                          reg_params=act.get(_model_name),
-                                                          models=[_model_name]
-                                                          )
-        # TODO: change old state into new state using current action
-        _state: dict = {}
-
+            _model_name: str = list(action.keys())[0]
+            _current_state: torch.tensor = self._state_to_tensor(model_name=_model_name,
+                                                                 state=self.observations['state'][-1]
+                                                                 )
+            _state: dict = self._action_to_state(action=action)
+        if self.sml_problem.find('clf') >= 0:
+            _model = ModelGeneratorClf(model_name=_model_name,
+                                       clf_params=_state.get(_model_name),
+                                       models=[_model_name]
+                                       ).generate_model()
+        else:
+            _model = ModelGeneratorReg(model_name=_model_name,
+                                       reg_params=_state.get(_model_name),
+                                       models=[_model_name]
+                                       ).generate_model()
         _model.train(x=data_sets.get('x_train').values, y=data_sets.get('y_train').values)
-        _pred_train: np.array = _model.predict(x=data_sets.get('x_train').values, probability=False)
-        _model.eval(obs=data_sets.get('x_train').values, pred=_pred_train, eval_metric=None, train_error=True)
-        _pred_test: np.array = _model.predict(x=data_sets.get('x_test').values, probability=False)
-        _model.eval(obs=data_sets.get('x_test').values, pred=_pred_test, eval_metric=None, train_error=False)
+        _pred_train: np.array = _model.predict(x=data_sets.get('x_train').values)
+        _model.eval(obs=data_sets.get('y_train').values, pred=_pred_train, eval_metric=None, train_error=True)
+        _pred_test: np.array = _model.predict(x=data_sets.get('x_test').values)
+        _model.eval(obs=data_sets.get('y_test').values, pred=_pred_test, eval_metric=None, train_error=False)
         _ml_metric: str = SML_SCORE['ml_metric'][self.sml_problem]
         _best_score: float = SML_SCORE['ml_metric_best'][self.sml_problem]
         _score: float = sml_fitness_score(ml_metric=tuple([_best_score, _model.fitness['test'].get(_ml_metric)]),
@@ -112,6 +230,18 @@ class EnvironmentModeling:
                                                                   ),
                                           train_time_in_seconds=_model.train_time
                                           )
-        _reward_clipped: int = 1 if _score > self.last_reward else -1
-        self.profit += _score - self.last_reward
-        return _state, _score, _reward_clipped
+        if len(self.observations['reward']) == 0:
+            _reward_clipped: int = -1
+        else:
+            _reward_clipped: int = 1 if _score > self.observations['reward'][-1] else -1
+        self.state = self._state_to_tensor(model_name=_model_name, state=_state)
+        self.observations['action'].append(action)
+        self.observations['state'].append(_state)
+        self.observations['reward'].append(_score)
+        self.observations['reward_clipped'].append(_reward_clipped)
+        self.observations['fitness'].append(_model.fitness)
+        self.observations['transition_gain'].append(_score - self.observations['reward'][-1])
+        return _current_state,\
+               self.state,\
+               torch.tensor([[_score]], device=DEVICE),\
+               torch.tensor([[_reward_clipped]], device=DEVICE)
