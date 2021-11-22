@@ -179,6 +179,14 @@ class EnvironmentModeling:
         _model_param: str = list(action[_model_name].keys())[0]
         _current_state: dict = self.observations['state'][-1]
         _current_state[_model_name].update({_model_param: action[_model_name][_model_param]})
+        _same_param_other_value: List[str] = []
+        for original_param in self.action_space['original_param'][_model_name].keys():
+            if _model_param in self.action_space['original_param'][_model_name][original_param]:
+                _same_param_other_value.extend(self.action_space['original_param'][_model_name][original_param])
+                break
+        for other_value in _same_param_other_value:
+            if other_value != _model_param:
+                _current_state[_model_name].update({other_value: 0.0})
         return _current_state
 
     def _initial_state(self, model_name: str) -> dict:
