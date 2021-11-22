@@ -4,6 +4,7 @@ Train Reinforcement Learning Algorithm: Deep-Q-Learning Network
 
 """
 
+import numpy as np
 import math
 import pandas as pd
 import random
@@ -14,7 +15,10 @@ from .neural_network_torch import DQNFC
 from .sampler import MLSampler
 from .utils import HappyLearningUtils
 from collections import namedtuple, deque
+from datetime import datetime
+from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter
 from easyexplore.data_visualizer import DataVisualizer
+from easyexplore.utils import Log
 from typing import List
 
 DEVICE: str = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -88,6 +92,15 @@ class DQNAgent:
                  target_update: int = 10,
                  optimizer: str = 'rmsprop',
                  use_clipped_reward: bool = False,
+                 timer_in_seconds: int = 43200,
+                 force_target_type: str = None,
+                 plot: bool = False,
+                 output_file_path: str = None,
+                 deploy_model: bool = True,
+                 cloud: str = None,
+                 log: bool = False,
+                 verbose: bool = False,
+                 checkpoint: bool = True,
                  **kwargs
                  ):
         """
@@ -114,6 +127,37 @@ class DQNAgent:
         :param use_clipped_reward: bool
             Whether to use clipped reward (categorical) or metric reward
 
+        :param timer_in_seconds: int
+            Maximum time exceeding to interrupt algorithm
+
+        :param force_target_type: str
+            Name of the target type to force (useful if target type is ordinal)
+                -> reg: define target type as regression instead of multi classification
+                -> clf_multi: define target type as multi classification instead of regression
+
+        :param plot: bool
+            Whether to visualize results or not
+
+        :param output_file_path: str
+            File path for exporting results (model, visualization, etc.)
+
+        :param cloud: str
+            Name of the cloud provider
+                -> google: Google Cloud Storage
+                -> aws: AWS Cloud
+
+        :param deploy_model: bool
+            Whether to deploy (save) evolved model or not
+
+        :param log: bool
+            Write logging file or just print messages
+
+        :param verbose: bool
+            Log all processes (extended logging)
+
+        :param checkpoint: bool
+            Save checkpoint after each adjustment
+
         :param kwargs: dict
             Key-word arguments
         """
@@ -130,9 +174,40 @@ class DQNAgent:
         self.eps_decay: float = eps_decay
         self.target_update: int = target_update
         self.use_clipped_reward: bool = use_clipped_reward
-        self.exploration_phase: bool = True
-        self.exploration_phase_end: int = -1
+        self.deploy_model: bool = deploy_model
+        self.n_training: int = 0
+        self.n_optimization: int = 0
+        self.n_update: int = 0
+        self.cloud: str = cloud
+        if self.cloud is None:
+            self.bucket_name: str = None
+        else:
+            if self.cloud not in CLOUD_PROVIDER:
+                raise DQNAgentException('Cloud provider ({}) not supported'.format(cloud))
+            if output_file_path is None:
+                raise DQNAgentException('Output file path is None')
+            self.bucket_name: str = output_file_path.split("//")[1].split("/")[0]
+        if output_file_path is None:
+            self.output_file_path: str = ''
+        else:
+            self.output_file_path: str = output_file_path.replace('\\', '/')
+            if self.output_file_path[len(self.output_file_path) - 1] != '/':
+                self.output_file_path = '{}/'.format(self.output_file_path)
+        self.force_target_type: str = force_target_type
+        self.n_cases: int = 0
+        self.experience_idx: int = 0
+        self.plot: bool = plot
+        self.timer: int = timer_in_seconds if timer_in_seconds > 0 else 99999
+        self.log: bool = log
+        self.verbose: bool = verbose
+        self.start_time: datetime = datetime.now()
         self.kwargs: dict = kwargs
+
+    def _save_checkpoint(self):
+        """
+        Save checkpoint of the agent
+        """
+        pass
 
     def _select_action(self, state: torch.tensor) -> dict:
         """
@@ -146,8 +221,8 @@ class DQNAgent:
         """
         _eps_threshold: float = self.eps_end + (self.eps_start - self.eps_end) * math.exp(-1.0 * self.env.n_steps / self.eps_decay)
         _sample: float = random.random()
-        print('Random Sample', _sample)
-        print('EPS Threshold', _eps_threshold)
+        if self.verbose:
+            Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'EPS threshold: {_eps_threshold}')
         _model_name: str = random.choice(seq=list(self.env.action_space['param_to_value'].keys()))
         _action_names: List[str] = self.env.action_space['action']
         #_action_names: List[str] = list(self.env.action_space['param_to_value'][_model_name].keys())
@@ -157,8 +232,9 @@ class DQNAgent:
                 # second column on max result is index of where max element was
                 # found, so we pick action with the larger expected reward.
                 _new_action_exploitation: torch.tensor = self.policy_net(state).max(1)[1].view(1, 1)
-                print('Exploitation action', _new_action_exploitation)
                 _idx: int = _new_action_exploitation.tolist()[0][0]
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Exploitation action: {_idx}')
                 if _idx in list(self.env.action_space['categorical_action'].keys()):
                     _action_name: str = _action_names[_idx].replace(f'_{self.env.action_space["categorical_action"][_idx]}', '')
                     return {_model_name: {_action_name: self.env.action_space['categorical_action'][_idx],
@@ -184,6 +260,8 @@ class DQNAgent:
         else:
             _new_state: List[float] = []
             _idx: int = random.randint(a=0, b=len(_action_names) - 1)
+            if self.verbose:
+                Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Exploration action: {_idx}')
             if _idx in list(self.env.action_space['categorical_action'].keys()):
                 _action_name: str = _action_names[_idx].replace(f'_{self.env.action_space["categorical_action"][_idx]}',
                                                                 '')
@@ -217,17 +295,27 @@ class DQNAgent:
         :param data_sets: dict
             Train, test and validation data set
         """
-        for i_episode in range(0, self.episodes, 1):
-            print('Episode:', i_episode)
-            for a in range(0, self.env.n_actions, 1):
+        for episode in range(0, self.episodes, 1):
+            Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Episode: {episode}')
+            for _ in range(0, self.env.n_actions, 1):
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Step: {self.env.n_steps}')
                 # Select and perform an action
                 if self.env.n_steps == 0:
                     _action: dict = None
                 else:
                     _action: dict = self._select_action(state=self.env.state)
+                    if self.verbose:
+                        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'New action: {_action}')
                 # Observe new state and reward
                 _state, _next_state, _reward, _clipped_reward = self.env.step(action=_action, data_sets=data_sets)
-                print('Reward', _reward)
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Current state: {self.env.observations["state"][-2]}')
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'New state: {self.env.observations["state"][-1]}')
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Reward: {self.env.observations["reward"][-1]}')
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Reward (clipped): {self.env.observations["reward_clipped"][-1]}')
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Fitness: {self.env.observations["fitness"][-1]}')
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Transition gain: {self.env.observations["transition_gain"][-1]}')
                 # Store the transition in memory
                 if _action is not None:
                     _model_name: str = list(_action.keys())[0]
@@ -241,8 +329,12 @@ class DQNAgent:
                 _state = _next_state
 
                 # Perform one step of the optimization (on the policy network)
-                print('Length Memory', len(self.memory))
-                if len(self.memory) >= self.batch_size:
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Memory length: {self.memory.__len__()}')
+                if self.memory.__len__() >= self.batch_size:
+                    self.n_optimization += 1
+                    if self.verbose:
+                        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Optimization step of policy network: {self.n_optimization}')
                     transitions = self.memory.sample(self.batch_size)
                     # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
                     # detailed explanation). This converts batch-array of Transitions
@@ -275,7 +367,9 @@ class DQNAgent:
 
                     # Compute Huber loss
                     criterion = torch.nn.SmoothL1Loss()
-                    loss = criterion(state_action_values.to(dtype=torch.float64), expected_state_action_values.unsqueeze(1))
+                    loss = criterion(state_action_values.to(dtype=torch.float64),
+                                     expected_state_action_values.unsqueeze(1).to(dtype=torch.float64)
+                                     )
 
                     # Optimize the model
                     self.optimizer.zero_grad()
@@ -284,10 +378,19 @@ class DQNAgent:
                         param.grad.data.clamp_(-1, 1)
                     self.optimizer.step()
             # Update the target network, copying all weights and biases in DQN
-            if i_episode % self.target_update == 0:
+            if episode % self.target_update == 0:
+                self.n_update += 1
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Update step of target network: {self.n_update}')
                 self.target_net.load_state_dict(self.policy_net.state_dict())
 
-    def optimize(self, df: pd.DataFrame, target: str, features: List[str] = None):
+    def optimize(self,
+                 df: pd.DataFrame,
+                 target: str,
+                 features: List[str] = None,
+                 memory_capacity: int = 10000,
+                 hidden_layer_size: int = 100,
+                 ):
         """
         Optimize hyper-parameter configuration
 
@@ -299,6 +402,12 @@ class DQNAgent:
 
         :param features: List[str]
             Names of the features used as predictors
+
+        :param memory_capacity: int
+            Maximum capacity of the agent memory
+
+        :param hidden_layer_size: int
+            Number of neurons of the fully connected hidden layer
         """
         if features is None:
             _features: List[str] = list(df.columns)
@@ -316,26 +425,44 @@ class DQNAgent:
         self.env: EnvironmentModeling = EnvironmentModeling(sml_problem=HappyLearningUtils().get_ml_type(values=df[target].values),
                                                             sml_algorithm=self.kwargs.get('sml_algorithm')
                                                             )
+        _hidden_layer_size: int = hidden_layer_size if hidden_layer_size > 1 else 100
         self.policy_net: DQNFC = DQNFC(input_size=self.env.n_actions,
-                                       hidden_size=100,
+                                       hidden_size=_hidden_layer_size,
                                        output_size=self.env.n_actions
                                        ).to(DEVICE)
         self.target_net: DQNFC = DQNFC(input_size=self.env.n_actions,
-                                       hidden_size=100,
+                                       hidden_size=_hidden_layer_size,
                                        output_size=self.env.n_actions
                                        ).to(DEVICE)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
         self.optimizer: torch.optim = torch.optim.RMSprop(self.policy_net.parameters())
-        self.memory: ReplayMemory = ReplayMemory(10000)
-        print('Training started')
+        _memory_capacity: int = memory_capacity if memory_capacity >= 10 else 10000
+        self.memory: ReplayMemory = ReplayMemory(capacity=_memory_capacity)
         self._train(data_sets=data_sets)
+        self.experience_idx = np.array(self.env.observations['reward']).argmax()
+        _reward: float = self.env.observations['reward'][self.experience_idx]
+        _state: dict = self.env.observations['state'][self.experience_idx]
+        _model_param: dict = self.env.observations['model_param'][self.experience_idx]
+        _fitness: dict = self.env.observations['fitness'][self.experience_idx]
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model state: {_state}')
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model param: {_model_param}')
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model fitness: {_fitness}')
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model reward: {_reward}')
+        self.save(agent=True, model=self.deploy_model, experience=True)
+        if self.plot:
+            self.visualize()
 
-    def save(self):
+    def save(self, agent: bool, model: bool, experience: bool):
         """
         Save learnings of the agent
         """
-        pass
+        if agent:
+            pass
+        if model:
+            _model = self.env.train_final_model(experience_id=self.experience_idx, data_sets=None)
+        if experience:
+            pass
 
     def visualize(self):
         """
