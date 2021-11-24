@@ -161,7 +161,9 @@ class EnvironmentModeling:
                                        reward_clipped=[],
                                        fitness=[],
                                        transition_gain=[],
-                                       model_param=[]
+                                       model_param=[],
+                                       model_name=[],
+                                       sml_score=[]
                                        )
 
     def _action_to_state(self, action: dict) -> dict:
@@ -335,17 +337,31 @@ class EnvironmentModeling:
         else:
             _reward_clipped: int = 1 if _score > self.observations['reward'][-1] else -1
         self.state = self._state_to_tensor(model_name=_model_name, state=_state)
+        if self.n_steps == 1:
+            self.observations['transition_gain'].append(0)
+        else:
+            self.observations['transition_gain'].append(_score - self.observations['reward'][-1])
+        if self.observations['transition_gain'][-1] > 0:
+            _reward: float = _score + self.observations['transition_gain'][-1]
+        else:
+            if _score == 0.00001 and self.observations['transition_gain'][-1] == 0.00001:
+                _reward: float = -1
+            else:
+                _reward: float = self.observations['transition_gain'][-1]
         self.observations['action'].append(action)
         self.observations['state'].append(_state)
-        self.observations['reward'].append(_score)
+        self.observations['reward'].append(_reward)
         self.observations['reward_clipped'].append(_reward_clipped)
         self.observations['fitness'].append(_model.fitness)
-        self.observations['transition_gain'].append(_score - self.observations['reward'][-1])
         self.observations['model_param'].append(_model_param)
-        return _current_state,\
-               self.state,\
-               torch.tensor([[_score]], device=DEVICE),\
-               torch.tensor([[_reward_clipped]], device=DEVICE)
+        self.observations['model_name'].append(_model_name)
+        self.observations['score'].append(_score)
+        _transition_elements: tuple = tuple([_current_state,
+                                             self.state,
+                                             torch.tensor([[_reward]], device=DEVICE),
+                                             torch.tensor([[_reward_clipped]], device=DEVICE)
+                                             ])
+        return _transition_elements
 
     def train_final_model(self, experience_id: int, data_sets: dict) -> object:
         """
