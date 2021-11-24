@@ -6,6 +6,7 @@ Train Reinforcement Learning Algorithm: Deep-Q-Learning Network
 
 import numpy as np
 import math
+import os
 import pandas as pd
 import random
 import torch
@@ -16,16 +17,13 @@ from .sampler import MLSampler
 from .utils import HappyLearningUtils
 from collections import namedtuple, deque
 from datetime import datetime
-from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter
+from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter, DataImporter
 from easyexplore.data_visualizer import DataVisualizer
 from easyexplore.utils import Log
 from typing import List
 
 DEVICE: str = 'cuda' if torch.cuda.is_available() else 'cpu'
 TRANSITION: namedtuple = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
-
-# TODO:
-#  categorize metric parameters into very small, small, medium, high, very high
 
 
 class ReplayMemory:
@@ -101,6 +99,7 @@ class DQNAgent:
                  log: bool = False,
                  verbose: bool = False,
                  checkpoint: bool = True,
+                 checkpoint_episode_interval: int = 5,
                  **kwargs
                  ):
         """
@@ -158,6 +157,9 @@ class DQNAgent:
         :param checkpoint: bool
             Save checkpoint after each adjustment
 
+        :parm checkpoint_episode_interval: int
+            Episode interval for saving checkpoint
+
         :param kwargs: dict
             Key-word arguments
         """
@@ -195,11 +197,16 @@ class DQNAgent:
                 self.output_file_path = '{}/'.format(self.output_file_path)
         self.force_target_type: str = force_target_type
         self.n_cases: int = 0
+        self.loss: List[float] = []
+        self.action_learning_type: List[str] = []
+        self.episode: List[int] = []
         self.experience_idx: int = 0
         self.plot: bool = plot
-        self.timer: int = timer_in_seconds if timer_in_seconds > 0 else 99999
         self.log: bool = log
         self.verbose: bool = verbose
+        self.checkpoint: bool = checkpoint
+        self.checkpoint_episode_interval: int = checkpoint_episode_interval if checkpoint_episode_interval > 0 else 5
+        self.timer: int = timer_in_seconds if timer_in_seconds > 0 else 99999
         self.start_time: datetime = datetime.now()
         self.kwargs: dict = kwargs
 
@@ -207,7 +214,11 @@ class DQNAgent:
         """
         Save checkpoint of the agent
         """
-        pass
+        self.save(agent=True,
+                  model=False,
+                  data_sets={},
+                  experience=False
+                  )
 
     def _select_action(self, state: torch.tensor) -> dict:
         """
@@ -225,8 +236,8 @@ class DQNAgent:
             Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'EPS threshold: {_eps_threshold}')
         _model_name: str = random.choice(seq=list(self.env.action_space['param_to_value'].keys()))
         _action_names: List[str] = self.env.action_space['action']
-        #_action_names: List[str] = list(self.env.action_space['param_to_value'][_model_name].keys())
         if _sample > _eps_threshold:
+            self.action_learning_type.append('exploitation')
             with torch.no_grad():
                 # t.max(1) will return largest column value of each row.
                 # second column on max result is index of where max element was
@@ -258,6 +269,7 @@ class DQNAgent:
                 else:
                     raise DQNAgentException(f'Type of action ({_action_names[_idx]}) not supported')
         else:
+            self.action_learning_type.append('exploration')
             _new_state: List[float] = []
             _idx: int = random.randint(a=0, b=len(_action_names) - 1)
             if self.verbose:
@@ -295,14 +307,21 @@ class DQNAgent:
         :param data_sets: dict
             Train, test and validation data set
         """
+        _early_stopping: bool = False
         for episode in range(0, self.episodes, 1):
+            self.episode.append(episode)
             Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Episode: {episode}')
             for _ in range(0, self.env.n_actions, 1):
+                if (datetime.now() - self.start_time).seconds >= self.timer:
+                    _early_stopping = False
+                    Log(write=self.log, logger_file_path=self.output_file_path).log('Time exceeded:{}'.format(self.timer))
+                    break
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Step: {self.env.n_steps}')
                 # Select and perform an action
                 if self.env.n_steps == 0:
                     _action: dict = None
+                    self.action_learning_type.append('exploration')
                 else:
                     _action: dict = self._select_action(state=self.env.state)
                     if self.verbose:
@@ -314,8 +333,9 @@ class DQNAgent:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'New state: {self.env.observations["state"][-1]}')
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Reward: {self.env.observations["reward"][-1]}')
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Reward (clipped): {self.env.observations["reward_clipped"][-1]}')
-                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Fitness: {self.env.observations["fitness"][-1]}')
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Transition gain: {self.env.observations["transition_gain"][-1]}')
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Fitness: {self.env.observations["fitness"][-1]}')
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Score: {self.env.observations["score"][-1]}')
                 # Store the transition in memory
                 if _action is not None:
                     _model_name: str = list(_action.keys())[0]
@@ -368,8 +388,10 @@ class DQNAgent:
                     # Compute Huber loss
                     criterion = torch.nn.SmoothL1Loss()
                     loss = criterion(state_action_values.to(dtype=torch.float64),
-                                     expected_state_action_values.unsqueeze(1).to(dtype=torch.float64)
+                                     expected_state_action_values.unsqueeze(1).resize_((self.batch_size, 1)).to(dtype=torch.float64)
                                      )
+                    self.loss.append(loss)
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Loss: {loss}')
 
                     # Optimize the model
                     self.optimizer.zero_grad()
@@ -378,11 +400,15 @@ class DQNAgent:
                         param.grad.data.clamp_(-1, 1)
                     self.optimizer.step()
             # Update the target network, copying all weights and biases in DQN
+            if _early_stopping:
+                break
             if episode % self.target_update == 0:
                 self.n_update += 1
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Update step of target network: {self.n_update}')
                 self.target_net.load_state_dict(self.policy_net.state_dict())
+            if self.checkpoint and episode % self.checkpoint_episode_interval == 0:
+                self._save_checkpoint()
 
     def optimize(self,
                  df: pd.DataFrame,
@@ -440,32 +466,286 @@ class DQNAgent:
         _memory_capacity: int = memory_capacity if memory_capacity >= 10 else 10000
         self.memory: ReplayMemory = ReplayMemory(capacity=_memory_capacity)
         self._train(data_sets=data_sets)
-        self.experience_idx = np.array(self.env.observations['reward']).argmax()
-        _reward: float = self.env.observations['reward'][self.experience_idx]
+        self.experience_idx = np.array(self.env.observations['sml_score']).argmax()
+        _score: float = self.env.observations['sml_score'][self.experience_idx]
         _state: dict = self.env.observations['state'][self.experience_idx]
         _model_param: dict = self.env.observations['model_param'][self.experience_idx]
         _fitness: dict = self.env.observations['fitness'][self.experience_idx]
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model state: {_state}')
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model param: {_model_param}')
         Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model fitness: {_fitness}')
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model reward: {_reward}')
-        self.save(agent=True, model=self.deploy_model, experience=True)
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model score: {_score}')
+        self.save(agent=True if self.kwargs.get('save_agent') is None else self.kwargs.get('save_agent'),
+                  model=self.deploy_model,
+                  data_sets=data_sets,
+                  experience=False if self.kwargs.get('save_experience') is None else self.kwargs.get('save_experience')
+                  )
         if self.plot:
             self.visualize()
 
-    def save(self, agent: bool, model: bool, experience: bool):
+    def optimize_continue(self,
+                          file_path_policy_network: str,
+                          file_path_target_network: str,
+                          file_path_environment: str,
+                          df: pd.DataFrame,
+                          target: str,
+                          features: List[str] = None,
+                          memory_capacity: int = 10000,
+                          ):
+        """
+        Continue hyper-parameter optimization
+
+        :param file_path_policy_network: str
+            Complete file path of the saved policy network
+
+        :param file_path_target_network: str
+            Complete file path of the saved target network
+
+        :param file_path_environment: str
+            Complete file path of the saved environment
+
+        :param df: pd.DataFrame
+            Data set
+
+        :param target: str
+            Name of the target feature
+
+        :param features: List[str]
+            Names of the features used as predictors
+
+        :param memory_capacity: int
+            Maximum capacity of the agent memory
+        """
+        if features is None:
+            _features: List[str] = list(df.columns)
+        else:
+            _features: List[str] = features
+        if target in _features:
+            del _features[_features.index(target)]
+        _n_features: int = len(_features)
+        data_sets: dict = MLSampler(df=df,
+                                    target=target,
+                                    features=_features if features is None else features,
+                                    train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
+                                    stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
+                                    ).train_test_sampling(validation_split=0.1 if self.kwargs.get('validation_split') is None else self.kwargs.get('validation_split'))
+        self.policy_net = DataImporter(file_path=file_path_policy_network,
+                                       as_data_frame=False,
+                                       use_dask=False,
+                                       create_dir=False,
+                                       sep=',',
+                                       cloud=self.cloud,
+                                       bucket_name=self.bucket_name,
+                                       region=self.kwargs.get('region')
+                                       ).file()
+        self.target_net = DataImporter(file_path=file_path_target_network,
+                                       as_data_frame=False,
+                                       use_dask=False,
+                                       create_dir=False,
+                                       sep=',',
+                                       cloud=self.cloud,
+                                       bucket_name=self.bucket_name,
+                                       region=self.kwargs.get('region')
+                                       ).file()
+        self.env = DataImporter(file_path=file_path_environment,
+                                as_data_frame=False,
+                                use_dask=False,
+                                create_dir=False,
+                                sep=',',
+                                cloud=self.cloud,
+                                bucket_name=self.bucket_name,
+                                region=self.kwargs.get('region')
+                                ).file()
+        self.optimizer: torch.optim = torch.optim.RMSprop(self.policy_net.parameters())
+        _memory_capacity: int = memory_capacity if memory_capacity >= 10 else 10000
+        self.memory: ReplayMemory = ReplayMemory(capacity=_memory_capacity)
+        self._train(data_sets=data_sets)
+        self.experience_idx = np.array(self.env.observations['sml_score']).argmax()
+        _score: float = self.env.observations['sml_score'][self.experience_idx]
+        _state: dict = self.env.observations['state'][self.experience_idx]
+        _model_param: dict = self.env.observations['model_param'][self.experience_idx]
+        _fitness: dict = self.env.observations['fitness'][self.experience_idx]
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model state: {_state}')
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model param: {_model_param}')
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model fitness: {_fitness}')
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model score: {_score}')
+        self.save(agent=True if self.kwargs.get('save_agent') is None else self.kwargs.get('save_agent'),
+                  model=self.deploy_model,
+                  data_sets=data_sets,
+                  experience=False if self.kwargs.get('save_experience') is None else self.kwargs.get('save_experience')
+                  )
+        if self.plot:
+            self.visualize()
+
+    def save(self, agent: bool, model: bool, data_sets: dict, experience: bool):
         """
         Save learnings of the agent
+
+        :param agent: bool
+            Save necessary parts of the agent (policy network, target network, environment)
+
+        :param model: bool
+            Save best observed model
+
+        :param data_sets: dict
+            Train, test and validation data sets
+
+        :param experience: bool
+            Save experiences of the agent
         """
         if agent:
-            pass
+            DataExporter(obj=self.policy_net,
+                         file_path=os.path.join(self.output_file_path, 'rl_policy_net.p'),
+                         create_dir=False,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
+                         ).file()
+            DataExporter(obj=self.target_net,
+                         file_path=os.path.join(self.output_file_path, 'rl_target_net.p'),
+                         create_dir=False,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
+                         ).file()
+            self.env.observations.update({'action_learning_type': self.action_learning_type,
+                                          'loss': self.loss,
+                                          'episode': self.episode
+                                          })
+            DataExporter(obj=self.env,
+                         file_path=os.path.join(self.output_file_path, 'rl_env.p'),
+                         create_dir=False,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
+                         ).file()
         if model:
-            _model = self.env.train_final_model(experience_id=self.experience_idx, data_sets=None)
+            _model = self.env.train_final_model(experience_id=self.experience_idx, data_sets=data_sets)
+            DataExporter(obj=_model,
+                         file_path=os.path.join(self.output_file_path, 'model.p'),
+                         create_dir=False,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
+                         ).file()
         if experience:
-            pass
+            _experience: dict = self.env.observations
+            _experience.update({'loss': self.loss})
+            _experience.update({'action_learning_type': self.action_learning_type})
+            DataExporter(obj=_experience,
+                         file_path=os.path.join(self.output_file_path, 'rl_agent_experience.p'),
+                         create_dir=False,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
+                         ).file()
 
-    def visualize(self):
+    def visualize(self,
+                  results_table: bool = True,
+                  reward_distribution: bool = False,
+                  rl_experience: bool = True,
+                  action_learning_type_distribution: bool = True,
+                  reward_distribution_grouped_by_action_learning: bool = True
+                  ):
         """
-        Visualize statistics generated by reinforcement learning environment
+        Visualize statistics generated by the interaction of agent and reinforcement learning environment
+
+        :param results_table: bool
+            Visualize reinforcement learning results as table chart
+
+        :param reward_distribution: bool
+            Visualize reward distribution
+
+        :param rl_experience: bool
+            Visualize experiences of agent and environment observations
+
+        :param action_learning_type_distribution: bool
+            Visualize distribution of action learning type
+
+        :param reward_distribution_grouped_by_action_learning: bool
+            Visualize reward distribution grouped by action learning types
         """
-        pass
+        _df: pd.DataFrame = pd.DataFrame()
+        _df['model_name'] = self.env.observations.get('model_name')
+        #_df['action'] = self.env.observations.get('action')
+        _df['reward'] = self.env.observations.get('reward')
+        _df['reward_clipped'] = self.env.observations.get('reward_clipped')
+        _df['transition_gain'] = self.env.observations.get('transition_gain')
+        _df['action_learning_type'] = self.action_learning_type
+        _df['step'] = [step for step in range(0, self.env.n_steps, 1)]
+        _train_error: List[float] = []
+        _test_error: List[float] = []
+        _metric_name: str = ''
+        for metric in self.env.observations.get('fitness'):
+            _metric_name = list(metric['train'].keys())[0]
+            _train_error.append(metric['train'][_metric_name])
+            _test_error.append(metric['test'][_metric_name])
+        _df[f'train_error_{_metric_name}'] = _train_error
+        _df[f'test_error_{_metric_name}'] = _test_error
+        _charts: dict = {}
+        if results_table:
+            _charts.update({'Results of Reinforcement Learning:': dict(data=_df,
+                                                                       plot_type='table',
+                                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'rl_metadata_table.html')
+                                                                       )
+                            })
+        if reward_distribution:
+            _charts.update({'Distribution of Reward per Time Step:': dict(data=_df,
+                                                                          features=['reward'],
+                                                                          time_features=['step'],
+                                                                          plot_type='ridgeline',
+                                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'rl_fitness_score_distribution_per_generation.html')
+                                                                          )
+                            })
+        if rl_experience:
+            _charts.update({'Reinforcement Learning Experience:': dict(data=_df,
+                                                                       features=['model_name',
+                                                                                 'action_learning_type',
+                                                                                 'step',
+                                                                                 f'train_error_{_metric_name}',
+                                                                                 f'test_error_{_metric_name}',
+                                                                                 'reward_clipped',
+                                                                                 'reward',
+                                                                                 'transition_gain'
+                                                                                 ],
+                                                                       #color_feature='reward',
+                                                                       color_feature='transition_gain',
+                                                                       plot_type='parcoords',
+                                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'rl_experience_metadata.html')
+                                                                       )
+                            })
+        if action_learning_type_distribution:
+            _charts.update({'Distribution of Action Learning Type:': dict(data=_df,
+                                                                          features=['action_learning_type'],
+                                                                          plot_type='bar',
+                                                                          melt=True,
+                                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                                self.output_file_path,
+                                                                                'rl_action_learning_type_distribution.html')
+                                                                          )
+                            })
+        if reward_distribution_grouped_by_action_learning:
+            _charts.update({'Reward grouped by Action Learning Type:': dict(data=_df,
+                                                                            features=['reward'],
+                                                                            group_by=['action_learning_type'],
+                                                                            plot_type='hist',
+                                                                            melt=True,
+                                                                            file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                                self.output_file_path,
+                                                                                'rl_reward_by_action_learning_type.html')
+                                                                            )
+                            })
+        if len(_charts.keys()) > 0:
+            DataVisualizer(subplots=_charts,
+                           interactive=True,
+                           file_path=self.output_file_path,
+                           render=True if self.output_file_path is None else False,
+                           height=750,
+                           width=750,
+                           unit='px'
+                           ).run()
