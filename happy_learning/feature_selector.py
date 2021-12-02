@@ -81,7 +81,7 @@ class FeatureSelector:
         self.target: str = target
         self.imp_score: Dict[str, float] = {}
         self.aggregate_feature_imp: Dict[str, dict] = aggregate_feature_imp
-        self.features: List[str] = list(self.df.keys()) if features is None else features
+        self.features: List[str] = list(self.df.columns) if features is None else features
         if self.target in self.features:
             del self.features[self.features.index(self.target)]
         self.force_target_type: str = force_target_type
@@ -101,6 +101,19 @@ class FeatureSelector:
                 if self.path.split('/')[-1] != '':
                     self.path = '{}/'.format(self.path)
         self.kwargs: dict = kwargs
+        self.init_pairs: int = self.kwargs.get('init_pairs')
+        self.init_games: int = self.kwargs.get('init_games')
+        self.increasing_pair_size_factor: float = self.kwargs.get('increasing_pair_size_factor')
+        self.games: int = self.kwargs.get('games')
+        self.penalty_factor: float = self.kwargs.get('penalty_factor')
+        self.evolutionary_algorithm: str = self.kwargs.get('evolutionary_algorithm')
+        self.max_iter = self.kwargs.get('max_iter')
+        self.kwargs.pop('init_pairs', None)
+        self.kwargs.pop('init_games', None)
+        self.kwargs.pop('increasing_pair_size_factor', None)
+        self.kwargs.pop('games', None)
+        self.kwargs.pop('evolutionary_algorithm', None)
+        self.kwargs.pop('max_iter', None)
 
     def get_imp_features(self,
                          meth: str = 'shapley',
@@ -144,13 +157,13 @@ class FeatureSelector:
                                                   target=self.target,
                                                   force_target_type=self.force_target_type,
                                                   models=['cat'] if model is None else [model],
-                                                  init_pairs=3 if self.kwargs.get('init_pairs') is None else self.kwargs.get('init_pairs'),
-                                                  init_games=5 if self.kwargs.get('init_games') is None else self.kwargs.get('init_games'),
-                                                  increasing_pair_size_factor=0.05 if self.kwargs.get('increasing_pair_size_factor') is None else self.kwargs.get('increasing_pair_size_factor'),
-                                                  games=3 if self.kwargs.get('games') is None else self.kwargs.get('games'),
-                                                  penalty_factor=0.1 if self.kwargs.get('penalty_factor') is None else self.kwargs.get('penalty_factor'),
-                                                  evolutionary_algorithm='si' if self.kwargs.get('evolutionary_algorithm') is None else self.kwargs.get('evolutionary_algorithm'),
-                                                  max_iter=50 if self.kwargs.get('max_iter') is None else self.kwargs.get('max_iter'),
+                                                  init_pairs=3 if self.init_pairs is None else self.init_pairs,
+                                                  init_games=5 if self.init_games is None else self.init_games,
+                                                  increasing_pair_size_factor=0.05 if self.increasing_pair_size_factor is None else self.increasing_pair_size_factor,
+                                                  games=3 if self.games is None else self.games,
+                                                  penalty_factor=0.1 if self.penalty_factor is None else self.penalty_factor,
+                                                  evolutionary_algorithm='si' if self.evolutionary_algorithm is None else self.evolutionary_algorithm,
+                                                  max_iter=50 if self.max_iter is None else self.max_iter,
                                                   **self.kwargs
                                                   ).play()
             _df: pd.DataFrame = pd.DataFrame(data=_imp_scores.get('total'), index=['score']).transpose()
