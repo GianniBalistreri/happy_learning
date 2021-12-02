@@ -18,7 +18,7 @@ from .utils import HappyLearningUtils
 from collections import namedtuple, deque
 from datetime import datetime
 from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter, DataImporter
-from easyexplore.data_visualizer import DataVisualizer
+from easyexplore.data_visualizer import DataVisualizer, plots
 from easyexplore.utils import Log
 from typing import List
 
@@ -197,9 +197,6 @@ class DQNAgent:
                 self.output_file_path = '{}/'.format(self.output_file_path)
         self.force_target_type: str = force_target_type
         self.n_cases: int = 0
-        self.loss: List[float] = []
-        self.action_learning_type: List[str] = []
-        self.episode: List[int] = []
         self.experience_idx: int = 0
         self.plot: bool = plot
         self.log: bool = log
@@ -237,7 +234,7 @@ class DQNAgent:
         _model_name: str = random.choice(seq=list(self.env.action_space['param_to_value'].keys()))
         _action_names: List[str] = self.env.action_space['action']
         if _sample > _eps_threshold:
-            self.action_learning_type.append('exploitation')
+            self.env.observations['action_learning_type'].append('exploitation')
             with torch.no_grad():
                 # t.max(1) will return largest column value of each row.
                 # second column on max result is index of where max element was
@@ -269,7 +266,7 @@ class DQNAgent:
                 else:
                     raise DQNAgentException(f'Type of action ({_action_names[_idx]}) not supported')
         else:
-            self.action_learning_type.append('exploration')
+            self.env.observations['action_learning_type'].append('exploration')
             _new_state: List[float] = []
             _idx: int = random.randint(a=0, b=len(_action_names) - 1)
             if self.verbose:
@@ -309,19 +306,23 @@ class DQNAgent:
         """
         _early_stopping: bool = False
         for episode in range(0, self.episodes, 1):
-            self.episode.append(episode)
-            Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Episode: {episode}')
+            if len(self.env.observations['episode']) == 0:
+                _episode: int = episode
+            else:
+                _episode: int = self.env.observations['episode'][-1] + 1
+            Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Episode: {_episode}')
             for _ in range(0, self.env.n_actions, 1):
                 if (datetime.now() - self.start_time).seconds >= self.timer:
                     _early_stopping = False
                     Log(write=self.log, logger_file_path=self.output_file_path).log('Time exceeded:{}'.format(self.timer))
                     break
+                self.env.observations['episode'].append(_episode)
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Step: {self.env.n_steps}')
                 # Select and perform an action
                 if self.env.n_steps == 0:
                     _action: dict = None
-                    self.action_learning_type.append('exploration')
+                    self.env.observations['action_learning_type'].append('exploration')
                 else:
                     _action: dict = self._select_action(state=self.env.state)
                     if self.verbose:
@@ -335,7 +336,7 @@ class DQNAgent:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Reward (clipped): {self.env.observations["reward_clipped"][-1]}')
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Transition gain: {self.env.observations["transition_gain"][-1]}')
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Fitness: {self.env.observations["fitness"][-1]}')
-                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Score: {self.env.observations["score"][-1]}')
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Score: {self.env.observations["sml_score"][-1]}')
                 # Store the transition in memory
                 if _action is not None:
                     _model_name: str = list(_action.keys())[0]
@@ -353,6 +354,7 @@ class DQNAgent:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Memory length: {self.memory.__len__()}')
                 if self.memory.__len__() >= self.batch_size:
                     self.n_optimization += 1
+                    self.env.observations['policy_update'].append(self.n_optimization)
                     if self.verbose:
                         Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Optimization step of policy network: {self.n_optimization}')
                     transitions = self.memory.sample(self.batch_size)
@@ -390,7 +392,7 @@ class DQNAgent:
                     loss = criterion(state_action_values.to(dtype=torch.float64),
                                      expected_state_action_values.unsqueeze(1).resize_((self.batch_size, 1)).to(dtype=torch.float64)
                                      )
-                    self.loss.append(loss)
+                    self.env.observations['loss'].append(loss.detach().numpy().tolist())
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Loss: {loss}')
 
                     # Optimize the model
@@ -399,16 +401,186 @@ class DQNAgent:
                     for param in self.policy_net.parameters():
                         param.grad.data.clamp_(-1, 1)
                     self.optimizer.step()
-            # Update the target network, copying all weights and biases in DQN
+                else:
+                    self.env.observations['loss'].append(0)
+                    self.env.observations['target_update'].append(self.n_update)
+                    self.env.observations['policy_update'].append(self.n_optimization)
             if _early_stopping:
                 break
+            # Update the target network, copying all weights and biases in DQN
             if episode % self.target_update == 0:
                 self.n_update += 1
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Update step of target network: {self.n_update}')
                 self.target_net.load_state_dict(self.policy_net.state_dict())
-            if self.checkpoint and episode % self.checkpoint_episode_interval == 0:
+            else:
+                _diff: int = len(self.env.observations['policy_update']) - len(self.env.observations['target_update'])
+                self.env.observations['target_update'].extend([self.n_update] * _diff)
+            if self.checkpoint and _episode > 0 and _episode % self.checkpoint_episode_interval == 0:
                 self._save_checkpoint()
+
+    def apply_learning(self,
+                       model_name: str,
+                       param: dict,
+                       file_path_policy_network: str = None,
+                       file_path_environment: str = None,
+                       file_path_model: str = None,
+                       data_sets: dict = None,
+                       max_actions: int = 1,
+                       force_all_actions: bool = False,
+                       **kwargs
+                       ):
+        """
+        Apply learning to generate optimized hyper-parameter configuration
+
+        :param model_name: str
+            Abbreviate name of the supervised machine learning model
+
+        :param param: dict
+            Initial hyper-parameter configuration (state)
+
+        :param file_path_policy_network: str
+            Complete file path of the saved policy network
+
+        :param file_path_environment: str
+            Complete file path of the saved environment
+
+        :param file_path_model: str
+            Complete file path to save optimized model
+
+        :param data_sets: dict
+            Train, test and validation data sets
+
+        :param max_actions: int
+            Maximum number of actions to apply
+
+        :param force_all_actions: bool
+            Whether to force all number of action and choose best hyper-parameter configuration
+
+        :param kwargs: dict
+            Key-word arguments for saving model
+
+        :return: dict
+            Optimized hyper-parameter configuration
+        """
+        if file_path_environment is not None:
+            self.env = DataImporter(file_path=file_path_environment,
+                                    as_data_frame=False,
+                                    use_dask=False,
+                                    create_dir=False,
+                                    sep=',',
+                                    cloud=self.cloud,
+                                    bucket_name=self.bucket_name,
+                                    region=self.kwargs.get('region')
+                                    ).file()
+        if file_path_policy_network is not None:
+            self.policy_net = DataImporter(file_path=file_path_policy_network,
+                                           as_data_frame=False,
+                                           use_dask=False,
+                                           create_dir=False,
+                                           sep=',',
+                                           cloud=self.cloud,
+                                           bucket_name=self.bucket_name,
+                                           region=self.kwargs.get('region')
+                                           ).file()
+        _current_state: dict = {}
+        _max_actions: int = max_actions if max_actions > 0 else 1
+        if data_sets is not None:
+            _model: object = self.env.train_final_model(data_sets=data_sets,
+                                                        model_name=model_name,
+                                                        param=param,
+                                                        eval=True
+                                                        )
+        _param: dict = param
+        _observations: dict = dict(model=[], sml_score=[])
+        _model_idx: int = 0
+        for i in range(0, _max_actions, 1):
+            if self.verbose:
+                Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Current state: {_param}')
+            _state: torch.tensor = self.env.state_to_tensor(model_name=model_name,
+                                                            state=self.env.param_to_state(model_name=model_name,
+                                                                                          param=_param
+                                                                                          )
+                                                            )
+            with torch.no_grad():
+                _new_action_exploitation: torch.tensor = self.policy_net(_state).max(1)[1].view(1, 1)
+                _idx: int = _new_action_exploitation.tolist()[0][0]
+                _action_names: List[str] = self.env.action_space['action']
+                if _idx in list(self.env.action_space['categorical_action'].keys()):
+                    _action_name: str = _action_names[_idx].replace(f'_{self.env.action_space["categorical_action"][_idx]}',
+                                                                    '')
+                    _action: dict = {model_name: {_action_name: self.env.action_space['categorical_action'][_idx],
+                                                  'idx': _idx
+                                                  }
+                                     }
+                elif _idx in list(self.env.action_space['ordinal_action'].keys()):
+                    _action: dict = {model_name: {
+                        _action_names[_idx]: random.randint(a=self.env.action_space['ordinal_action'][_idx][0],
+                                                            b=self.env.action_space['ordinal_action'][_idx][1]
+                                                            ),
+                        'idx': _idx
+                        }
+                            }
+                elif _idx in list(self.env.action_space['continuous_action'].keys()):
+                    _action: dict = {model_name: {
+                        _action_names[_idx]: random.uniform(a=self.env.action_space['continuous_action'][_idx][0],
+                                                            b=self.env.action_space['continuous_action'][_idx][1]
+                                                            ),
+                        'idx': _idx
+                        }
+                            }
+                else:
+                    raise DQNAgentException(f'Type of action ({_action_names[_idx]}) not supported')
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Exploited action: {_action_names[_idx]} - {_action[model_name][_action_name]}')
+            _current_state: dict = _param
+            _model_param: str = list(_action[model_name].keys())[0]
+            _same_param_other_value: List[str] = []
+            for original_param in self.env.action_space['original_param'][model_name].keys():
+                if _model_param in self.env.action_space['original_param'][model_name][original_param]:
+                    _current_state.update({original_param: _action[model_name][_model_param]})
+                    break
+            if data_sets is None:
+                break
+            else:
+                _new_model: object = self.env.train_final_model(data_sets=data_sets,
+                                                                model_name=model_name,
+                                                                param=_current_state,
+                                                                eval=True
+                                                                )
+                _observations['model'].append(_new_model)
+                _observations['sml_score'].append(_new_model.fitness_score)
+                if self.verbose:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Current Model Fitness: {_model.fitness_score} | New Model Fitness:{_new_model.fitness_score}')
+                if _model.fitness_score < _new_model.fitness_score:
+                    if force_all_actions:
+                        if i + 1 == max_actions:
+                            _best_model_idx: int = np.array(_observations['sml_score']).argmax()
+                            _best_model: object = _observations['model'][_best_model_idx]
+                            _current_state = _best_model.model_param
+                            if file_path_model is not None:
+                                DataExporter(obj=_best_model.model,
+                                             file_path=file_path_model,
+                                             create_dir=False,
+                                             overwrite=False if kwargs.get('overwrite') is None else kwargs.get('overwrite'),
+                                             cloud=kwargs.get('cloud'),
+                                             bucket_name=kwargs.get('bucket_name'),
+                                             region=kwargs.get('region')
+                                             ).file()
+                    else:
+                        if file_path_model is not None:
+                            DataExporter(obj=_new_model.model,
+                                         file_path=file_path_model,
+                                         create_dir=False,
+                                         overwrite=False if kwargs.get('overwrite') is None else kwargs.get('overwrite'),
+                                         cloud=kwargs.get('cloud'),
+                                         bucket_name=kwargs.get('bucket_name'),
+                                         region=kwargs.get('region')
+                                         ).file()
+                        break
+                else:
+                    _param = _current_state
+        return _current_state
 
     def optimize(self,
                  df: pd.DataFrame,
@@ -416,6 +588,9 @@ class DQNAgent:
                  features: List[str] = None,
                  memory_capacity: int = 10000,
                  hidden_layer_size: int = 100,
+                 file_path_policy_network: str = None,
+                 file_path_target_network: str = None,
+                 file_path_environment: str = None
                  ):
         """
         Optimize hyper-parameter configuration
@@ -434,66 +609,6 @@ class DQNAgent:
 
         :param hidden_layer_size: int
             Number of neurons of the fully connected hidden layer
-        """
-        if features is None:
-            _features: List[str] = list(df.columns)
-        else:
-            _features: List[str] = features
-        if target in _features:
-            del _features[_features.index(target)]
-        _n_features: int = len(_features)
-        data_sets: dict = MLSampler(df=df,
-                                    target=target,
-                                    features=_features if features is None else features,
-                                    train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
-                                    stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
-                                    ).train_test_sampling(validation_split=0.1 if self.kwargs.get('validation_split') is None else self.kwargs.get('validation_split'))
-        self.env: EnvironmentModeling = EnvironmentModeling(sml_problem=HappyLearningUtils().get_ml_type(values=df[target].values),
-                                                            sml_algorithm=self.kwargs.get('sml_algorithm')
-                                                            )
-        _hidden_layer_size: int = hidden_layer_size if hidden_layer_size > 1 else 100
-        self.policy_net: DQNFC = DQNFC(input_size=self.env.n_actions,
-                                       hidden_size=_hidden_layer_size,
-                                       output_size=self.env.n_actions
-                                       ).to(DEVICE)
-        self.target_net: DQNFC = DQNFC(input_size=self.env.n_actions,
-                                       hidden_size=_hidden_layer_size,
-                                       output_size=self.env.n_actions
-                                       ).to(DEVICE)
-        self.target_net.load_state_dict(self.policy_net.state_dict())
-        self.target_net.eval()
-        self.optimizer: torch.optim = torch.optim.RMSprop(self.policy_net.parameters())
-        _memory_capacity: int = memory_capacity if memory_capacity >= 10 else 10000
-        self.memory: ReplayMemory = ReplayMemory(capacity=_memory_capacity)
-        self._train(data_sets=data_sets)
-        self.experience_idx = np.array(self.env.observations['sml_score']).argmax()
-        _score: float = self.env.observations['sml_score'][self.experience_idx]
-        _state: dict = self.env.observations['state'][self.experience_idx]
-        _model_param: dict = self.env.observations['model_param'][self.experience_idx]
-        _fitness: dict = self.env.observations['fitness'][self.experience_idx]
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model state: {_state}')
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model param: {_model_param}')
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model fitness: {_fitness}')
-        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model score: {_score}')
-        self.save(agent=True if self.kwargs.get('save_agent') is None else self.kwargs.get('save_agent'),
-                  model=self.deploy_model,
-                  data_sets=data_sets,
-                  experience=False if self.kwargs.get('save_experience') is None else self.kwargs.get('save_experience')
-                  )
-        if self.plot:
-            self.visualize()
-
-    def optimize_continue(self,
-                          file_path_policy_network: str,
-                          file_path_target_network: str,
-                          file_path_environment: str,
-                          df: pd.DataFrame,
-                          target: str,
-                          features: List[str] = None,
-                          memory_capacity: int = 10000,
-                          ):
-        """
-        Continue hyper-parameter optimization
 
         :param file_path_policy_network: str
             Complete file path of the saved policy network
@@ -503,18 +618,6 @@ class DQNAgent:
 
         :param file_path_environment: str
             Complete file path of the saved environment
-
-        :param df: pd.DataFrame
-            Data set
-
-        :param target: str
-            Name of the target feature
-
-        :param features: List[str]
-            Names of the features used as predictors
-
-        :param memory_capacity: int
-            Maximum capacity of the agent memory
         """
         if features is None:
             _features: List[str] = list(df.columns)
@@ -529,36 +632,58 @@ class DQNAgent:
                                     train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
                                     stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
                                     ).train_test_sampling(validation_split=0.1 if self.kwargs.get('validation_split') is None else self.kwargs.get('validation_split'))
-        self.policy_net = DataImporter(file_path=file_path_policy_network,
-                                       as_data_frame=False,
-                                       use_dask=False,
-                                       create_dir=False,
-                                       sep=',',
-                                       cloud=self.cloud,
-                                       bucket_name=self.bucket_name,
-                                       region=self.kwargs.get('region')
-                                       ).file()
-        self.target_net = DataImporter(file_path=file_path_target_network,
-                                       as_data_frame=False,
-                                       use_dask=False,
-                                       create_dir=False,
-                                       sep=',',
-                                       cloud=self.cloud,
-                                       bucket_name=self.bucket_name,
-                                       region=self.kwargs.get('region')
-                                       ).file()
-        self.env = DataImporter(file_path=file_path_environment,
-                                as_data_frame=False,
-                                use_dask=False,
-                                create_dir=False,
-                                sep=',',
-                                cloud=self.cloud,
-                                bucket_name=self.bucket_name,
-                                region=self.kwargs.get('region')
-                                ).file()
+        if file_path_environment is None:
+            self.env: EnvironmentModeling = EnvironmentModeling(sml_problem=HappyLearningUtils().get_ml_type(values=df[target].values),
+                                                                sml_algorithm=self.kwargs.get('sml_algorithm')
+                                                                )
+        else:
+            self.env = DataImporter(file_path=file_path_environment,
+                                    as_data_frame=False,
+                                    use_dask=False,
+                                    create_dir=False,
+                                    sep=',',
+                                    cloud=self.cloud,
+                                    bucket_name=self.bucket_name,
+                                    region=self.kwargs.get('region')
+                                    ).file()
+        _hidden_layer_size: int = hidden_layer_size if hidden_layer_size > 1 else 100
+        if file_path_policy_network is None:
+            self.policy_net: DQNFC = DQNFC(input_size=self.env.n_actions,
+                                           hidden_size=_hidden_layer_size,
+                                           output_size=self.env.n_actions
+                                           ).to(DEVICE)
+        else:
+            self.policy_net = DataImporter(file_path=file_path_policy_network,
+                                           as_data_frame=False,
+                                           use_dask=False,
+                                           create_dir=False,
+                                           sep=',',
+                                           cloud=self.cloud,
+                                           bucket_name=self.bucket_name,
+                                           region=self.kwargs.get('region')
+                                           ).file()
+        if file_path_target_network is None:
+            self.target_net: DQNFC = DQNFC(input_size=self.env.n_actions,
+                                           hidden_size=_hidden_layer_size,
+                                           output_size=self.env.n_actions
+                                           ).to(DEVICE)
+            self.target_net.load_state_dict(self.policy_net.state_dict())
+            self.target_net.eval()
+        else:
+            self.target_net = DataImporter(file_path=file_path_target_network,
+                                           as_data_frame=False,
+                                           use_dask=False,
+                                           create_dir=False,
+                                           sep=',',
+                                           cloud=self.cloud,
+                                           bucket_name=self.bucket_name,
+                                           region=self.kwargs.get('region')
+                                           ).file()
         self.optimizer: torch.optim = torch.optim.RMSprop(self.policy_net.parameters())
         _memory_capacity: int = memory_capacity if memory_capacity >= 10 else 10000
         self.memory: ReplayMemory = ReplayMemory(capacity=_memory_capacity)
+        self.n_update = len(self.env.observations['target_update'])
+        self.n_optimization = len(self.env.observations['policy_update'])
         self._train(data_sets=data_sets)
         self.experience_idx = np.array(self.env.observations['sml_score']).argmax()
         _score: float = self.env.observations['sml_score'][self.experience_idx]
@@ -610,10 +735,6 @@ class DQNAgent:
                          bucket_name=self.bucket_name,
                          region=self.kwargs.get('region')
                          ).file()
-            self.env.observations.update({'action_learning_type': self.action_learning_type,
-                                          'loss': self.loss,
-                                          'episode': self.episode
-                                          })
             DataExporter(obj=self.env,
                          file_path=os.path.join(self.output_file_path, 'rl_env.p'),
                          create_dir=False,
@@ -633,10 +754,7 @@ class DQNAgent:
                          region=self.kwargs.get('region')
                          ).file()
         if experience:
-            _experience: dict = self.env.observations
-            _experience.update({'loss': self.loss})
-            _experience.update({'action_learning_type': self.action_learning_type})
-            DataExporter(obj=_experience,
+            DataExporter(obj=self.env.observations,
                          file_path=os.path.join(self.output_file_path, 'rl_agent_experience.p'),
                          create_dir=False,
                          overwrite=True,
@@ -647,10 +765,20 @@ class DQNAgent:
 
     def visualize(self,
                   results_table: bool = True,
-                  reward_distribution: bool = False,
-                  rl_experience: bool = True,
+                  rl_experience_metadata: bool = True,
+                  rl_experience_time_step: bool = True,
+                  reward_distribution: bool = True,
+                  reward_distribution_per_episode: bool = True,
+                  reward_distribution_grouped_by_action_learning: bool = True,
+                  reward_score_distribution: bool = True,
+                  score_distribution: bool = True,
+                  score_distribution_per_episode: bool = True,
+                  score_distribution_grouped_by_action_learning: bool = True,
+                  action_distribution: bool = True,
                   action_learning_type_distribution: bool = True,
-                  reward_distribution_grouped_by_action_learning: bool = True
+                  action_distribution_grouped_by_action_type: bool = True,
+                  loss_distribution: bool = True,
+                  loss_distribution_per_episode: bool = False,
                   ):
         """
         Visualize statistics generated by the interaction of agent and reinforcement learning environment
@@ -658,25 +786,62 @@ class DQNAgent:
         :param results_table: bool
             Visualize reinforcement learning results as table chart
 
+        :param rl_experience_metadata: bool
+            Visualize experiences of agent and environment observations
+
+        :param rl_experience_time_step: bool
+            Visualize experiences of the agent as time series
+
         :param reward_distribution: bool
             Visualize reward distribution
 
-        :param rl_experience: bool
-            Visualize experiences of agent and environment observations
+        :param reward_distribution_per_episode: bool
+            Visualize reward distribution per episode
+
+        :param reward_distribution_grouped_by_action_learning: bool
+            Visualize reward distribution grouped by action learning types
+
+        :param reward_score_distribution: bool
+            Visualize reward supervised machine learning score joint distribution
+
+        :param score_distribution: bool
+            Visualize supervised machine learning score distribution
+
+        :param score_distribution_per_episode: bool
+            Visualize supervised machine learning score distribution per episode
+
+        :param score_distribution_grouped_by_action_learning: bool
+            Visualize supervised machine learning score distribution grouped by action learning type
+
+        :param action_distribution: bool
+            Visualize action distribution
+
+        :param action_distribution_grouped_by_action_type: bool
+            Visualize action distribution grouped by action learning type
 
         :param action_learning_type_distribution: bool
             Visualize distribution of action learning type
 
-        :param reward_distribution_grouped_by_action_learning: bool
-            Visualize reward distribution grouped by action learning types
+        :param loss_distribution: bool
+            Visualize loss distribution of the neural network of the agent
+
+        :param loss_distribution_per_episode: bool
+            Visualize loss distribution of the neural network of the agent per episode
         """
         _df: pd.DataFrame = pd.DataFrame()
         _df['model_name'] = self.env.observations.get('model_name')
-        #_df['action'] = self.env.observations.get('action')
+        _df['action'] = self.env.observations.get('action')
+        _df['action_value'] = self.env.observations.get('action_value')
+        _df['sml_score'] = self.env.observations.get('sml_score')
         _df['reward'] = self.env.observations.get('reward')
+        _df['reward_scaled'] = _df['reward'] * 100
         _df['reward_clipped'] = self.env.observations.get('reward_clipped')
         _df['transition_gain'] = self.env.observations.get('transition_gain')
-        _df['action_learning_type'] = self.action_learning_type
+        _df['action_learning_type'] = self.env.observations.get('action_learning_type')
+        _df['episode'] = self.env.observations.get('episode')
+        _df['loss'] = self.env.observations.get('loss')
+        _df['policy_update'] = self.env.observations.get('policy_update')
+        _df['target_update'] = self.env.observations.get('target_update')
         _df['step'] = [step for step in range(0, self.env.n_steps, 1)]
         _train_error: List[float] = []
         _test_error: List[float] = []
@@ -691,43 +856,69 @@ class DQNAgent:
         if results_table:
             _charts.update({'Results of Reinforcement Learning:': dict(data=_df,
                                                                        plot_type='table',
-                                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'rl_metadata_table.html')
+                                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                           self.output_file_path,
+                                                                           'rl_metadata_table.html'
+                                                                       )
                                                                        )
                             })
-        if reward_distribution:
-            _charts.update({'Distribution of Reward per Time Step:': dict(data=_df,
-                                                                          features=['reward'],
-                                                                          time_features=['step'],
-                                                                          plot_type='ridgeline',
-                                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'rl_fitness_score_distribution_per_generation.html')
-                                                                          )
-                            })
-        if rl_experience:
+        if rl_experience_metadata:
             _charts.update({'Reinforcement Learning Experience:': dict(data=_df,
                                                                        features=['model_name',
                                                                                  'action_learning_type',
                                                                                  'step',
+                                                                                 'episode',
+                                                                                 'policy_update',
+                                                                                 'target_update',
                                                                                  f'train_error_{_metric_name}',
                                                                                  f'test_error_{_metric_name}',
                                                                                  'reward_clipped',
                                                                                  'reward',
-                                                                                 'transition_gain'
+                                                                                 'transition_gain',
+                                                                                 'sml_score'
                                                                                  ],
-                                                                       #color_feature='reward',
-                                                                       color_feature='transition_gain',
+                                                                       color_feature='sml_score',
                                                                        plot_type='parcoords',
-                                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'rl_experience_metadata.html')
+                                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                           self.output_file_path,
+                                                                           'rl_experience_metadata.html'
+                                                                       )
                                                                        )
                             })
-        if action_learning_type_distribution:
-            _charts.update({'Distribution of Action Learning Type:': dict(data=_df,
-                                                                          features=['action_learning_type'],
-                                                                          plot_type='bar',
-                                                                          melt=True,
-                                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
-                                                                                self.output_file_path,
-                                                                                'rl_action_learning_type_distribution.html')
-                                                                          )
+        if rl_experience_time_step:
+            _charts.update({'Reinforcement Learning Experience Time Steps:': dict(data=_df,
+                                                                                  features=['reward_scaled',
+                                                                                            'transition_gain',
+                                                                                            'sml_score'
+                                                                                            ],
+                                                                                  time_features=['step'],
+                                                                                  plot_type='line',
+                                                                                  file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                                      self.output_file_path,
+                                                                                      'rl_experience_time_step.html'
+                                                                                  )
+                                                                                  )
+                            })
+        if reward_distribution:
+            _charts.update({'Distribution of Reward:': dict(data=_df,
+                                                            features=['reward'],
+                                                            plot_type='violin',
+                                                            file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                self.output_file_path,
+                                                                'rl_reward_distribution.html'
+                                                            )
+                                                            )
+                            })
+        if reward_distribution_per_episode:
+            _charts.update({'Distribution of Reward per Episode:': dict(data=_df,
+                                                                        features=['reward'],
+                                                                        time_features=['episode'],
+                                                                        plot_type='ridgeline',
+                                                                        file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                            self.output_file_path,
+                                                                            'rl_reward_distribution_per_episode.html'
+                                                                        )
+                                                                        )
                             })
         if reward_distribution_grouped_by_action_learning:
             _charts.update({'Reward grouped by Action Learning Type:': dict(data=_df,
@@ -737,8 +928,109 @@ class DQNAgent:
                                                                             melt=True,
                                                                             file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
                                                                                 self.output_file_path,
-                                                                                'rl_reward_by_action_learning_type.html')
+                                                                                'rl_reward_by_action_learning_type.html'
                                                                             )
+                                                                            )
+                            })
+        if reward_score_distribution:
+            _charts.update({'Reward SML Score Joint Distribution:': dict(data=_df,
+                                                                         features=['reward', 'sml_score'],
+                                                                         plot_type='joint',
+                                                                         file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                             self.output_file_path,
+                                                                             'rl_reward_score_joint_distribution.html'
+                                                                         )
+                                                                         )
+                            })
+        if score_distribution:
+            _charts.update({'Distribution of SML Score:': dict(data=_df,
+                                                               features=['sml_score'],
+                                                               plot_type='violin',
+                                                               file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                   self.output_file_path,
+                                                                   'rl_sml_score_distribution.html'
+                                                               )
+                                                               )
+                            })
+        if score_distribution_per_episode:
+            _charts.update({'Distribution of SML Score per Episode:': dict(data=_df,
+                                                                           features=['sml_score'],
+                                                                           time_features=['episode'],
+                                                                           plot_type='ridgeline',
+                                                                           file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                               self.output_file_path,
+                                                                               'rl_sml_score_distribution_per_episode.html'
+                                                                           )
+                                                                           )
+                            })
+        if score_distribution_grouped_by_action_learning:
+            _charts.update({'SML Score grouped by Action Learning Type:': dict(data=_df,
+                                                                               features=['sml_score'],
+                                                                               group_by=['action_learning_type'],
+                                                                               plot_type='hist',
+                                                                               melt=True,
+                                                                               file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                                   self.output_file_path,
+                                                                                   'rl_reward_by_action_learning_type.html'
+                                                                               )
+                                                                               )
+                            })
+        if action_distribution:
+            _charts.update({'Distribution of Action:': dict(data=_df,
+                                                            features=['action'],
+                                                            plot_type='bar',
+                                                            melt=True,
+                                                            file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                self.output_file_path,
+                                                                'rl_action_distribution.html'
+                                                            )
+                                                            )
+                            })
+        if action_learning_type_distribution:
+            _charts.update({'Distribution of Action Learning Type:': dict(data=_df,
+                                                                          features=['action_learning_type'],
+                                                                          plot_type='pie',
+                                                                          melt=True,
+                                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                                self.output_file_path,
+                                                                                'rl_action_learning_type_distribution.html'
+                                                                          )
+                                                                          )
+                            })
+        if action_distribution_grouped_by_action_type:
+            _charts.update({'Distribution of Action grouped by Action Type:': dict(data=_df,
+                                                                                   features=['action'],
+                                                                                   group_by=['action_learning_type'],
+                                                                                   plot_type='bar',
+                                                                                   melt=True,
+                                                                                   file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                                       self.output_file_path,
+                                                                                       'rl_action_distribution_grouped_by_action_type.html'
+                                                                                   )
+                                                                                   )
+                            })
+        if loss_distribution:
+            _charts.update({'Loss of Policy Network:': dict(data=_df,
+                                                            features=['loss'],
+                                                            time_features=['step'],
+                                                            plot_type='line',
+                                                            file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                self.output_file_path,
+                                                                'rl_network_loss.html'
+                                                            )
+                                                            )
+                            })
+        if loss_distribution_per_episode:
+            _charts.update({'Loss of Policy Network per Episode:': dict(data=_df,
+                                                                        features=['loss'],
+                                                                        group_by=['episode'],
+                                                                        plot_type='hist',
+                                                                        melt=False,
+                                                                        file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(
+                                                                            self.output_file_path,
+                                                                            'rl_network_loss_per_episode.html'
+                                                                        )
+                                                                        )
                             })
         if len(_charts.keys()) > 0:
             DataVisualizer(subplots=_charts,
