@@ -163,33 +163,14 @@ class EnvironmentModeling:
                                        transition_gain=[],
                                        model_param=[],
                                        model_name=[],
-                                       sml_score=[]
+                                       sml_score=[],
+                                       action_learning_type=[],
+                                       action_value=[],
+                                       episode=[],
+                                       loss=[],
+                                       policy_update=[],
+                                       target_update=[]
                                        )
-
-    def _action_to_state(self, action: dict) -> dict:
-        """
-        Convert action to state
-
-        :param action: dict
-            Selected action by agent
-
-        :return: dict
-            New hyper-parameter configuration (state)
-        """
-        _model_name: str = list(action.keys())[0]
-        _idx: int = action[_model_name]['idx']
-        _model_param: str = list(action[_model_name].keys())[0]
-        _current_state: dict = self.observations['state'][-1]
-        _current_state[_model_name].update({_model_param: action[_model_name][_model_param]})
-        _same_param_other_value: List[str] = []
-        for original_param in self.action_space['original_param'][_model_name].keys():
-            if _model_param in self.action_space['original_param'][_model_name][original_param]:
-                _same_param_other_value.extend(self.action_space['original_param'][_model_name][original_param])
-                break
-        for other_value in _same_param_other_value:
-            if other_value != _model_param:
-                _current_state[_model_name].update({other_value: 0.0})
-        return _current_state
 
     def _initial_state(self, model_name: str) -> dict:
         """
@@ -223,8 +204,6 @@ class EnvironmentModeling:
                                                    })
                     else:
                         raise EnvironmentModelingException(f'Type of action ({self.action_space["param_to_value"][model_name].get(_action)}) not supported')
-                #elif isinstance(self.action_space['param_to_value'][model_name].get(_action), list):
-                #    _state[model_name].update({_action: random.choice(seq=self.action_space['param_to_value'][model_name].get(_action))})
                 else:
                     raise EnvironmentModelingException(f'Type of action ({self.action_space["param_to_value"][model_name].get(_action)}) not supported')
                 for action in self.action_space['original_param'][model_name][param]:
@@ -259,7 +238,60 @@ class EnvironmentModeling:
                         break
         return _model_param
 
-    def _state_to_tensor(self, model_name: str, state: dict) -> torch.tensor:
+    def action_to_state(self, action: dict) -> dict:
+        """
+        Convert action to state
+
+        :param action: dict
+            Selected action by agent
+
+        :return: dict
+            New hyper-parameter configuration (state)
+        """
+        _model_name: str = list(action.keys())[0]
+        _idx: int = action[_model_name]['idx']
+        _model_param: str = list(action[_model_name].keys())[0]
+        _current_state: dict = self.observations['state'][-1]
+        _current_state[_model_name].update({_model_param: action[_model_name][_model_param]})
+        _same_param_other_value: List[str] = []
+        for original_param in self.action_space['original_param'][_model_name].keys():
+            if _model_param in self.action_space['original_param'][_model_name][original_param]:
+                _same_param_other_value.extend(self.action_space['original_param'][_model_name][original_param])
+                break
+        for other_value in _same_param_other_value:
+            if other_value != _model_param:
+                _current_state[_model_name].update({other_value: 0.0})
+        return _current_state
+
+    def param_to_state(self, model_name: str, param: dict) -> dict:
+        """
+        Convert hyper-parameter configuration to state
+
+        :param model_name: str
+            Abbreviated name of the supervised machine learning model
+
+        :param param: dict
+            Hyper-parameter configuration
+
+        :return: dict
+            State
+        """
+        _state: dict = {model_name: {}}
+        for hyper_param in param.keys():
+            for sub_param in self.action_space['original_param'][model_name][hyper_param]:
+                if sub_param in self.action_space['categorical_param'].keys():
+                    if sub_param == param[hyper_param]:
+                        _state[model_name].update({f'{hyper_param}_{sub_param}': 1.0})
+                    else:
+                        _state[model_name].update({f'{hyper_param}_{sub_param}': 0.0})
+                else:
+                    if self.action_space['param_to_value'][model_name][sub_param][1] >= param[hyper_param] >= self.action_space['param_to_value'][model_name][sub_param][0]:
+                        _state[model_name].update({sub_param: param[hyper_param]})
+                    else:
+                        _state[model_name].update({sub_param: 0.0})
+        return _state
+
+    def state_to_tensor(self, model_name: str, state: dict) -> torch.tensor:
         """
         Convert state to tensor
 
@@ -275,7 +307,10 @@ class EnvironmentModeling:
         _new_state: List[float] = []
         for action in self.action_space['param_to_value'][model_name].keys():
             if isinstance(self.action_space['param_to_value'][model_name].get(action), tuple):
-                _new_state.append(state[model_name][action])
+                if state[model_name][action] >= 1:
+                    _new_state.append(state[model_name][action] / 1000)
+                else:
+                    _new_state.append(state[model_name][action])
             elif isinstance(self.action_space['param_to_value'][model_name].get(action), list):
                 for cat in self.action_space['param_to_value'][model_name].get(action):
                     _new_state.append(state[model_name][f'{self.action_space["categorical_param"][cat]}_{cat}'])
@@ -300,14 +335,16 @@ class EnvironmentModeling:
         self.n_steps += 1
         if action is None:
             _model_name: str = random.choice(seq=self.action_space['model_name'])
+            _action: str = '*'
             _current_state: torch.tensor = torch.tensor(data=[[0.0] * self.n_actions], device=DEVICE)
             _state: dict = self._initial_state(model_name=_model_name)
         else:
             _model_name: str = list(action.keys())[0]
-            _current_state: torch.tensor = self._state_to_tensor(model_name=_model_name,
-                                                                 state=self.observations['state'][-1]
-                                                                 )
-            _state: dict = self._action_to_state(action=action)
+            _action: str = list(action.get(_model_name).keys())[0]
+            _current_state: torch.tensor = self.state_to_tensor(model_name=_model_name,
+                                                                state=self.observations['state'][-1]
+                                                                )
+            _state: dict = self.action_to_state(action=action)
         _model_param: dict = self._state_to_param(model_name=_model_name, state=_state)
         if self.sml_problem.find('clf') >= 0:
             _model = ModelGeneratorClf(model_name=_model_name,
@@ -332,30 +369,31 @@ class EnvironmentModeling:
                                                                   ),
                                           train_time_in_seconds=_model.train_time
                                           )
-        if len(self.observations['reward']) == 0:
+        if len(self.observations['reward']) <= 0:
             _reward_clipped: int = -1
         else:
-            _reward_clipped: int = 1 if _score > self.observations['reward'][-1] else -1
-        self.state = self._state_to_tensor(model_name=_model_name, state=_state)
+            _reward_clipped: int = 1 if _score > self.observations['sml_score'][-1] else -1
+        self.state = self.state_to_tensor(model_name=_model_name, state=_state)
         if self.n_steps == 1:
             self.observations['transition_gain'].append(0)
         else:
-            self.observations['transition_gain'].append(_score - self.observations['reward'][-1])
-        if self.observations['transition_gain'][-1] > 0:
-            _reward: float = _score + self.observations['transition_gain'][-1]
+            self.observations['transition_gain'].append(_score - self.observations['sml_score'][-1])
+        if _score == 0.00001:
+            _reward: float = -1
         else:
-            if _score == 0.00001 and self.observations['transition_gain'][-1] == 0.00001:
+            if self.observations['transition_gain'][-1] == 0:
                 _reward: float = -1
             else:
-                _reward: float = self.observations['transition_gain'][-1]
-        self.observations['action'].append(action)
+                _reward: float = self.observations['transition_gain'][-1] * 0.01
+        self.observations['action'].append(_action)
+        self.observations['action_value'].append(action[_model_name][_action] if _action != '*' else 0)
         self.observations['state'].append(_state)
         self.observations['reward'].append(_reward)
         self.observations['reward_clipped'].append(_reward_clipped)
         self.observations['fitness'].append(_model.fitness)
         self.observations['model_param'].append(_model_param)
         self.observations['model_name'].append(_model_name)
-        self.observations['score'].append(_score)
+        self.observations['sml_score'].append(_score)
         _transition_elements: tuple = tuple([_current_state,
                                              self.state,
                                              torch.tensor([[_reward]], device=DEVICE),
@@ -363,29 +401,53 @@ class EnvironmentModeling:
                                              ])
         return _transition_elements
 
-    def train_final_model(self, experience_id: int, data_sets: dict) -> object:
+    def train_final_model(self,
+                          data_sets: dict,
+                          model_name: str,
+                          param: dict,
+                          eval: bool = True
+                          ) -> object:
         """
         Train machine learning model based on best experienced model parameters
-
-        :param experience_id: int
-            Number of experienced state
 
         :param data_sets: dict
              Train, test and validation data set
 
+        :param model_name: str
+            Abbreviated name of the supervised machine learning model
+
+        :param param: dict
+            Hyper-parameter configuration
+
+        :param eval: bool
+            Evaluate trained supervised machine learning model
+
         :return: object
             Trained model object
         """
-        _model_name: str = self.action_space['model_name'][experience_id]
         if self.sml_problem.find('clf') >= 0:
-            _model = ModelGeneratorClf(model_name=_model_name,
-                                       clf_params=self.observations['model_param'][experience_id].get(_model_name),
-                                       models=[_model_name]
+            _model = ModelGeneratorClf(model_name=model_name,
+                                       clf_params=param,
+                                       models=[model_name]
                                        ).generate_model()
         else:
-            _model = ModelGeneratorReg(model_name=_model_name,
-                                       reg_params=self.observations['model_param'][experience_id].get(_model_name),
-                                       models=[_model_name]
+            _model = ModelGeneratorReg(model_name=model_name,
+                                       reg_params=param,
+                                       models=[model_name]
                                        ).generate_model()
         _model.train(x=data_sets.get('x_train').values, y=data_sets.get('y_train').values)
-        return _model.model
+        if eval:
+            _pred_train: np.array = _model.predict(x=data_sets.get('x_train').values)
+            _model.eval(obs=data_sets.get('y_train').values, pred=_pred_train, eval_metric=None, train_error=True)
+            _pred_test: np.array = _model.predict(x=data_sets.get('x_test').values)
+            _model.eval(obs=data_sets.get('y_test').values, pred=_pred_test, eval_metric=None, train_error=False)
+            _ml_metric: str = SML_SCORE['ml_metric'][self.sml_problem]
+            _best_score: float = SML_SCORE['ml_metric_best'][self.sml_problem]
+            _score: float = sml_fitness_score(ml_metric=tuple([_best_score, _model.fitness['test'].get(_ml_metric)]),
+                                              train_test_metric=tuple([_model.fitness['train'].get(_ml_metric),
+                                                                       _model.fitness['test'].get(_ml_metric)]
+                                                                      ),
+                                              train_time_in_seconds=_model.train_time
+                                              )
+            _model.fitness_score = _score
+        return _model
