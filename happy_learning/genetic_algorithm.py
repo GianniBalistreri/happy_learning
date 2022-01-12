@@ -348,7 +348,7 @@ class GeneticAlgorithm:
         self._input_manager()
         self.target_labels: List[str] = labels
         self.log: bool = log
-        self.verbose: int = verbose
+        self.verbose: bool = verbose
         self.warm_start: bool = warm_start
         self.warm_start_strategy: str = warm_start_strategy if warm_start_strategy in HIDDEN_LAYER_CATEGORY_EVOLUTION else 'monotone'
         self.warm_start_constant_hidden_layers: int = warm_start_constant_hidden_layers if warm_start_constant_hidden_layers > 0 else 0
@@ -696,7 +696,10 @@ class GeneticAlgorithm:
                         if not self.text_clustering:
                             del self.features[self.features.index(self.target)]
                     if not self.text_clustering:
-                        self.df = self.df[self.features + [self.target]]
+                        _used_features: List[str] = self.features
+                        _used_features.append(self.target)
+                        _used_features = list(set(_used_features))
+                        self.df = self.df[_used_features]
                         self.target_values: np.array = self.df[self.target].unique()
                         self.feature_pairs = None
                         self.n_cases = len(self.df)
@@ -1343,7 +1346,7 @@ class GeneticAlgorithm:
             end_time=str(datetime.now()),
             stopping_reason=self.stopping_reason
             )
-        if self.plot:
+        if self.plot and self.stopping_reason is not None:
             self.visualize(results_table=True,
                            model_distribution=True,
                            model_evolution=True,
