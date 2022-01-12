@@ -485,7 +485,7 @@ class HappyLearningUtils:
                                         return {'categorical': feature}
                             else:
                                 return {'categorical': feature}
-                except Exception as e:
+                except (TypeError, ValueError):
                     if len(_feature_data) == len(_unique):
                         return {'id_text': feature}
                     if len(_feature_data.unique()) <= 3:
