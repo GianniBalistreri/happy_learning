@@ -91,9 +91,9 @@ OPTIMIZER: dict = dict(adam=torch.optim.Adam,
                        sgd=torch.optim.SGD
                        )
 EMBEDDING: dict = dict(fast_text=FastText)
-TRANSFORMER: dict = {'roberta': 'roberta-large',
+TRANSFORMER: dict = {#'roberta': 'roberta-large',
                      'xlm': 'xlm-mlm-100-1280',
-                     'xlmroberta': 'xlm-roberta-large'
+                     #'xlmroberta': 'xlm-roberta-large'
                      }
 IGNORE_PARAM_FOR_OPTIMIZATION: List[str] = ['embedding_len',
                                             'weights',
@@ -252,8 +252,7 @@ class NeuralNetwork:
         """
         return Attention(parameters=self.model_param, output_size=self.output_size)
 
-    @staticmethod
-    def attention_network_param() -> dict:
+    def attention_network_param(self) -> dict:
         """
         Generate Long-Short Term Memory Network + Attention classifier parameter configuration randomly
 
@@ -261,7 +260,10 @@ class NeuralNetwork:
             Parameter config
         """
         return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()),
-                    bidirectional=np.random.choice(a=[False, True])
+                    bidirectional=np.random.choice(a=[False, True]),
+                    epoch=np.random.randint(low=1 if self.kwargs.get('epoch_low') is None else self.kwargs.get('epoch_low'),
+                                            high=20 if self.kwargs.get('epoch_high') is None else self.kwargs.get('epoch_high')
+                                            )
                     )
 
     @staticmethod
@@ -285,15 +287,18 @@ class NeuralNetwork:
         """
         return GRU(parameters=self.model_param, output_size=self.output_size)
 
-    @staticmethod
-    def gated_recurrent_unit_network_param() -> dict:
+    def gated_recurrent_unit_network_param(self) -> dict:
         """
         Generate Gated Recurrent Unit Network (GRU) classifier parameter randomly
 
         :return: dict
             Parameter config
         """
-        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()))
+        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()),
+                    epoch=np.random.randint(low=1 if self.kwargs.get('epoch_low') is None else self.kwargs.get('epoch_low'),
+                                            high=20 if self.kwargs.get('epoch_high') is None else self.kwargs.get('epoch_high')
+                                            )
+                    )
 
     def multi_layer_perceptron(self) -> MLP:
         """
@@ -304,15 +309,18 @@ class NeuralNetwork:
         """
         return MLP(input_size=len(self.predictors), output_size=self.output_size, parameters=self.model_param)
 
-    @staticmethod
-    def multi_layer_perceptron_param() -> dict:
+    def multi_layer_perceptron_param(self) -> dict:
         """
         Generate Multi-Layer Perceptron (MLP) classifier parameter configuration randomly
 
         :return dict:
             Configured Multi-Layer Perceptron (MLP) hyper parameter set
         """
-        return dict(hidden_neurons=np.random.choice(a=HappyLearningUtils().geometric_progression()))
+        return dict(hidden_neurons=np.random.choice(a=HappyLearningUtils().geometric_progression()),
+                    epoch=np.random.randint(low=1 if self.kwargs.get('epoch_low') is None else self.kwargs.get('epoch_low'),
+                                            high=20 if self.kwargs.get('epoch_high') is None else self.kwargs.get('epoch_high')
+                                            )
+                    )
 
     def long_short_term_memory_network(self) -> LSTM:
         """
@@ -323,8 +331,7 @@ class NeuralNetwork:
         """
         return LSTM(parameters=self.model_param, output_size=self.output_size)
 
-    @staticmethod
-    def long_short_term_memory_network_param() -> dict:
+    def long_short_term_memory_network_param(self) -> dict:
         """
         Generate Long-Short Term Memory Network (LSTM) classifier parameter randomly
 
@@ -332,8 +339,11 @@ class NeuralNetwork:
             Parameter config
         """
         return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()),
-                    bidirectional=np.random.choice(a=[False, True])
-                    )
+                    bidirectional=np.random.choice(a=[False, True]),
+                    epoch = np.random.randint(low=1 if self.kwargs.get('epoch_low') is None else self.kwargs.get('epoch_low'),
+                                              high=20 if self.kwargs.get('epoch_high') is None else self.kwargs.get('epoch_high')
+                                              )
+        )
 
     def recurrent_neural_network(self) -> RNN:
         """
@@ -344,15 +354,19 @@ class NeuralNetwork:
         """
         return RNN(parameters=self.model_param, output_size=self.output_size)
 
-    @staticmethod
-    def recurrent_neural_network_param() -> dict:
+    def recurrent_neural_network_param(self) -> dict:
         """
         Generate Recurrent Neural Network (RNN) classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()))
+        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()),
+                    epoch=np.random.randint(
+                        low=1 if self.kwargs.get('epoch_low') is None else self.kwargs.get('epoch_low'),
+                        high=20 if self.kwargs.get('epoch_high') is None else self.kwargs.get('epoch_high')
+                        )
+                    )
 
     def recurrent_convolutional_neural_network(self) -> RCNN:
         """
@@ -372,7 +386,11 @@ class NeuralNetwork:
         """
         return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression(n=2 if len(self.model_param_mutated.keys()) == 0 else 8)),
                     recurrent_network_type='lstm', #np.random.choice(a=['gru', 'lstm', 'rnn']),
-                    bidirectional=np.random.choice(a=[False, True])
+                    bidirectional=np.random.choice(a=[False, True]),
+                    epoch=np.random.randint(
+                        low=1 if self.kwargs.get('epoch_low') is None else self.kwargs.get('epoch_low'),
+                        high=20 if self.kwargs.get('epoch_high') is None else self.kwargs.get('epoch_high')
+                        )
                     )
 
     def self_attention_network(self) -> SelfAttention:
@@ -384,15 +402,19 @@ class NeuralNetwork:
         """
         return SelfAttention(parameters=self.model_param, output_size=self.output_size)
 
-    @staticmethod
-    def self_attention_network_param() -> dict:
+    def self_attention_network_param(self) -> dict:
         """
         Generate Attention Network classifier parameter configuration randomly
 
         :return: dict
             Parameter config
         """
-        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()))
+        return dict(hidden_states=np.random.choice(a=HappyLearningUtils().geometric_progression()),
+                    epoch=np.random.randint(
+                        low=1 if self.kwargs.get('epoch_low') is None else self.kwargs.get('epoch_low'),
+                        high=20 if self.kwargs.get('epoch_high') is None else self.kwargs.get('epoch_high')
+                        )
+                    )
 
     def transformer(self) -> Transformers:
         """
@@ -1050,14 +1072,13 @@ class NetworkGenerator(NeuralNetwork):
                         self.embedding_text.build_vocab(_train_data,
                                                         vectors=EMBEDDING[self.model_param.get('embedding_model')](language='de' if self.model_param.get('lang') is None else self.model_param.get('lang'))
                                                         )
-                    self.embedding_label.build_vocab()
+                    self.embedding_label.build_vocab(_train_data)
                     if 0 in _unique_labels:
                         for label in _unique_labels:
                             self.embedding_label.vocab.stoi.update({str(label): label})
                     else:
                         for label in _unique_labels:
                             self.embedding_label.vocab.stoi.update({str(label): label - 1})
-                    self.embedding_label.build_vocab(_train_data)
                     self.model_param.update(dict(weights=self.embedding_text.vocab.vectors, vocab_size=len(self.embedding_text.vocab)))
                     if self.test_data_path is None:
                         self.train_iter, self.validation_iter = BucketIterator.splits((_train_data, _validation_data),
