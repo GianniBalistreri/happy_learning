@@ -15,18 +15,27 @@ from .environment_modeling import EnvironmentModeling
 from .neural_network_torch import DQNFC
 from .sampler import MLSampler
 from .utils import HappyLearningUtils
-from collections import namedtuple, deque
+from collections import deque
 from datetime import datetime
 from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter, DataImporter
-from easyexplore.data_visualizer import DataVisualizer, plots
+from easyexplore.data_visualizer import DataVisualizer
 from easyexplore.utils import Log
-from typing import List
+from typing import List, NamedTuple
 
 DEVICE: str = 'cuda' if torch.cuda.is_available() else 'cpu'
-TRANSITION: namedtuple = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
 
 
-class ReplayMemory:
+class Transition(NamedTuple):
+    """
+    Class for defining transition parameter
+    """
+    state: torch.tensor
+    action: torch.tensor
+    next_state: torch.tensor
+    reward: torch.tensor
+
+
+class TransitionMemory:
     """
     Class for storing transitions that the agent observes
     """
@@ -45,7 +54,7 @@ class ReplayMemory:
         :param args: dict
             Transition arguments
         """
-        self.memory.append(TRANSITION(*args))
+        self.memory.append(Transition(*args))
 
     def sample(self, batch_size: int):
         """
@@ -89,6 +98,7 @@ class DQNAgent:
                  eps_decay: int = 200,
                  target_update: int = 10,
                  optimizer: str = 'rmsprop',
+                 hidden_layer_size: int = 100,
                  use_clipped_reward: bool = False,
                  timer_in_seconds: int = 43200,
                  force_target_type: str = None,
@@ -110,18 +120,28 @@ class DQNAgent:
             Number of episodes to train
 
         :param gamma: float
+            Gamma value for calculating expected Q values
 
         :param eps_start: float
+            Start value of the epsilon-greedy algorithm
 
         :param eps_end: float
+            End value of the epsilon-greedy algorithm
 
         :param eps_decay: float
+            Decay value of the epsilon-greedy algorithm each step
 
         :param target_update: int
             Interval for updating target net
 
         :param optimizer: str
-            Abbreviate name of the optimizer
+            Abbreviated name of the optimizer
+                -> rmsprop: RMSprop
+                -> adam: Adam
+                -> sgd: Stochastic Gradient Descent
+
+        :param hidden_layer_size: int
+            Number of neurons of the fully connected hidden layer (policy and target network)
 
         :param use_clipped_reward: bool
             Whether to use clipped reward (categorical) or metric reward
@@ -175,11 +195,16 @@ class DQNAgent:
         self.eps_end: float = eps_end
         self.eps_decay: float = eps_decay
         self.target_update: int = target_update
+        self.hidden_layer_size: int = hidden_layer_size if hidden_layer_size > 1 else 100
         self.use_clipped_reward: bool = use_clipped_reward
         self.deploy_model: bool = deploy_model
         self.n_training: int = 0
         self.n_optimization: int = 0
         self.n_update: int = 0
+        if optimizer in ['rmsprop', 'adam', 'sgd']:
+            self.optimizer_name: str = optimizer
+        else:
+            self.optimizer_name: str = 'rmsprop'
         self.cloud: str = cloud
         if self.cloud is None:
             self.bucket_name: str = None
@@ -345,24 +370,22 @@ class DQNAgent:
                                      _next_state,
                                      _clipped_reward if self.use_clipped_reward else _reward
                                      )
-
                 # Move to the next state
                 _state = _next_state
-
                 # Perform one step of the optimization (on the policy network)
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Memory length: {self.memory.__len__()}')
                 if self.memory.__len__() >= self.batch_size:
                     self.n_optimization += 1
                     self.env.observations['policy_update'].append(self.n_optimization)
+                    self.env.observations['target_update'].append(self.n_update)
                     if self.verbose:
                         Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Optimization step of policy network: {self.n_optimization}')
                     transitions = self.memory.sample(self.batch_size)
                     # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
                     # detailed explanation). This converts batch-array of Transitions
                     # to Transition of batch-arrays.
-                    batch = TRANSITION(*zip(*transitions))
-
+                    batch = Transition(*zip(*transitions))
                     # Compute a mask of non-final states and concatenate the batch elements
                     # (a final state would've been the one after which simulation ended)
                     non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
@@ -371,12 +394,10 @@ class DQNAgent:
                     state_batch = torch.cat(batch.state)
                     action_batch = torch.cat(batch.action)
                     reward_batch = torch.cat(batch.reward)
-
                     # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
                     # columns of actions taken. These are the actions which would've been taken
                     # for each batch state according to policy_net
                     state_action_values = self.policy_net(state_batch).gather(1, action_batch)
-
                     # Compute V(s_{t+1}) for all next states.
                     # Expected values of actions for non_final_next_states are computed based
                     # on the "older" target_net; selecting their best reward with max(1)[0].
@@ -386,7 +407,6 @@ class DQNAgent:
                     next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0].detach()
                     # Compute the expected Q values
                     expected_state_action_values = (next_state_values * self.gamma) + reward_batch
-
                     # Compute Huber loss
                     criterion = torch.nn.SmoothL1Loss()
                     loss = criterion(state_action_values.to(dtype=torch.float64),
@@ -394,7 +414,6 @@ class DQNAgent:
                                      )
                     self.env.observations['loss'].append(loss.detach().numpy().tolist())
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Loss: {loss}')
-
                     # Optimize the model
                     self.optimizer.zero_grad()
                     loss.backward()
@@ -413,9 +432,6 @@ class DQNAgent:
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Update step of target network: {self.n_update}')
                 self.target_net.load_state_dict(self.policy_net.state_dict())
-            else:
-                _diff: int = len(self.env.observations['policy_update']) - len(self.env.observations['target_update'])
-                self.env.observations['target_update'].extend([self.n_update] * _diff)
             if self.checkpoint and _episode > 0 and _episode % self.checkpoint_episode_interval == 0:
                 self._save_checkpoint()
 
@@ -587,10 +603,6 @@ class DQNAgent:
                  target: str,
                  features: List[str] = None,
                  memory_capacity: int = 10000,
-                 hidden_layer_size: int = 100,
-                 file_path_policy_network: str = None,
-                 file_path_target_network: str = None,
-                 file_path_environment: str = None
                  ):
         """
         Optimize hyper-parameter configuration
@@ -606,18 +618,6 @@ class DQNAgent:
 
         :param memory_capacity: int
             Maximum capacity of the agent memory
-
-        :param hidden_layer_size: int
-            Number of neurons of the fully connected hidden layer
-
-        :param file_path_policy_network: str
-            Complete file path of the saved policy network
-
-        :param file_path_target_network: str
-            Complete file path of the saved target network
-
-        :param file_path_environment: str
-            Complete file path of the saved environment
         """
         if features is None:
             _features: List[str] = list(df.columns)
@@ -632,58 +632,77 @@ class DQNAgent:
                                     train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
                                     stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
                                     ).train_test_sampling(validation_split=0.1 if self.kwargs.get('validation_split') is None else self.kwargs.get('validation_split'))
-        if file_path_environment is None:
-            self.env: EnvironmentModeling = EnvironmentModeling(sml_problem=HappyLearningUtils().get_ml_type(values=df[target].values),
-                                                                sml_algorithm=self.kwargs.get('sml_algorithm')
-                                                                )
-        else:
-            self.env = DataImporter(file_path=file_path_environment,
-                                    as_data_frame=False,
-                                    use_dask=False,
-                                    create_dir=False,
-                                    sep=',',
-                                    cloud=self.cloud,
-                                    bucket_name=self.bucket_name,
-                                    region=self.kwargs.get('region')
-                                    ).file()
-        _hidden_layer_size: int = hidden_layer_size if hidden_layer_size > 1 else 100
-        if file_path_policy_network is None:
-            self.policy_net: DQNFC = DQNFC(input_size=self.env.n_actions,
-                                           hidden_size=_hidden_layer_size,
-                                           output_size=self.env.n_actions
-                                           ).to(DEVICE)
-        else:
-            self.policy_net = DataImporter(file_path=file_path_policy_network,
-                                           as_data_frame=False,
-                                           use_dask=False,
-                                           create_dir=False,
-                                           sep=',',
-                                           cloud=self.cloud,
-                                           bucket_name=self.bucket_name,
-                                           region=self.kwargs.get('region')
-                                           ).file()
-        if file_path_target_network is None:
-            self.target_net: DQNFC = DQNFC(input_size=self.env.n_actions,
-                                           hidden_size=_hidden_layer_size,
-                                           output_size=self.env.n_actions
-                                           ).to(DEVICE)
-            self.target_net.load_state_dict(self.policy_net.state_dict())
-            self.target_net.eval()
-        else:
-            self.target_net = DataImporter(file_path=file_path_target_network,
-                                           as_data_frame=False,
-                                           use_dask=False,
-                                           create_dir=False,
-                                           sep=',',
-                                           cloud=self.cloud,
-                                           bucket_name=self.bucket_name,
-                                           region=self.kwargs.get('region')
-                                           ).file()
-        self.optimizer: torch.optim = torch.optim.RMSprop(self.policy_net.parameters())
+        self.env: EnvironmentModeling = EnvironmentModeling(sml_problem=HappyLearningUtils().get_ml_type(values=df[target].values),
+                                                            sml_algorithm=self.kwargs.get('sml_algorithm')
+                                                            )
+        self.policy_net: DQNFC = DQNFC(input_size=self.env.n_actions,
+                                       hidden_size=self.hidden_layer_size,
+                                       output_size=self.env.n_actions
+                                       ).to(DEVICE)
+        self.target_net: DQNFC = DQNFC(input_size=self.env.n_actions,
+                                       hidden_size=self.hidden_layer_size,
+                                       output_size=self.env.n_actions
+                                       ).to(DEVICE)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.target_net.eval()
+        if self.optimizer_name == 'rmsprop':
+            self.optimizer: torch.optim = torch.optim.RMSprop(self.policy_net.parameters())
+        elif self.optimizer_name == 'adam':
+            self.optimizer: torch.optim = torch.optim.Adam(self.policy_net.parameters())
+        elif self.optimizer_name == 'sgd':
+            self.optimizer: torch.optim = torch.optim.SGD(self.policy_net.parameters())
         _memory_capacity: int = memory_capacity if memory_capacity >= 10 else 10000
-        self.memory: ReplayMemory = ReplayMemory(capacity=_memory_capacity)
+        self.memory: TransitionMemory = TransitionMemory(capacity=_memory_capacity)
         self.n_update = len(self.env.observations['target_update'])
         self.n_optimization = len(self.env.observations['policy_update'])
+        self._train(data_sets=data_sets)
+        self.experience_idx = np.array(self.env.observations['sml_score']).argmax()
+        _score: float = self.env.observations['sml_score'][self.experience_idx]
+        _state: dict = self.env.observations['state'][self.experience_idx]
+        _model_param: dict = self.env.observations['model_param'][self.experience_idx]
+        _fitness: dict = self.env.observations['fitness'][self.experience_idx]
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model state: {_state}')
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model param: {_model_param}')
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model fitness: {_fitness}')
+        Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Best model score: {_score}')
+        self.save(agent=True if self.kwargs.get('save_agent') is None else self.kwargs.get('save_agent'),
+                  model=self.deploy_model,
+                  data_sets=data_sets,
+                  experience=False if self.kwargs.get('save_experience') is None else self.kwargs.get('save_experience')
+                  )
+        if self.plot:
+            self.visualize()
+
+    def optimize_continue(self,
+                          df: pd.DataFrame,
+                          target: str,
+                          features: List[str] = None,
+                          ):
+        """
+        Continue hyper-parameter optimization
+
+        :param df: pd.DataFrame
+            Data set
+
+        :param target: str
+            Name of the target feature
+
+        :param features: List[str]
+            Names of the features used as predictors
+        """
+        if features is None:
+            _features: List[str] = list(df.columns)
+        else:
+            _features: List[str] = features
+        if target in _features:
+            del _features[_features.index(target)]
+        _n_features: int = len(_features)
+        data_sets: dict = MLSampler(df=df,
+                                    target=target,
+                                    features=_features if features is None else features,
+                                    train_size=0.8 if self.kwargs.get('train_size') is None else self.kwargs.get('train_size'),
+                                    stratification=False if self.kwargs.get('stratification') is None else self.kwargs.get('stratification')
+                                    ).train_test_sampling(validation_split=0.1 if self.kwargs.get('validation_split') is None else self.kwargs.get('validation_split'))
         self._train(data_sets=data_sets)
         self.experience_idx = np.array(self.env.observations['sml_score']).argmax()
         _score: float = self.env.observations['sml_score'][self.experience_idx]
@@ -719,6 +738,25 @@ class DQNAgent:
             Save experiences of the agent
         """
         if agent:
+            # Save agent class DQNAgent itself:
+            DataExporter(obj=self,
+                         file_path=os.path.join(self.output_file_path, 'rl_agent.p'),
+                         create_dir=False,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
+                         ).file()
+            # Save reinforcement learning environment:
+            DataExporter(obj=self.env,
+                         file_path=os.path.join(self.output_file_path, 'rl_env.p'),
+                         create_dir=False,
+                         overwrite=True,
+                         cloud=self.cloud,
+                         bucket_name=self.bucket_name,
+                         region=self.kwargs.get('region')
+                         ).file()
+            # Save trained policy network:
             DataExporter(obj=self.policy_net,
                          file_path=os.path.join(self.output_file_path, 'rl_policy_net.p'),
                          create_dir=False,
@@ -727,16 +765,9 @@ class DQNAgent:
                          bucket_name=self.bucket_name,
                          region=self.kwargs.get('region')
                          ).file()
+            # Save trained target network:
             DataExporter(obj=self.target_net,
                          file_path=os.path.join(self.output_file_path, 'rl_target_net.p'),
-                         create_dir=False,
-                         overwrite=True,
-                         cloud=self.cloud,
-                         bucket_name=self.bucket_name,
-                         region=self.kwargs.get('region')
-                         ).file()
-            DataExporter(obj=self.env,
-                         file_path=os.path.join(self.output_file_path, 'rl_env.p'),
                          create_dir=False,
                          overwrite=True,
                          cloud=self.cloud,
