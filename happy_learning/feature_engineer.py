@@ -4,6 +4,15 @@ Feature engineer for structured (tabular) data
 
 """
 
+#TODO:
+# Check pre-defined feature types & save temp files
+# processing: process -> graph for re-engineer data for prediction in "production" environment
+# clean internals if FeatureEngineer is re_initializing
+# sampler: feature, train_test - normal
+# disparity: processing of date features only (effect of SPECIAL_JOBS)
+# post-processing data for prediction from trained ml model
+
+import boto3
 import copy
 import dask.dataframe as dd
 import gc
@@ -58,6 +67,7 @@ DATA_PROCESSING: dict = dict(processing=dict(process={},
                                              features=dict(raw={},
                                                            level_1={}
                                                            ),
+                                             forced_rename={}
                                              ),
                              encoder=dict(bin={},
                                           label={},
@@ -151,13 +161,6 @@ TEXT_MINER: dict = dict(obj=None,
                         linguistic={}
                         )
 
-# TODO:
-#  processing: process -> graph for re-engineer data for prediction in "production" environment
-#  clean internals if FeatureEngineer is re_initializing
-#  sampler: feature, train_test - normal
-#  disparity: processing of date features only (effect of SPECIAL_JOBS)
-#  post-processing data for prediction from trained ml model
-
 
 def _avoid_overwriting(feature: str) -> str:
     """
@@ -170,9 +173,9 @@ def _avoid_overwriting(feature: str) -> str:
         Adjusted feature name if feature name already existed
     """
     _feature: str = feature
-    if _feature in DATA_PROCESSING['df'].columns:
+    if _feature in ALL_FEATURES:
         _i: int = 0
-        while _feature in DATA_PROCESSING['df'].columns:
+        while _feature in ALL_FEATURES:
             _i += 1
             if _i == 1:
                 _feature = '{}_{}'.format(_feature, _i)
@@ -228,6 +231,28 @@ def _float_adjustments(features: List[str], imp_value: float, convert_to_float32
     for feature in _features:
         if feature not in _inv_features:
             _save_temp_files(feature=feature)
+
+
+def _force_rename_feature(feature: str, max_length: int = 100) -> str:
+    """
+    Force feature renaming to avoid too long feature names
+
+    :param feature: str
+        Name of the feature to rename
+
+    :param max_length: int
+        Maximum character length of the feature
+
+    :return: str
+        Renamed feature name
+    """
+    if len(feature) > max_length:
+        _feature: str = f"_engineered_feature_{len(DATA_PROCESSING['processing']['forced_rename'].keys())}"
+        DATA_PROCESSING['processing']['forced_rename'].update({_feature: feature})
+        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Rename feature {} to {}'.format(feature, _feature))
+        return _feature
+    else:
+        return feature
 
 
 def _load_temp_files(features: List[str]):
@@ -310,11 +335,12 @@ def _process_handler(action: str,
     if DATA_PROCESSING['re_generate']:
         DATA_PROCESSING['re_gen_data'] = data
     else:
+        _forced_rename_new_feature: str = _force_rename_feature(feature=new_feature, max_length=100)
         if action == 'add':
             if DATA_PROCESSING.get('avoid_overwriting'):
-                _new_feature: str = _avoid_overwriting(feature=new_feature)
+                _new_feature: str = _avoid_overwriting(feature=_forced_rename_new_feature)
             else:
-                _new_feature: str = new_feature
+                _new_feature: str = _forced_rename_new_feature
             DATA_PROCESSING['last_generated_feature'] = _new_feature
             _tracked_processes: int = len(DATA_PROCESSING['processing']['process'].keys())
             _processed_features: dict = {}
@@ -349,48 +375,63 @@ def _process_handler(action: str,
                     if _process[0] == 'interaction':
                         if _process[1] in ['simple', 'polynomial']:
                             _process_data_set = False
-                            _new_names: dict = {}
                             for ft in data.columns:
-                                _ft: str = _avoid_overwriting(feature=ft)
-                                if ft != _ft:
-                                    _new_names.update({ft: _ft})
-                            if len(_new_names.keys()) > 0:
-                                data = data.rename(columns=_new_names)
-                            DATA_PROCESSING['df'] = dd.concat(dfs=[DATA_PROCESSING['df'], data], axis=1)
+                                if ft not in DATA_PROCESSING['df'].columns:
+                                    DATA_PROCESSING['df'][ft] = data[ft]
                             _float_adjustments(features=list(data.columns), imp_value=imp_value)
                             for inter_feature in obj['features'].keys():
+                                if DATA_PROCESSING.get('avoid_overwriting'):
+                                    _inter_feature: str = _avoid_overwriting(feature=_force_rename_feature(feature=inter_feature, max_length=100))
+                                else:
+                                    _inter_feature: str = _force_rename_feature(feature=inter_feature, max_length=100)
                                 for inter in obj['features'][inter_feature]:
-                                    _set_feature_relations(feature=inter, new_feature=inter_feature)
-                                if DATA_PROCESSING.get('last_generated_feature') == '':
-                                    DATA_PROCESSING['last_generated_feature'] = inter_feature
-                                _update_feature_types(feature=inter_feature, force_type='continuous')
+                                    _set_feature_relations(feature=inter, new_feature=_inter_feature)
+                                if _inter_feature not in DATA_PROCESSING['df'].columns:
+                                    DATA_PROCESSING['df'][_inter_feature] = DATA_PROCESSING['df'][inter_feature].values
+                                DATA_PROCESSING['last_generated_feature'] = _inter_feature
+                                _update_feature_types(feature=_inter_feature, force_type='continuous')
+                                _save_temp_files(feature=inter_feature, new_name=_inter_feature)
                         elif _process[1] == 'one_hot':
                             _set_feature_relations(feature=obj, new_feature=_new_feature)
                     elif _process[0] == 'text' and _process[1] == 'split':
                         _process_data_set = False
                         for o in obj:
-                            _set_feature_relations(feature=feature, new_feature=o)
-                            _update_feature_types(feature=o, force_type=force_type)
-                            _save_temp_files(feature=o)
+                            if DATA_PROCESSING.get('avoid_overwriting'):
+                                _o: str = _avoid_overwriting(feature=_force_rename_feature(feature=o, max_length=100))
+                            else:
+                                _o: str = _force_rename_feature(feature=o, max_length=100)
+                            if _o not in DATA_PROCESSING['df'].columns:
+                                DATA_PROCESSING['df'][_o] = DATA_PROCESSING['df'][o].values
+                            DATA_PROCESSING['last_generated_feature'] = _o
+                            _set_feature_relations(feature=feature, new_feature=_o)
+                            _update_feature_types(feature=_o, force_type=force_type)
+                            _save_temp_files(feature=o, new_name=_o)
                     elif _process[0] == 'encoder' and _process[1] == 'one_hot':
                         _process_data_set = False
                         for o in obj:
-                            _set_feature_relations(feature=feature, new_feature=o)
-                            _update_feature_types(feature=o, force_type=force_type)
-                            _save_temp_files(feature=o)
+                            if DATA_PROCESSING.get('avoid_overwriting'):
+                                _o: str = _avoid_overwriting(feature=_force_rename_feature(feature=o, max_length=100))
+                            else:
+                                _o: str = _force_rename_feature(feature=o, max_length=100)
+                            if _o not in DATA_PROCESSING['df'].columns:
+                                DATA_PROCESSING['df'][_o] = DATA_PROCESSING['df'][o].values
+                            DATA_PROCESSING['last_generated_feature'] = _o
+                            _set_feature_relations(feature=feature, new_feature=_o)
+                            _update_feature_types(feature=_o, force_type=force_type)
+                            _save_temp_files(feature=o, new_name=_o)
                     elif _process[0] == 'encoder' and _process[1] == 'label':
                         _process_data_set = False
-                        DATA_PROCESSING['df'][new_feature] = data
-                        _update_feature_types(feature=new_feature, force_type=force_type)
-                        _save_temp_files(feature=new_feature)
+                        DATA_PROCESSING['df'][_new_feature] = data
+                        _update_feature_types(feature=_new_feature, force_type=force_type)
+                        _save_temp_files(feature=_new_feature)
                     elif _process[0] == 'mapper' and _process[1] == 'obs':
                         _process_data_set = False
-                        DATA_PROCESSING['df'][new_feature] = data.replace(obj.get(feature))
-                        if not MissingDataAnalysis(df=DATA_PROCESSING['df'][new_feature]).has_nan():
-                            DATA_PROCESSING['df'][new_feature] = DATA_PROCESSING['df'][new_feature].astype(int)
-                        if feature != new_feature:
-                            _update_feature_types(feature=new_feature, force_type=force_type)
-                            _save_temp_files(feature=new_feature)
+                        DATA_PROCESSING['df'][_new_feature] = data.replace(obj.get(feature))
+                        if not MissingDataAnalysis(df=DATA_PROCESSING['df'][_new_feature]).has_nan():
+                            DATA_PROCESSING['df'][_new_feature] = DATA_PROCESSING['df'][_new_feature].astype(int)
+                        if feature != _new_feature:
+                            _update_feature_types(feature=_new_feature, force_type=force_type)
+                            _save_temp_files(feature=_new_feature)
                 elif len(_process) == 3:
                     if _process[0] == 'interaction':
                         if _process[1] == 'disparity':
@@ -434,6 +475,8 @@ def _process_handler(action: str,
                 del PREDICTORS[PREDICTORS.index(feature)]
             if feature == DATA_PROCESSING.get('last_generated_feature'):
                 DATA_PROCESSING['last_generated_feature'] = ''
+            if feature in ALL_FEATURES:
+                del ALL_FEATURES[ALL_FEATURES.index(feature)]
         elif action == 'rename':
             if feature != new_feature:
                 _tracked_processes: int = len(DATA_PROCESSING['processing']['process'].keys())
@@ -445,14 +488,11 @@ def _process_handler(action: str,
                     DATA_PROCESSING[_process[0]][_process[1]].update({feature: new_feature})
                 _renamed_history: dict = {}
                 for level in DATA_PROCESSING['processing']['features'].keys():
-                    #print(level)
                     _renamed_history.update({level: {}})
                     for tracked_feature in DATA_PROCESSING['processing']['features'][level].keys():
-                        #print(tracked_feature)
                         if feature != tracked_feature:
                             _renamed_history[level].update({tracked_feature: []})
                             for relation in DATA_PROCESSING['processing']['features'][level][tracked_feature]:
-                                #print(relation)
                                 if feature != relation:
                                     _renamed_history[level][tracked_feature].append(relation)
                 DATA_PROCESSING['processing']['features'] = _renamed_history
@@ -560,7 +600,7 @@ def _process_handler(action: str,
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg=msg)
 
 
-def _save_temp_files(feature: str):
+def _save_temp_files(feature: str, new_name: str = None):
     """
     Save temporary feature files
     """
@@ -570,15 +610,22 @@ def _save_temp_files(feature: str):
             _data: list = DATA_PROCESSING['df'][feature].values.compute().tolist()
         else:
             _data: list = DATA_PROCESSING['df'][feature].values.tolist()
-        DataExporter(obj={feature: _data},
-                     file_path=os.path.join(TEMP_DIR, '{}.json'.format(feature)),
+        if new_name is None:
+            _feature: str = feature
+        else:
+            if len(new_name) == 0:
+                _feature: str = feature
+            else:
+                _feature: str = new_name
+        DataExporter(obj={_feature: _data},
+                     file_path=os.path.join(TEMP_DIR, '{}.json'.format(_feature)),
                      create_dir=False,
                      overwrite=True,
                      cloud=None,
                      bucket_name=None
                      ).file()
-        if feature not in ALL_FEATURES:
-            ALL_FEATURES.append(feature)
+        if _feature not in ALL_FEATURES:
+            ALL_FEATURES.append(_feature)
 
 
 def _set_feature_relations(feature: str, new_feature: str):
@@ -749,6 +796,8 @@ def _update_feature_types(feature: str, force_type: str = None):
                         _features: List[str] = copy.deepcopy(FEATURE_TYPES.get(ft))
                         del _features[_features.index(feature)]
                         FEATURE_TYPES[ft] = _features
+    else:
+        Log(write=not DATA_PROCESSING.get('show_msg')).log('Feature type of feature {} could not be updated'.format(feature))
 
 
 class FeatureOrchestra:
@@ -1071,12 +1120,12 @@ class FeatureEngineer:
                     raise FeatureEngineerException('Neither data object nor file path to data file found')
                 self.data_import(file_path=file_path, sep=sep, **kwargs)
                 for feature in DATA_PROCESSING['df'].columns:
-                    _save_temp_files(feature=feature)
+                    _save_temp_files(feature=feature, new_name=_force_rename_feature(feature=feature, max_length=100))
                 DATA_PROCESSING['df'] = None
             else:
                 if isinstance(df, pd.DataFrame):
                     DATA_PROCESSING['df'] = dd.from_pandas(data=df, npartitions=DATA_PROCESSING['cpu_cores'])
-                DATA_PROCESSING['processing']['features']['raw'].update({feature: [] for feature in DATA_PROCESSING.get('df').columns})
+                DATA_PROCESSING['processing']['features']['raw'].update({_force_rename_feature(feature=feature, max_length=100): [] for feature in DATA_PROCESSING.get('df').columns})
                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Data set loaded from given object\nCases: {}\nFeatures: {}'.format(len(DATA_PROCESSING['df']),
                                                                                                                                            len(DATA_PROCESSING['df'].columns)
                                                                                                                                            )
@@ -1088,8 +1137,8 @@ class FeatureEngineer:
                     if ignore in list(DATA_PROCESSING['df'].columns):
                         del DATA_PROCESSING['df'][ignore]
                 DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns})
-                for feature in DATA_PROCESSING['df'].columns:
-                    _save_temp_files(feature=feature)
+                for feature in DATA_PROCESSING.get('df').columns:
+                    _save_temp_files(feature=feature, new_name=_force_rename_feature(feature=feature, max_length=100))
                 DATA_PROCESSING['df'] = None
                 Log(write=not print_msg, level='info', env='dev').log(msg='Feature files saved in {}'.format(TEMP_DIR))
         else:
@@ -2427,6 +2476,8 @@ class FeatureEngineer:
     def date_categorizer(features: List[str] = None,
                          year: bool = True,
                          month: bool = True,
+                         week: bool = True,
+                         week_day: bool = True,
                          day: bool = True,
                          hour: bool = True,
                          minute: bool = True,
@@ -2443,6 +2494,12 @@ class FeatureEngineer:
 
         :param month: bool
             Extract month from date
+
+        :param week: bool
+            Extract week number of the year from date
+
+        :param week_day: bool
+            Extract week day from date
 
         :param day: bool
             Extract day from date
@@ -2473,7 +2530,7 @@ class FeatureEngineer:
                                  new_feature='{}_year'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
                                  data=_date_feature.dt.year.values,
                                  force_type='categorical'
                                  )
@@ -2485,11 +2542,35 @@ class FeatureEngineer:
                                  new_feature='{}_month'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
                                  data=_date_feature.dt.month.values,
                                  force_type='categorical'
                                  )
                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Transformed date feature "{}" using date categorizer - month'.format(feature))
+            if week:
+                DATA_PROCESSING['semi_engineered_features'].append('{}_week'.format(feature))
+                _process_handler(action='add',
+                                 feature=feature,
+                                 new_feature='{}_week'.format(feature),
+                                 process='categorizer|date',
+                                 meth='date_categorizer',
+                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
+                                 data=_date_feature.dt.week.values,
+                                 force_type='categorical'
+                                 )
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Transformed date feature "{}" using date categorizer - week'.format(feature))
+            if week_day:
+                DATA_PROCESSING['semi_engineered_features'].append('{}_week_day'.format(feature))
+                _process_handler(action='add',
+                                 feature=feature,
+                                 new_feature='{}_week_day'.format(feature),
+                                 process='categorizer|date',
+                                 meth='date_categorizer',
+                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
+                                 data=_date_feature.dt.day_name().values,
+                                 force_type='categorical'
+                                 )
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Transformed date feature "{}" using date categorizer - week_day'.format(feature))
             if day:
                 DATA_PROCESSING['semi_engineered_features'].append('{}_day'.format(feature))
                 _process_handler(action='add',
@@ -2497,7 +2578,7 @@ class FeatureEngineer:
                                  new_feature='{}_day'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
                                  data=_date_feature.dt.day.values,
                                  force_type='categorical'
                                  )
@@ -2509,7 +2590,7 @@ class FeatureEngineer:
                                  new_feature='{}_hour'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
                                  data=_date_feature.dt.hour.values,
                                  force_type='categorical'
                                  )
@@ -2521,7 +2602,7 @@ class FeatureEngineer:
                                  new_feature='{}_minute'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
                                  data=_date_feature.dt.minute.values,
                                  force_type='categorical'
                                  )
@@ -2533,7 +2614,7 @@ class FeatureEngineer:
                                  new_feature='{}_second'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
                                  data=_date_feature.dt.second.values,
                                  force_type='categorical'
                                  )
@@ -2577,6 +2658,28 @@ class FeatureEngineer:
                                  obj=dict(feature=fmt)
                                  )
                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Date feature {} formatted'.format(feature))
+
+    @staticmethod
+    def delete_temp_dir(cloud: str = None):
+        """
+        Delete temp directory containing preprocessed data files
+
+        :param cloud: str
+            Name of the cloud provider:
+                -> aws: Amazon Web Service (AWS)
+                -> gcp: Google Cloud Platform (GCP)
+                -> None: Local
+        """
+        if cloud is None:
+            os.rmdir(path=TEMP_DIR)
+        elif cloud == 'aws':
+            _prefix: str = TEMP_DIR.split('/')[-1]
+            _s3_bucket_name: str = TEMP_DIR.replace('{}/'.format(_prefix), '')
+            _s3 = boto3.resource('s3')
+            _s3_bucket = _s3.Bucket(_s3_bucket_name)
+            _s3_bucket.objects.filter(Prefix='{}/'.format(_prefix)).delete()
+        elif cloud == 'gcp':
+            pass
 
     @staticmethod
     @FeatureOrchestra(meth='disparity', feature_types=['date'])
@@ -3246,6 +3349,53 @@ class FeatureEngineer:
         return np.ndarray(shape=[0, 0])
 
     @staticmethod
+    def get_forced_rename_features() -> dict:
+        """
+        Get rename mapping of feature names that exceeded the maximum character length
+
+        :return: dict
+            Mapping of forced rename features
+        """
+        return DATA_PROCESSING['processing']['forced_rename']
+
+    @staticmethod
+    def get_indices() -> list:
+        """
+        Get index values
+
+        :return list:
+            Index values
+        """
+        return list(DATA_PROCESSING['df'].index.values.compute())
+
+    @staticmethod
+    def get_imp_features(feature_type: str = None) -> List[str]:
+        """
+        Get pre-defined important features
+
+        :param feature_type: str
+            Name of the feature type to subset output
+
+        :return: List[str]
+            Names of the pre-defined important features
+        """
+        if feature_type is None:
+            return DATA_PROCESSING['imp_features']
+        else:
+            _imp_features: List[str] = []
+            for imp_feature in DATA_PROCESSING['imp_features']:
+                if feature_type == 'categorical':
+                    if imp_feature in FEATURE_TYPES.get('categorical'):
+                        _imp_features.append(imp_feature)
+                elif feature_type == 'continuous':
+                    if imp_feature in FEATURE_TYPES.get('continuous'):
+                        _imp_features.append(imp_feature)
+                elif feature_type == 'ordinal':
+                    if imp_feature in FEATURE_TYPES.get('ordinal'):
+                        _imp_features.append(imp_feature)
+            return _imp_features
+
+    @staticmethod
     def get_last_action() -> str:
         """
         Get last action of actor embedded in an reinforcement learning
@@ -3358,6 +3508,16 @@ class FeatureEngineer:
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Page ({}) not found in notepad'.format(page))
 
     @staticmethod
+    def get_obj_source() -> str:
+        """
+        Get complete file path of current FeatureEngineer object if it was saved
+
+        :return str:
+            Complete file path
+        """
+        return DATA_PROCESSING.get('source')
+
+    @staticmethod
     def get_pages() -> List[str]:
         """
         Get name of all pages stored in notepad
@@ -3376,38 +3536,6 @@ class FeatureEngineer:
             Predictor names
         """
         return DATA_PROCESSING.get('predictors')
-
-    @staticmethod
-    def get_obj_source() -> str:
-        """
-        Get complete file path of current FeatureEngineer object if it was saved
-
-        :return str:
-            Complete file path
-        """
-        return DATA_PROCESSING.get('source')
-
-    @staticmethod
-    def get_supported_types(data_type: str = None):
-        """
-        Get supported types
-
-        :param data_type: str
-            Name of the specific data type to show
-        """
-        if data_type in SUPPORTED_TYPES.keys():
-            return SUPPORTED_TYPES.get(data_type)
-        return SUPPORTED_TYPES
-
-    @staticmethod
-    def get_indices() -> list:
-        """
-        Get index values
-
-        :return list:
-            Index values
-        """
-        return list(DATA_PROCESSING['df'].index.values.compute())
 
     @staticmethod
     def get_processing() -> dict:
@@ -3484,6 +3612,18 @@ class FeatureEngineer:
                             _feature = _parents[_p]
                             _p += 1
         return _processing_relation
+
+    @staticmethod
+    def get_supported_types(data_type: str = None):
+        """
+        Get supported types
+
+        :param data_type: str
+            Name of the specific data type to show
+        """
+        if data_type in SUPPORTED_TYPES.keys():
+            return SUPPORTED_TYPES.get(data_type)
+        return SUPPORTED_TYPES
 
     @staticmethod
     def get_target() -> str:
@@ -3950,7 +4090,9 @@ class FeatureEngineer:
         :param feature: str
             Name of the continuous feature
         """
-        if feature in DATA_PROCESSING['df'].columns:
+        if feature in ALL_FEATURES:
+            if feature not in DATA_PROCESSING['df'].columns:
+                _load_temp_files(features=[feature])
             if feature in FEATURE_TYPES.get('continuous'):
                 _mean = np.mean(DATA_PROCESSING['df'][feature].values)
                 if _mean in INVALID_VALUES:
@@ -4096,12 +4238,6 @@ class FeatureEngineer:
             PROCESSING_ACTION_SPACE = self.data_processing.data_processing.get('processing_action_space')
             TEXT_MINER = self.data_processing.data_processing.get('text_miner')
             self.data_processing = None
-            DATA_PROCESSING['df'] = DataImporter(file_path=file_path.split('.')[0],
-                                                 #file_path='{}.parquet'.format(file_path.split('.')[0]),
-                                                 as_data_frame=True,
-                                                 use_dask=True,
-                                                 create_dir=False
-                                                 ).file()
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Load feature engineer')
 
     @staticmethod
@@ -4851,7 +4987,6 @@ class FeatureEngineer:
     def save(self,
              file_path: str = None,
              cls_obj: bool = True,
-             write_parquet: bool = True,
              overwrite: bool = True,
              create_dir: bool = False,
              cloud: str = None
@@ -4864,9 +4999,6 @@ class FeatureEngineer:
 
         :param cls_obj: bool
             Whether to export class object or processing dictionary as pickle file
-
-        :param write_parquet: bool
-            Write data set (dask DataFrame) as parquet
 
         :param overwrite: bool
             Whether to overwrite existing file or not
@@ -4903,14 +5035,6 @@ class FeatureEngineer:
             else:
                 _file_path: str = file_path
             self.dask_client = None
-            if write_parquet:
-                _parquet_file_path: str = _file_path.split('.')[0]
-                DataExporter(obj=DATA_PROCESSING.get('df'),
-                             file_path=_parquet_file_path,
-                             #file_path='{}.parquet'.format(_parquet_file_path),
-                             create_dir=create_dir,
-                             overwrite=overwrite
-                             ).file()
             DATA_PROCESSING['df'] = None
             if cls_obj:
                 DataExporter(obj=self,
@@ -5238,7 +5362,7 @@ class FeatureEngineer:
                 -> id_text: Text or ID features
         """
         for feature in feature_types.keys():
-            if feature in DATA_PROCESSING['df'].columns:
+            if feature in ALL_FEATURES:
                 _update_feature_types(feature=feature, force_type=feature_types.get(feature))
 
     @staticmethod
@@ -5323,6 +5447,11 @@ class FeatureEngineer:
                         if feature not in FEATURE_TYPES.get('ordinal'):
                             del _predictors[_predictors.index(feature)]
                             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Exclude original (non-numeric) feature "{}"'.format(feature))
+        for cat in DATA_PROCESSING['encoder']['one_hot'].keys():
+            if cat in _predictors:
+                del _predictors[_predictors.index(cat)]
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(
+                    msg='Exclude original (non-numeric) feature "{}"'.format(cat))
         DATA_PROCESSING['predictors'] = _predictors
         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Set {} predictors'.format(len(_predictors)))
 
@@ -5336,7 +5465,7 @@ class FeatureEngineer:
         """
         global PREDICTORS
         for predictor in predictors:
-            if predictor in DATA_PROCESSING['df'].columns:
+            if predictor in ALL_FEATURES:
                 PREDICTORS.append(predictor)
                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Set predictor ({}). This predictor will be excluded from any further engineering process'.format(predictor))
 
@@ -5350,7 +5479,7 @@ class FeatureEngineer:
         """
         _imp_features: List[str] = []
         for feature in imp_features:
-            if feature in DATA_PROCESSING['df'].columns:
+            if feature in ALL_FEATURES:
                 _imp_features.append(feature)
         if len(_imp_features) > 0:
             DATA_PROCESSING['imp_features'] = _imp_features
