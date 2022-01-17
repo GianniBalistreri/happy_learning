@@ -289,7 +289,7 @@ class FeatureLearning:
                                                                              multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
                                                                              multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
                                                                              log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
-                                                                             verbose=0 if self.kwargs.get('verbose') is None else self.kwargs.get('verbose')
+                                                                             verbose=False if self.kwargs.get('verbose') is None else self.kwargs.get('verbose')
                                                                              )
         elif evolutionary_algorithm == 'si':
             _feature_learning_evolution: SwarmIntelligence = SwarmIntelligence(mode='feature_engineer',
@@ -319,7 +319,7 @@ class FeatureLearning:
                                                                                multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
                                                                                multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
                                                                                log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
-                                                                               verbose=0 if self.kwargs.get('verbose') is None else self.kwargs.get('verbose')
+                                                                               verbose=False if self.kwargs.get('verbose') is None else self.kwargs.get('verbose')
                                                                                )
         else:
             raise FeatureLearningException('Reinforced evolutionary algorithm ({}) not supported'.format(evolutionary_algorithm))
