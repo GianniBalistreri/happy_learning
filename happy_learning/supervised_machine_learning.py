@@ -45,6 +45,7 @@ REG_ALGORITHMS: dict = dict(ada='ada_boosting',
                             gam='generalized_additive_models',
                             gbo='gradient_boosting_tree',
                             knn='k_nearest_neighbor',
+                            lasso='lasso_regression',
                             rf='random_forest',
                             svm='support_vector_machine',
                             #lsvm='linear_support_vector_machine',
@@ -52,16 +53,16 @@ REG_ALGORITHMS: dict = dict(ada='ada_boosting',
                             xgb='extreme_gradient_boosting_tree'
                             )
 
-PARAM_SPACE_CLF: dict = dict(ada=dict(base_estimator=['base_estimator_None', 'base_estimator_base_decision_tree', 'base_estimator_decision_tree_classifier', 'base_estimator_extra_tree_classifier'],
+PARAM_SPACE_CLF: dict = dict(ada=dict(#base_estimator=['base_estimator_None', 'base_estimator_base_decision_tree', 'base_estimator_decision_tree_classifier', 'base_estimator_extra_tree_classifier'],
                                       n_estimators=-1,
                                       learning_rate=-1.0,
-                                      algorithm=['algorithm_SAMME', 'algorithm_SAMME.R']
+                                      #algorithm=['algorithm_SAMME', 'algorithm_SAMME.R']
                                       ),
                              cat=dict(n_estimators=np.random.randint(low=5, high=100),
                                       learning_rate=np.random.uniform(low=0.01, high=1.0),
                                       l2_leaf_reg=np.random.uniform(low=0.1, high=1.0),
                                       depth=np.random.randint(low=3, high=16),
-                                      sampling_frequency=np.random.choice(a=['PerTree', 'PerTreeLevel']),
+                                      #sampling_frequency=np.random.choice(a=['PerTree', 'PerTreeLevel']),
                                       grow_policy=np.random.choice(a=['SymmetricTree', 'Depthwise', 'Lossguide']),
                                       min_data_in_leaf=np.random.randint(low=1, high=20),
                                       rsm=np.random.uniform(low=0, high=1),
@@ -85,14 +86,14 @@ PARAM_SPACE_CLF: dict = dict(ada=dict(base_estimator=['base_estimator_None', 'ba
                                       algorithm=['algorithm_auto', 'algorithm_ball_tree', 'algorithm_kd_tree', 'algorithm_brute'],
                                       leaf_size=-1,
                                       p=['p_1', 'p_2', 'p_3'],
-                                      metric=['metric_minkowski', 'metric_precomputed']
+                                      #metric=['metric_minkowski', 'metric_precomputed']
                                       ),
-                             lda=dict(solver=['solver_svd', 'solver_lsqr', 'solver_eigen'],
-                                      shrinkage=-1.0
-                                      ),
+                             lida=dict(solver=['solver_svd', 'solver_lsqr', 'solver_eigen'],
+                                       shrinkage=-1.0
+                                       ),
                              log=dict(penalty=['penalty_l1', 'penalty_l2', 'penalty_elasticnet', 'penalty_None'],
                                       C=-1.0,
-                                      solver=['solver_liblinear', 'solver_lbfgs', 'solver_sag', 'solver_saga', 'solver_newton-cg'],
+                                      #solver=['solver_liblinear', 'solver_lbfgs', 'solver_sag', 'solver_saga', 'solver_newton-cg'],
                                       max_iter=-1
                                       ),
                              qda=dict(reg_param=-1.0),
@@ -105,7 +106,7 @@ PARAM_SPACE_CLF: dict = dict(ada=dict(base_estimator=['base_estimator_None', 'ba
                                      ),
                              svm=dict(C=-1.0,
                                       kernel=['kernel_rbf', 'kernel_linear', 'kernel_poly', 'kernel_sigmoid', 'kernel_precomputed'],
-                                      gamma=['gamma_auto', 'gamma_scale'],
+                                      #gamma=['gamma_auto', 'gamma_scale'],
                                       shrinking=['shrinking_True', 'shrinking_False'],
                                       cache_size=-1,
                                       decision_function_shape=['decision_function_shape_ovo', 'decision_function_shape_ovr'],
@@ -119,7 +120,7 @@ PARAM_SPACE_CLF: dict = dict(ada=dict(base_estimator=['base_estimator_None', 'ba
                                        ),
                              nusvm=dict(C=-1.0,
                                         kernel=['kernel_rbf', 'kernel_linear', 'kernel_poly', 'kernel_sigmoid', 'kernel_precomputed'],
-                                        gamma=['gamma_auto', 'gamma_scale'],
+                                        #gamma=['gamma_auto', 'gamma_scale'],
                                         shrinking=['shrinking_True', 'shrinking_False'],
                                         cache_size=-1,
                                         decision_function_shape=['decision_function_shape_ovo', 'decision_function_shape_ovr'],
@@ -138,13 +139,13 @@ PARAM_SPACE_CLF: dict = dict(ada=dict(base_estimator=['base_estimator_None', 'ba
                                       reg_lambda=-1.0,
                                       subsample=-1.0,
                                       colsample_bytree=-1.0,
-                                      scale_pos_weight=-1.0,
-                                      base_score=-1.0,
+                                      #scale_pos_weight=-1.0,
+                                      #base_score=-1.0,
                                       early_stopping=['early_stopping_True', 'early_stopping_False']
                                       )
                              )
 
-PARAM_SPACE_REG: dict = dict(ada=dict(base_estimator=['base_estimator_None', 'base_estimator_base_decision_tree', 'base_estimator_decision_tree_classifier', 'base_estimator_extra_tree_classifier'],
+PARAM_SPACE_REG: dict = dict(ada=dict(#base_estimator=['base_estimator_None', 'base_estimator_base_decision_tree', 'base_estimator_decision_tree_classifier', 'base_estimator_extra_tree_classifier'],
                                       n_estimators=-1,
                                       learning_rate=-1.0,
                                       loss=['loss_linear', 'loss_square', 'loss_exponential'],
@@ -163,7 +164,7 @@ PARAM_SPACE_REG: dict = dict(ada=dict(base_estimator=['base_estimator_None', 'ba
                              elastic=dict(alpha=-1.0,
                                           l1_ratio=-1.0,
                                           normalize=['normalize_True', 'normalize_False'],
-                                          precompute=['precompute_True', 'precompute_False'],
+                                          #precompute=['precompute_True', 'precompute_False'],
                                           max_iter=-1,
                                           fit_intercept=['fit_intercept_True', 'fit_intercept_False'],
                                           selection=['selection_cyclic', 'selection_random']
@@ -191,7 +192,7 @@ PARAM_SPACE_REG: dict = dict(ada=dict(base_estimator=['base_estimator_None', 'ba
                                       algorithm=['algorithm_auto', 'algorithm_ball_tree', 'algorithm_kd_tree', 'algorithm_brute'],
                                       leaf_size=-1,
                                       p=['p_1', 'p_2', 'p_3'],
-                                      metric=['metric_minkowski', 'metric_precomputed']
+                                      #metric=['metric_minkowski', 'metric_precomputed']
                                       ),
                              lasso=dict(alpha=-1.0,
                                         normalize=['normalize_True', 'normalize_False'],
@@ -205,7 +206,6 @@ PARAM_SPACE_REG: dict = dict(ada=dict(base_estimator=['base_estimator_None', 'ba
                                       solver=['solver_liblinear', 'solver_lbfgs', 'solver_sag', 'solver_saga', 'solver_newton-cg'],
                                       max_iter=-1
                                       ),
-                             qda=dict(reg_param=-1.0),
                              rf=dict(n_estimators=-1,
                                      criterion=['criterion_mae', 'criterion_mse'],
                                      max_depth=-1,
@@ -229,7 +229,7 @@ PARAM_SPACE_REG: dict = dict(ada=dict(base_estimator=['base_estimator_None', 'ba
                                        ),
                              nusvm=dict(C=-1.0,
                                         kernel=['kernel_rbf', 'kernel_linear', 'kernel_poly', 'kernel_sigmoid', 'kernel_precomputed'],
-                                        gamma=['gamma_auto', 'gamma_scale'],
+                                        #gamma=['gamma_auto', 'gamma_scale'],
                                         shrinking=['shrinking_True', 'shrinking_False'],
                                         cache_size=-1,
                                         decision_function_shape=['decision_function_shape_ovo', 'decision_function_shape_ovr'],
@@ -442,7 +442,7 @@ Q_TABLE_PARAM_SPACE_CLF: dict = dict(ada=dict(n_estimators_0=tuple([5, 9]),
                                               n_estimators_36=tuple([185, 189]),
                                               n_estimators_37=tuple([190, 194]),
                                               n_estimators_38=tuple([195, 199]),
-                                              loss=['ls', 'lad', 'huber', 'quantile'],
+                                              loss=['deviance', 'exponential'],
                                               subsample_0=tuple([0.0, 0.1]),
                                               subsample_1=tuple([0.1, 0.2]),
                                               subsample_2=tuple([0.2, 0.3]),
@@ -476,16 +476,6 @@ Q_TABLE_PARAM_SPACE_CLF: dict = dict(ada=dict(n_estimators_0=tuple([5, 9]),
                                               n_iter_no_change_2=tuple([6, 7]),
                                               n_iter_no_change_3=tuple([8, 9]),
                                               n_iter_no_change_4=tuple([10, 11]),
-                                              alpha_0=tuple([0.01, 0.09]),
-                                              alpha_1=tuple([0.09, 0.19]),
-                                              alpha_2=tuple([0.19, 0.29]),
-                                              alpha_3=tuple([0.29, 0.39]),
-                                              alpha_4=tuple([0.39, 0.49]),
-                                              alpha_5=tuple([0.49, 0.59]),
-                                              alpha_6=tuple([0.59, 0.69]),
-                                              alpha_7=tuple([0.69, 0.79]),
-                                              alpha_8=tuple([0.79, 0.89]),
-                                              alpha_9=tuple([0.89, 0.99]),
                                               ccp_alpha_0=tuple([0.0, 0.09]),
                                               ccp_alpha_1=tuple([0.09, 0.19]),
                                               ccp_alpha_2=tuple([0.19, 0.29]),
@@ -3562,11 +3552,10 @@ class ModelGeneratorReg(Regression):
                                verbose=False
                                )
             else:
-                # TODO: check if fit got verbose as parameter
                 if hasattr(self.model, 'fit_transform'):
-                    self.model.fit_transform(x, y, verbose=False)
+                    self.model.fit_transform(x, y)
                 else:
-                    self.model.fit(x, y, verbose=False)
+                    self.model.fit(x, y)
         elif hasattr(self.model, 'train'):
             #with joblib.parallel_backend(backend='dask'):
             self.model.train(x, y)
