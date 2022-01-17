@@ -775,7 +775,11 @@ class DQNAgent:
                          region=self.kwargs.get('region')
                          ).file()
         if model:
-            _model = self.env.train_final_model(experience_id=self.experience_idx, data_sets=data_sets)
+            _model = self.env.train_final_model(data_sets=data_sets,
+                                                model_name=self.kwargs.get('sml_algorithm'),
+                                                param=self.env.observations['model_param'][self.experience_idx],
+                                                eval=True
+                                                )
             DataExporter(obj=_model,
                          file_path=os.path.join(self.output_file_path, 'model.p'),
                          create_dir=False,
