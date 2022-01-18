@@ -80,3 +80,7 @@ class TestEnvironmentModeling(unittest.TestCase):
                                         ModelGeneratorClf
                                         )
                         )
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -428,3 +428,7 @@ class TestDQNAgent(unittest.TestCase):
        if os.path.isfile(f'{OUTPUT_PATH}rl_action_learning_type_distribution.html'):
            _found_saved_plots += 1
        self.assertTrue(expr=_found_saved_plots >= 12)
+
+
+if __name__ == '__main__':
+    unittest.main()
