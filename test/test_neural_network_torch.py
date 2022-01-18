@@ -6,9 +6,9 @@ from happy_learning.neural_network_generator_torch import NetworkGenerator
 from typing import List
 
 
-DATA_FILE_PATH: dict = dict(train='',
-                            test='',
-                            val=''
+DATA_FILE_PATH: dict = dict(train='data/text_train.csv',
+                            test='data/text_test.csv',
+                            val='data/text_val.csv',
                             )
 
 DATA_SET_MLP: pd.DataFrame = pd.DataFrame(data=dict(x1=np.random.choice(a=[0, 1], size=1000),
@@ -18,6 +18,63 @@ DATA_SET_MLP: pd.DataFrame = pd.DataFrame(data=dict(x1=np.random.choice(a=[0, 1]
                                                     y=np.random.choice(a=[0, 1], size=1000)
                                                     )
                                           )
+
+
+class AttentionTest(unittest.TestCase):
+    """
+    Class for testing class Attention (torch)
+    """
+    def test_forward(self):
+        _network_generator: NetworkGenerator = NetworkGenerator(target='label',
+                                                                predictors=['text'],
+                                                                output_layer_size=5,
+                                                                train_data_path=DATA_FILE_PATH.get('train'),
+                                                                test_data_path=DATA_FILE_PATH.get('test'),
+                                                                validation_data_path=DATA_FILE_PATH.get('val'),
+                                                                model_name='att',
+                                                                sep=','
+                                                                )
+        _network_generator.get_vanilla_model()
+        _network_generator.train()
+        self.assertTrue(expr=len(_network_generator.fitness.keys()) > 0)
+
+
+class GRUTest(unittest.TestCase):
+    """
+    Class for testing class GRU (torch)
+    """
+    def test_forward(self):
+        _network_generator: NetworkGenerator = NetworkGenerator(target='label',
+                                                                predictors=['text'],
+                                                                output_layer_size=5,
+                                                                train_data_path=DATA_FILE_PATH.get('train'),
+                                                                test_data_path=DATA_FILE_PATH.get('test'),
+                                                                validation_data_path=DATA_FILE_PATH.get('val'),
+                                                                model_name='gru',
+                                                                sep=','
+                                                                )
+        _network_generator.get_vanilla_model()
+        _network_generator.train()
+        self.assertTrue(expr=len(_network_generator.fitness.keys()) > 0)
+
+
+class LSTMTest(unittest.TestCase):
+    """
+    Class for testing class LSTM (torch)
+    """
+    def test_forward(self):
+        _network_generator: NetworkGenerator = NetworkGenerator(target='label',
+                                                                predictors=['text'],
+                                                                output_layer_size=5,
+                                                                train_data_path=DATA_FILE_PATH.get('train'),
+                                                                test_data_path=DATA_FILE_PATH.get('test'),
+                                                                validation_data_path=DATA_FILE_PATH.get('val'),
+                                                                model_name='lstm',
+                                                                sep=','
+                                                                )
+        _network_generator.get_vanilla_model()
+        _network_generator.train()
+        self.assertTrue(expr=len(_network_generator.fitness.keys()) > 0)
 
 
 class MLPTest(unittest.TestCase):
@@ -51,11 +108,69 @@ class RCNNTest(unittest.TestCase):
     def test_forward(self):
         _network_generator: NetworkGenerator = NetworkGenerator(target='label',
                                                                 predictors=['text'],
-                                                                output_layer_size=2,
+                                                                output_layer_size=5,
                                                                 train_data_path=DATA_FILE_PATH.get('train'),
                                                                 test_data_path=DATA_FILE_PATH.get('test'),
                                                                 validation_data_path=DATA_FILE_PATH.get('val'),
-                                                                models=['rcnn']
+                                                                model_name='rcnn',
+                                                                sep=','
+                                                                )
+        _network_generator.get_vanilla_model()
+        _network_generator.train()
+        self.assertTrue(expr=len(_network_generator.fitness.keys()) > 0)
+
+
+class RNNTest(unittest.TestCase):
+    """
+    Class for testing class RNN (torch)
+    """
+    def test_forward(self):
+        _network_generator: NetworkGenerator = NetworkGenerator(target='label',
+                                                                predictors=['text'],
+                                                                output_layer_size=5,
+                                                                train_data_path=DATA_FILE_PATH.get('train'),
+                                                                test_data_path=DATA_FILE_PATH.get('test'),
+                                                                validation_data_path=DATA_FILE_PATH.get('val'),
+                                                                model_name='rnn',
+                                                                sep=','
+                                                                )
+        _network_generator.get_vanilla_model()
+        _network_generator.train()
+        self.assertTrue(expr=len(_network_generator.fitness.keys()) > 0)
+
+
+class SelfAttentionTest(unittest.TestCase):
+    """
+    Class for testing class SelfAttention (torch)
+    """
+    def test_forward(self):
+        _network_generator: NetworkGenerator = NetworkGenerator(target='label',
+                                                                predictors=['text'],
+                                                                output_layer_size=5,
+                                                                train_data_path=DATA_FILE_PATH.get('train'),
+                                                                test_data_path=DATA_FILE_PATH.get('test'),
+                                                                validation_data_path=DATA_FILE_PATH.get('val'),
+                                                                model_name='self',
+                                                                sep=','
+                                                                )
+        _network_generator.get_vanilla_model()
+        _network_generator.train()
+        self.assertTrue(expr=len(_network_generator.fitness.keys()) > 0)
+
+
+class TransformerTest(unittest.TestCase):
+    """
+    Class for testing class Transformer (torch)
+    """
+    def test_forward(self):
+        _network_generator: NetworkGenerator = NetworkGenerator(target='label',
+                                                                predictors=['text'],
+                                                                output_layer_size=5,
+                                                                train_data_path=DATA_FILE_PATH.get('train'),
+                                                                test_data_path=DATA_FILE_PATH.get('test'),
+                                                                validation_data_path=DATA_FILE_PATH.get('val'),
+                                                                model_name='trans',
+                                                                sep=','
                                                                 )
         _network_generator.get_vanilla_model()
         _network_generator.train()

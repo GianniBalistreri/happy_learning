@@ -156,6 +156,39 @@ class Attention(nn.Module):
         return self.output_layer(_attn_output)
 
 
+class DQNFC(nn.Module):
+    """
+    Class for building deep-q-learning network using fully connected layers only
+    """
+    def __init__(self, input_size: int, hidden_size: int, output_size):
+        super(DQNFC, self).__init__()
+        self.fully_connected_input_layer: torch.nn.Linear = torch.nn.Linear(in_features=input_size,
+                                                                            out_features=hidden_size,
+                                                                            bias=True
+                                                                            )
+        self.fully_connected_hidden_layer: torch.nn.Linear = torch.nn.Linear(in_features=hidden_size,
+                                                                             out_features=hidden_size,
+                                                                             bias=True
+                                                                             )
+        self.fully_connected_output_layer: torch.nn.Linear = torch.nn.Linear(in_features=hidden_size,
+                                                                             out_features=output_size,
+                                                                             bias=True
+                                                                             )
+
+    def forward(self, x):
+        """
+        Feed forward algorithm
+
+        :param x:
+            Input
+
+        :return: Fitted neural network
+        """
+        x = torch.tanh(self.fully_connected_input_layer(x))
+        x = torch.tanh(self.fully_connected_hidden_layer(x))
+        return torch.tanh(self.fully_connected_output_layer(x))
+
+
 class GRU(nn.Module):
     """
 	Class for building deep learning gated recurrent unit network model using PyTorch

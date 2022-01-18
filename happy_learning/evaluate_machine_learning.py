@@ -20,19 +20,19 @@ from typing import Dict, List
 #  Handle Multi-Class Problems using AUC: OVO / OVR
 
 ML_METRIC: Dict[str, List[str]] = dict(reg=['mae', 'mgd', 'mpd', 'mse', 'msle', 'mtd', 'rmse', 'rmse_norm'],
-                                       clf_binary=['accuracy', 'f1', 'precision', 'recall', 'roc_auc'],
-                                       clf_multi=['accuracy', 'cohen_kappa', 'f1', 'precision', 'recall']
+                                       clf_binary=['accuracy', 'f1', 'precision', 'recall', 'roc_auc', 'confusion'],
+                                       clf_multi=['accuracy', 'cohen_kappa', 'f1', 'precision', 'recall', 'confusion']
                                        )
 
 
 SML_SCORE: dict = dict(ml_metric=dict(clf_binary='roc_auc', clf_multi='cohen_kappa', reg='rmse_norm'),
                        ml_metric_best=dict(clf_binary=1, clf_multi=1, reg=0),
-                       ml_metric_weights=0.25,
-                       train_test_weights=0.35,
+                       ml_metric_weights=0.3,
+                       train_test_weights=0.77,
                        train_time_in_seconds_weights=0.0000005,
                        start_value=100,
                        normalized=False,
-                       capping_to_zero=True
+                       capping_to_zero=False
                        )
 
 
@@ -47,7 +47,7 @@ def sml_score(ml_metric: tuple,
               capping_to_zero: bool = SML_SCORE.get('capping_to_zero')
               ) -> dict:
     """
-    Productivity score for evaluating machine learning models multi-dimensional
+    Supervised machine learning score for evaluating machine learning models multi-dimensional
         -> Dimensions:  1) Difference between normalized classification or regression metric of test data and it's optimal score
                         2) Difference between train and test metric
                         3) Training time in seconds
@@ -84,7 +84,7 @@ def sml_score(ml_metric: tuple,
         Cap scores smaller then zero to zero
 
     :return dict
-        Productivity scores for each dimension to evaluate general purpose machine learning model
+        Supervised machine learning scores for each dimension to evaluate general purpose machine learning model
     """
     _out_of_range: bool = False
     try:
@@ -138,7 +138,7 @@ def sml_fitness_score(ml_metric: tuple,
                       capping_to_zero: bool = SML_SCORE.get('capping_to_zero')
                       ) -> float:
     """
-    Productivity score for evaluating machine learning models multi-dimensional
+    Supervised machine learning score for evaluating machine learning models multi-dimensional
         -> Wrapper function of 'productivity' method to extract and return only final fitness score
 
     :param ml_metric: tuple
@@ -215,7 +215,8 @@ def sml_score_test(optimal_value: int, experiments: int = 10000):
         if optimal_value == 0 or optimal_value == 1:
             _sml_score.append(sml_fitness_score(ml_metric=(optimal_value, _test_error[-1]),
                                                 train_test_metric=(_train_error[-1], _test_error[-1]),
-                                                train_time_in_seconds=_training_time_in_seconds[-1]
+                                                train_time_in_seconds=_training_time_in_seconds[-1],
+                                                capping_to_zero=True
                                                 )
                               )
         else:

@@ -1259,7 +1259,7 @@ class SwarmIntelligence:
                                     end_time=str(datetime.now()),
                                     stopping_reason=self.stopping_reason
                                     )
-        if self.plot:
+        if self.plot and self.stopping_reason is not None:
             self.visualize(results_table=True,
                            model_distribution=True,
                            model_evolution=True,

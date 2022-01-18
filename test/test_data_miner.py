@@ -26,7 +26,7 @@ class DataMinerTest(unittest.TestCase):
                   plot=True,
                   output_path='data',
                   **dict(max_generations=2)
-                  ).supervised(models=['cat', 'xgb', 'svm'],
+                  ).supervised(models=['cat', 'xgb'],
                                feature_selector='shapley',
                                top_features=0.5,
                                optimizer='ga',
@@ -67,7 +67,7 @@ class DataMinerTest(unittest.TestCase):
                   plot=True,
                   output_path='data',
                   **dict(max_generations=2)
-                  ).supervised(models=['cat', 'xgb', 'svm'],
+                  ).supervised(models=['cat', 'xgb'],
                                feature_selector='shapley',
                                top_features=0.5,
                                optimizer='ga',

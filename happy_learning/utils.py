@@ -5,6 +5,7 @@ Happy Learning utility functions
 """
 
 import dask
+import dateutil
 import geocoder
 import inspect
 import itertools

@@ -37,10 +37,9 @@ class FeatureLearning:
                  keep_fittest_only: bool = True,
                  train_continuous_critic: bool = False,
                  train_categorical_critic: bool = False,
-                 engineer_time_disparity: bool = True,
                  engineer_categorical: bool = True,
                  engineer_continuous: bool = True,
-                 engineer_text: bool = False,
+                 generate_text: bool = False,
                  generate_categorical: bool = True,
                  generate_continuous: bool = True,
                  output_path: str = None,
@@ -69,16 +68,13 @@ class FeatureLearning:
         :param keep_fittest_only: bool
             Whether to keep the fittest features only or all (generated) features
 
-        :param engineer_time_disparity: bool
-            Whether to process time disparity of datetime features or not
-
         :param engineer_categorical: bool
             Whether to process categorical features or not
 
         :param engineer_continuous: bool
             Whether to process continuous features or not
 
-        :param engineer_text: bool
+        :param generate_text: bool
             Whether to process text features or not
 
         :param generate_categorical: bool
@@ -104,10 +100,9 @@ class FeatureLearning:
         self.keep_fittest_only: bool = keep_fittest_only
         self.train_continuous_critic: bool = train_continuous_critic
         self.train_categorical_critic: bool = train_categorical_critic
-        self.engineer_text: bool = engineer_text
         self.engineer_continuous: bool = engineer_continuous
         self.engineer_categorical: bool = engineer_categorical
-        self.engineer_time_disparity: bool = engineer_time_disparity
+        self.generate_text: bool = generate_text
         self.generate_categorical: bool = generate_categorical
         self.generate_continuous: bool = generate_continuous
         if output_path is None:
@@ -144,22 +139,15 @@ class FeatureLearning:
         if engineer_continuous:
             self.feature_engineer.impute(multiple=True, multiple_meth='random', m=25, convergence_threshold=0.99)
         self.feature_engineer.reset_multi_threading()
-        if self.engineer_time_disparity:
-            self.feature_engineer.disparity(years=True if kwargs.get('years') is None else kwargs.get('years'),
-                                            months=True if kwargs.get('months') is None else kwargs.get('months'),
-                                            weeks=True if kwargs.get('weeks') is None else kwargs.get('weeks'),
-                                            days=True if kwargs.get('days') is None else kwargs.get('days'),
-                                            hours=True if kwargs.get('hours') is None else kwargs.get('hours'),
-                                            minutes=True if kwargs.get('minutes') is None else kwargs.get('minutes'),
-                                            seconds=True if kwargs.get('seconds') is None else kwargs.get('seconds')
-                                            )
-        if self.engineer_text:
+        if self.generate_text:
             self.feature_engineer.text_occurances()
             self.feature_engineer.linguistic_features()
         self.force_target_type: str = force_target_type
         self.kwargs: dict = kwargs
         self.continuous_learning = None
         self.categorical_learning = None
+        if len(self.feature_engineer.get_predictors()) > 0:
+            self.feature_engineer.reset_predictors()
 
     def _evolve_feature_learning_ai(self, feature_type: str, evolutionary_algorithm: str):
         """
@@ -301,7 +289,7 @@ class FeatureLearning:
                                                                              multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
                                                                              multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
                                                                              log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
-                                                                             verbose=0 if self.kwargs.get('verbose') is None else self.kwargs.get('verbose')
+                                                                             verbose=False if self.kwargs.get('verbose') is None else self.kwargs.get('verbose')
                                                                              )
         elif evolutionary_algorithm == 'si':
             _feature_learning_evolution: SwarmIntelligence = SwarmIntelligence(mode='feature_engineer',
@@ -331,7 +319,7 @@ class FeatureLearning:
                                                                                multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
                                                                                multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
                                                                                log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
-                                                                               verbose=0 if self.kwargs.get('verbose') is None else self.kwargs.get('verbose')
+                                                                               verbose=False if self.kwargs.get('verbose') is None else self.kwargs.get('verbose')
                                                                                )
         else:
             raise FeatureLearningException('Reinforced evolutionary algorithm ({}) not supported'.format(evolutionary_algorithm))
@@ -375,7 +363,14 @@ class FeatureLearning:
         """
         _disparity: bool = True if self.kwargs.get('disparity') is None else self.kwargs.get('disparity')
         if _disparity:
-            self.feature_engineer.disparity()
+            self.feature_engineer.disparity(years=True if self.kwargs.get('years') is None else self.kwargs.get('years'),
+                                            months=True if self.kwargs.get('months') is None else self.kwargs.get('months'),
+                                            weeks=True if self.kwargs.get('weeks') is None else self.kwargs.get('weeks'),
+                                            days=True if self.kwargs.get('days') is None else self.kwargs.get('days'),
+                                            hours=True if self.kwargs.get('hours') is None else self.kwargs.get('hours'),
+                                            minutes=True if self.kwargs.get('minutes') is None else self.kwargs.get('minutes'),
+                                            seconds=True if self.kwargs.get('seconds') is None else self.kwargs.get('seconds')
+                                            )
         _features: List[str] = self.feature_engineer.get_features(feature_type='ordinal') + self.feature_engineer.get_features(feature_type='continuous')
         self.feature_engineer.set_predictors(features=_features, exclude_original_data=False)
 
@@ -434,6 +429,9 @@ class FeatureLearning:
         if self.engineer_continuous:
             if self.generate_continuous:
                 self._generate_continuous_features()
+            else:
+                _features: List[str] = self.feature_engineer.get_features(feature_type='ordinal') + self.feature_engineer.get_features(feature_type='continuous')
+                self.feature_engineer.set_predictors(features=_features, exclude_original_data=False)
             if len(self.feature_engineer.get_predictors()) >= 4:
                 if self.train_continuous_critic:
                     self._feature_critic()
@@ -445,6 +443,9 @@ class FeatureLearning:
         if self.engineer_categorical:
             if self.generate_categorical:
                 self._generate_categorical_features()
+            else:
+                _features: List[str] = self.feature_engineer.get_features(feature_type='categorical')
+                self.feature_engineer.set_predictors(features=_features, exclude_original_data=True)
             if self.save_temp_data:
                 if self.output_path is None:
                     Log(write=False, level='info').log(msg='No output path found for writing temporary data for applying one-hot merging')
@@ -493,6 +494,9 @@ class FeatureLearning:
         if self.engineer_continuous:
             if self.generate_continuous:
                 self._generate_continuous_features()
+            else:
+                _features: List[str] = self.feature_engineer.get_features(feature_type='ordinal') + self.feature_engineer.get_features(feature_type='continuous')
+                self.feature_engineer.set_predictors(features=_features, exclude_original_data=False)
             if len(self.feature_engineer.get_predictors()) >= 4:
                 if self.train_continuous_critic:
                     self._feature_critic()
@@ -504,6 +508,9 @@ class FeatureLearning:
         if self.engineer_categorical:
             if self.generate_categorical:
                 self._generate_categorical_features()
+            else:
+                _features: List[str] = self.feature_engineer.get_features(feature_type='categorical')
+                self.feature_engineer.set_predictors(features=_features, exclude_original_data=True)
             if self.save_temp_data:
                 if self.output_path is None:
                     Log(write=False, level='info').log(msg='No output path found for writing temporary data for applying one-hot merging')
