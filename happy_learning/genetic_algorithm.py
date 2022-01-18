@@ -78,7 +78,7 @@ class GeneticAlgorithm:
                  mutation_prob: float = 0.85,
                  parents_ratio: float = 0.5,
                  early_stopping: int = 0,
-                 convergence: bool = True,
+                 convergence: bool = False,
                  convergence_measure: str = 'min',
                  timer_in_seconds: int = 43200,
                  force_target_type: str = None,
