@@ -132,7 +132,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  max_trials=2,
                                                  max_features=-1,
                                                  labels=None,
-                                                 models=['trans'],
+                                                 models=['rcnn'],
                                                  model_params=None,
                                                  burn_in_generations=-1,
                                                  warm_start=True,
