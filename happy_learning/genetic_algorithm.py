@@ -1453,14 +1453,14 @@ class GeneticAlgorithm:
                         break
             _threads: dict = {}
             _thread_pool: ThreadPool = ThreadPool(processes=self.n_threads) if self.multi_threading else None
-            if self.mlflow_log:
-                with mlflow.start_run():
-                    for i in range(0, self.pop_size, 1):
-                        if i not in self.parents_idx:
-                            if self.multi_threading:
-                                _threads.update({i: _thread_pool.apply_async(func=self._modeling, args=[i])})
-                            else:
-                                self._modeling(pop_idx=i)
+            for i in range(0, self.pop_size, 1):
+                if i not in self.parents_idx:
+                    if self.multi_threading:
+                        _threads.update({i: _thread_pool.apply_async(func=self._modeling, args=[i])})
+                    else:
+                        self._modeling(pop_idx=i)
+                    if self.mlflow_log:
+                        with mlflow.start_run():
                             if self.deep_learning:
                                 mlflow.pytorch.log_model(pytorch_model=self.population[i].model,
                                                          artifact_path=self.population[i].model_name
@@ -1477,15 +1477,17 @@ class GeneticAlgorithm:
                                                 artifact_file='features.yaml'
                                                 )
                                 mlflow.sklearn.log_model(sk_model=self.population[i].model,
-                                                         artifact_path=self.population[i].model_name
+                                                         artifact_path='model'#self.population[i].model_name
                                                          )
                             mlflow.log_params(params=self.population[i].model_param)
                             #mlflow.log_params(params=self.population[i].model_param_mutated)
-                            mlflow.log_metrics(metrics=self.population[i].fitness)
-                            mlflow.log_metrics(metrics=self.population[i].fitness_score)
-            else:
-                for i in range(0, self.pop_size, 1):
-                    if i not in self.parents_idx:
+                            for metric_context in self.population[i].fitness:
+                                for metric in self.population[i].fitness[metric_context]:
+                                    mlflow.log_metric(key=f'{metric}_{metric_context}',
+                                                      value=self.population[i].fitness[metric_context][metric]
+                                                      )
+                            mlflow.log_metric(key='sml_score', value=self.population[i].fitness_score)
+                    else:
                         if self.multi_threading:
                             _threads.update({i: _thread_pool.apply_async(func=self._modeling, args=[i])})
                         else:
@@ -1540,7 +1542,7 @@ class GeneticAlgorithm:
             self._populate()
         while _evolve:
             if self.mlflow_log:
-                mlflow.set_experiment(f'Genetic Algorithm: Generation {self.current_generation_meta_data["generation"]}')
+                mlflow.set_experiment(f'GA: Gen {self.current_generation_meta_data["generation"]}')
             Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Generation: {self.current_generation_meta_data["generation"]} / {self.max_generations}')
             if self.current_generation_meta_data['generation'] > 0:
                 self.n_threads = len(self.child_idx)
