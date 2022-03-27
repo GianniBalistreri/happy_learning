@@ -5,6 +5,7 @@ dask==2020.12.0
 dask-ml==1.7.0
 easyexplore==0.7.1
 emoji==0.6.0
+fast_gsdmm==0.0.1
 fsspec==0.8.5
 gensim==3.8.3
 geocoder==1.38.1
