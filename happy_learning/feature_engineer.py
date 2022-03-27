@@ -5452,7 +5452,7 @@ class FeatureEngineer:
                 del _predictors[_predictors.index(cat)]
                 Log(write=not DATA_PROCESSING.get('show_msg')).log(
                     msg='Exclude original (non-numeric) feature "{}"'.format(cat))
-        DATA_PROCESSING['predictors'] = _predictors
+        DATA_PROCESSING['predictors'] = copy.deepcopy(_predictors)
         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Set {} predictors'.format(len(_predictors)))
 
     @staticmethod
