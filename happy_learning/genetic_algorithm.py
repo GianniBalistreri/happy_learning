@@ -5,6 +5,7 @@ Reinforcement Learning Environment using genetic algorithm
 """
 
 import copy
+import mlflow
 import numpy as np
 import os
 import pandas as pd
@@ -95,6 +96,7 @@ class GeneticAlgorithm:
                  log: bool = False,
                  verbose: bool = False,
                  checkpoint: bool = True,
+                 mlflow_log: bool = True,
                  feature_engineer=None,
                  fitness_function=sml_score,
                  sampling_function=None,
@@ -260,6 +262,9 @@ class GeneticAlgorithm:
         :param checkpoint: bool
             Save checkpoint after each adjustment
 
+        :param mlflow_log: bool
+            Track experiment results using mlflow
+
         :param kwargs: dict
             Key-word arguments
         """
@@ -349,6 +354,14 @@ class GeneticAlgorithm:
         self.target_labels: List[str] = labels
         self.log: bool = log
         self.verbose: bool = verbose
+        self.mlflow_log: bool = mlflow_log
+        if self.mlflow_log:
+            self.mlflow_client: mlflow.tracking.MlflowClient = mlflow.tracking.MlflowClient(
+                tracking_uri=self.kwargs.get('tracking_uri'),
+                registry_uri=self.kwargs.get('registry_uri')
+                )
+        else:
+            self.mlflow_client = None
         self.warm_start: bool = warm_start
         self.warm_start_strategy: str = warm_start_strategy if warm_start_strategy in HIDDEN_LAYER_CATEGORY_EVOLUTION else 'monotone'
         self.warm_start_constant_hidden_layers: int = warm_start_constant_hidden_layers if warm_start_constant_hidden_layers > 0 else 0
@@ -415,10 +428,10 @@ class GeneticAlgorithm:
 
     def _collect_meta_data(self, current_gen: bool, idx: int = None):
         """
-        Collect evolution meta data
+        Collect evolution metadata
 
         :param current_gen: bool
-            Whether to write evolution meta data of each individual of current generation or not
+            Whether to write evolution metadata of each individual of current generation or not
 
         :param idx: int
             Index number of individual within population
@@ -1440,12 +1453,43 @@ class GeneticAlgorithm:
                         break
             _threads: dict = {}
             _thread_pool: ThreadPool = ThreadPool(processes=self.n_threads) if self.multi_threading else None
-            for i in range(0, self.pop_size, 1):
-                if i not in self.parents_idx:
-                    if self.multi_threading:
-                        _threads.update({i: _thread_pool.apply_async(func=self._modeling, args=[i])})
-                    else:
-                        self._modeling(pop_idx=i)
+            if self.mlflow_log:
+                with mlflow.start_run():
+                    for i in range(0, self.pop_size, 1):
+                        if i not in self.parents_idx:
+                            if self.multi_threading:
+                                _threads.update({i: _thread_pool.apply_async(func=self._modeling, args=[i])})
+                            else:
+                                self._modeling(pop_idx=i)
+                            if self.deep_learning:
+                                mlflow.pytorch.log_model(pytorch_model=self.population[i].model,
+                                                         artifact_path=self.population[i].model_name
+                                                         )
+                                mlflow.pytorch.log_state_dict(state_dict=self.population[i].model.state_dict,
+                                                              artifact_path=self.population[i].model_name
+                                                              )
+                            if self.text_clustering:
+                                mlflow.sklearn.log_model(sk_model=self.population[i].model,
+                                                         artifact_path=self.population[i].model_name
+                                                         )
+                            if not self.deep_learning and not self.text_clustering:
+                                mlflow.log_dict(dictionary=dict(features=self.population[i].features),
+                                                artifact_file='features.yaml'
+                                                )
+                                mlflow.sklearn.log_model(sk_model=self.population[i].model,
+                                                         artifact_path=self.population[i].model_name
+                                                         )
+                            mlflow.log_params(params=self.population[i].model_param)
+                            #mlflow.log_params(params=self.population[i].model_param_mutated)
+                            mlflow.log_metrics(metrics=self.population[i].fitness)
+                            mlflow.log_metrics(metrics=self.population[i].fitness_score)
+            else:
+                for i in range(0, self.pop_size, 1):
+                    if i not in self.parents_idx:
+                        if self.multi_threading:
+                            _threads.update({i: _thread_pool.apply_async(func=self._modeling, args=[i])})
+                        else:
+                            self._modeling(pop_idx=i)
             if self.multi_threading:
                 for thread in _threads.keys():
                     _threads.get(thread).get()
@@ -1495,7 +1539,9 @@ class GeneticAlgorithm:
         else:
             self._populate()
         while _evolve:
-            Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Generation: {} / {}'.format(self.current_generation_meta_data['generation'], self.max_generations))
+            if self.mlflow_log:
+                mlflow.set_experiment(f'Genetic Algorithm: Generation {self.current_generation_meta_data["generation"]}')
+            Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Generation: {self.current_generation_meta_data["generation"]} / {self.max_generations}')
             if self.current_generation_meta_data['generation'] > 0:
                 self.n_threads = len(self.child_idx)
             if self.deep_learning:
