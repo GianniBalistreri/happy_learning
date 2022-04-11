@@ -255,6 +255,87 @@ def _force_rename_feature(feature: str, max_length: int = 100) -> str:
         return feature
 
 
+def _init_global_variables():
+    """
+    Initialize global variables in case of re-initializing class object FeatureEngineer
+    """
+    global TEMP_DIR
+    TEMP_DIR = ''
+    global NOTEPAD
+    NOTEPAD = {}
+    global PREDICTORS
+    PREDICTORS = []
+    global MERGES
+    MERGES = {}
+    global ALL_FEATURES
+    ALL_FEATURES = []
+    global FEATURE_TYPES
+    FEATURE_TYPES = dict(continuous=[], ordinal=[], categorical=[], date=[], id_text=[])
+    global DATA_PROCESSING
+    DATA_PROCESSING = dict(processing=dict(process={},
+                                           features=dict(raw={},
+                                                         level_1={}
+                                                         ),
+                                           forced_rename={}
+                                           ),
+                           encoder=dict(bin={},
+                                        label={},
+                                        one_hot={}
+                                        ),
+                           scaler=dict(minmax={},
+                                       robust={},
+                                       normal={},
+                                       standard={},
+                                       box_cox={},
+                                       log={},
+                                       exp={}
+                                       ),
+                           interaction=dict(disparity=dict(date={},
+                                                           continuous={}
+                                                           ),
+                                            simple={},
+                                            polynomial={},
+                                            one_hot={}
+                                            ),
+                           self_interaction=dict(addition={},
+                                                 multiplication={}
+                                                 ),
+                           categorizer=dict(date={},
+                                            continuous={}
+                                            ),
+                           mapper=dict(obs={},
+                                       mis={},
+                                       imp={},
+                                       clean={},
+                                       names={}
+                                       ),
+                           text=dict(occurances={},
+                                     split={},
+                                     categorical=dict(len={},
+                                                      numbers={},
+                                                      words={},
+                                                      chars={},
+                                                      special_chars={},
+                                                      email={},
+                                                      url={}
+                                                      ),
+                                     linguistic=dict(pos={},
+                                                     ner={},
+                                                     dep_tree={},
+                                                     dep_noun={},
+                                                     emoji={}
+                                                     )
+                                     )
+                           )
+    global TEXT_MINER
+    TEXT_MINER = dict(obj=None,
+                      segments={},
+                      data=None,
+                      generated_features=[],
+                      linguistic={}
+                      )
+
+
 def _load_temp_files(features: List[str]):
     """
     Load temporary feature files
@@ -777,25 +858,24 @@ def _update_feature_types(feature: str, force_type: str = None):
     """
     if feature in DATA_PROCESSING['df'].columns:
         if feature != DASK_INDEXER:
-            _feature_type = EasyExploreUtils().get_feature_types(df=DATA_PROCESSING.get('df'),
-                                                                 features=[feature],
-                                                                 dtypes=[DATA_PROCESSING['df'][feature].dtype],
-                                                                 continuous=[feature] if force_type == 'continuous' else None,
-                                                                 categorical=[feature] if force_type == 'categorical' else None,
-                                                                 ordinal=[feature] if force_type == 'ordinal' else None,
-                                                                 date=[feature] if force_type == 'date' else None,
-                                                                 id_text=[feature] if force_type == 'id_text' else None,
-                                                                 print_msg=False
-                                                                 )
-            for ft in _feature_type.keys():
-                if feature in _feature_type.get(ft):
-                    if feature not in FEATURE_TYPES.get(ft):
-                        FEATURE_TYPES[ft].append(feature)
-                else:
+            _feature_type = HappyLearningUtils().get_analytical_type(df=DATA_PROCESSING.get('df'),
+                                                                     feature=feature,
+                                                                     dtype=DATA_PROCESSING.get('df')[feature].dtype,
+                                                                     continuous=[feature] if force_type == 'continuous' else None,
+                                                                     categorical=[feature] if force_type == 'categorical' else None,
+                                                                     ordinal=[feature] if force_type == 'ordinal' else None,
+                                                                     date=[feature] if force_type == 'date' else None,
+                                                                     id_text=[feature] if force_type == 'id_text' else None
+                                                                     )
+            for ft in FEATURE_TYPES.keys():
+                if _feature_type.get(ft) is None:
                     if feature in FEATURE_TYPES.get(ft):
                         _features: List[str] = copy.deepcopy(FEATURE_TYPES.get(ft))
                         del _features[_features.index(feature)]
                         FEATURE_TYPES[ft] = _features
+                else:
+                    if feature not in FEATURE_TYPES.get(ft):
+                        FEATURE_TYPES[ft].append(feature)
     else:
         Log(write=not DATA_PROCESSING.get('show_msg')).log('Feature type of feature {} could not be updated'.format(feature))
 
@@ -1039,6 +1119,7 @@ class FeatureEngineer:
             Key-word arguments
         """
         Log(write=not print_msg, level='info', env='dev').log(msg='Initializing ...')
+        _init_global_variables()
         global TEMP_DIR
         TEMP_DIR = temp_dir
         global DATA_PROCESSING
@@ -2878,6 +2959,24 @@ class FeatureEngineer:
             DATA_PROCESSING['df'][features].fillna(imp_const).pct_change(axis=_axis).fillna(0)
         else:
             DATA_PROCESSING['df'][features].fillna(imp_const).diff(periods=_periods, axis=_axis).fillna(0)
+
+    @staticmethod
+    def balance_data_set_by_sampling(n_target_cases: int,
+                                     down_sampling: bool,
+                                     up_sampling: bool,
+                                     max_classes: int = 100
+                                     ):
+        """
+        Balance data set by apply sampling techniques based on the target feature (feature type categorical / ordinal only)
+        """
+        if DATA_PROCESSING.get('target_feature') is None:
+            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='No target feature set')
+        else:
+            _load_temp_files(features=[DATA_PROCESSING.get('target_feature')])
+            if max_classes < len(DATA_PROCESSING['df'][DATA_PROCESSING.get('target_feature')].unique()):
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg=f'Target feature ({DATA_PROCESSING.get("target_feature")}) is not ordinal or categorical')
+            else:
+                pass
 
     @staticmethod
     @FeatureOrchestra(meth='exp_transform', feature_types=['continuous'])
@@ -5363,7 +5462,10 @@ class FeatureEngineer:
         """
         for feature in feature_types.keys():
             if feature in ALL_FEATURES:
+                _load_temp_files(features=[feature])
                 _update_feature_types(feature=feature, force_type=feature_types.get(feature))
+                DATA_PROCESSING['df'] = None
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg=f'Feature type of feature {feature} changed to {feature_types.get(feature)}')
 
     @staticmethod
     def set_index(idx: List[str]):
@@ -5452,7 +5554,7 @@ class FeatureEngineer:
                 del _predictors[_predictors.index(cat)]
                 Log(write=not DATA_PROCESSING.get('show_msg')).log(
                     msg='Exclude original (non-numeric) feature "{}"'.format(cat))
-        DATA_PROCESSING['predictors'] = _predictors
+        DATA_PROCESSING['predictors'] = copy.deepcopy(_predictors)
         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Set {} predictors'.format(len(_predictors)))
 
     @staticmethod

@@ -2164,7 +2164,7 @@ class Classification:
                                         high=1.0 if self.kwargs.get('C_high') is None else self.kwargs.get('C_high')
                                         ),
                     penalty=np.random.choice(a=['l1', 'l2', 'elasticnet', 'none'] if self.kwargs.get('penalty_choice') is None else self.kwargs.get('penalty_choice')),
-                    #solver=np.random.choice(a=['liblinear', 'lbfgs', 'sag', 'saga', 'newton-cg']),
+                    solver=np.random.choice(a=['liblinear', 'lbfgs', 'sag', 'saga', 'newton-cg'] if self.kwargs.get('solver') is None else self.kwargs.get('solver')),
                     max_iter=np.random.randint(low=5 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
                                                high=500 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
                                                )
@@ -2260,7 +2260,7 @@ class Classification:
                    cache_size=200 if self.clf_params.get('cache_size') is None else self.clf_params.get('cache_size'),
                    class_weight=None if self.clf_params.get('class_weight') is None else self.clf_params.get('class_weight'),
                    verbose=False if self.clf_params.get('verbose') is None else self.clf_params.get('verbose'),
-                   max_iter=-1 if self.clf_params.get('max_iter') is None else self.clf_params.get('max_iter'),
+                   max_iter=1000 if self.clf_params.get('max_iter') is None else self.clf_params.get('max_iter'),
                    decision_function_shape='ovr' if self.clf_params.get('decision_function_shape') is None else self.clf_params.get('decision_function_shape'),
                    probability=False if self.clf_params.get('probability') is None else self.clf_params.get('probability')
                    )
@@ -2282,8 +2282,8 @@ class Classification:
                                                  high=500 if self.kwargs.get('cache_size_high') is None else self.kwargs.get('cache_size_high')
                                                  ),
                     decision_function_shape=np.random.choice(a=['ovo', 'ovr'] if self.kwargs.get('decision_function_shape_choice') is None else self.kwargs.get('decision_function_shape_choice')),
-                    max_iter=np.random.randint(low=10 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
-                                               high=100 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                    max_iter=np.random.randint(low=100 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=1000 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
                                                )
                     )
 
@@ -2305,7 +2305,7 @@ class Classification:
                          class_weight=None if self.clf_params.get('class_weight') is None else self.clf_params.get('class_weight'),
                          verbose=0 if self.clf_params.get('verbose') is None else self.clf_params.get('verbose'),
                          random_state=self.seed,
-                         max_iter=500 if self.clf_params.get('max_iter') is None else self.clf_params.get('max_iter')
+                         max_iter=1000 if self.clf_params.get('max_iter') is None else self.clf_params.get('max_iter')
                          )
 
     def linear_support_vector_machine_param(self) -> dict:
@@ -2321,8 +2321,8 @@ class Classification:
                     penalty=np.random.choice(a=['l1', 'l2'] if self.kwargs.get('penalty_choice') is None else self.kwargs.get('penalty_choice')),
                     loss=np.random.choice(a=['hinge', 'squared_hinge'] if self.kwargs.get('loss_choice') is None else self.kwargs.get('loss_choice')),
                     multi_class=np.random.choice(a=['ovr', 'crammer_singer'] if self.kwargs.get('multi_class_choice') is None else self.kwargs.get('multi_class_choice')),
-                    max_iter=np.random.randint(low=10 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
-                                               high=100 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                    max_iter=np.random.randint(low=100 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=1000 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
                                                )
                     )
 
@@ -2343,7 +2343,7 @@ class Classification:
                      cache_size=200 if self.clf_params.get('cache_size') is None else self.clf_params.get('cache_size'),
                      class_weight=None if self.clf_params.get('class_weight') is None else self.clf_params.get('class_weight'),
                      verbose=False if self.clf_params.get('verbose') is None else self.clf_params.get('verbose'),
-                     max_iter=-1 if self.clf_params.get('max_iter') is None else self.clf_params.get('max_iter'),
+                     max_iter=1000 if self.clf_params.get('max_iter') is None else self.clf_params.get('max_iter'),
                      decision_function_shape='ovr' if self.clf_params.get('decision_function_shape') is None else self.clf_params.get('decision_function_shape'),
                      probability=True if self.clf_params.get('probability') is None else self.clf_params.get('probability')
                      )
@@ -2368,8 +2368,8 @@ class Classification:
                                                  high=500 if self.kwargs.get('cache_size_high') is None else self.kwargs.get('cache_size_high')
                                                  ),
                     decision_function_shape=np.random.choice(a=['ovo', 'ovr'] if self.kwargs.get('decision_function_shape_choice') is None else self.kwargs.get('decision_function_shape_choice')),
-                    max_iter=np.random.randint(low=10 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
-                                               high=100 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
+                    max_iter=np.random.randint(low=100 if self.kwargs.get('max_iter_low') is None else self.kwargs.get('max_iter_low'),
+                                               high=1000 if self.kwargs.get('max_iter_high') is None else self.kwargs.get('max_iter_high')
                                                )
                     )
 
@@ -3089,16 +3089,23 @@ class ModelGeneratorClf(Classification):
                  model_name: str = None,
                  clf_params: dict = None,
                  models: List[str] = None,
+                 labels: List[str] = None,
                  cpu_cores: int = 0,
                  seed: int = 1234,
                  **kwargs
                  ):
         """
+        :param model_name: str
+            Abrreviate name of the model
+
         :param clf_params: dict
             Pre-configured classification model parameter
 
         :param models: List[str]
             Names of the possible models to sample from
+
+        :param labels: List[str]
+            Class labels
 
         :param cpu_cores: int
             Number of CPU core to use
@@ -3133,15 +3140,13 @@ class ModelGeneratorClf(Classification):
         self.model_param_mutation: str = ''
         self.features: List[str] = []
         self.target: str = ''
+        self.target_labels: List[str] = labels
         self.train_time = None
         self.multi = None
 
-    def generate_model(self) -> object:
+    def generate_model(self):
         """
         Generate supervised machine learning model with randomized parameter configuration
-
-        :return object
-            Model object itself (self)
         """
         if self.random:
             if self.models is None:
@@ -3152,19 +3157,22 @@ class ModelGeneratorClf(Classification):
         else:
             _model = copy.deepcopy(CLF_ALGORITHMS.get(self.model_name))
         if len(self.clf_params.keys()) == 0:
-            self.model_param = getattr(Classification(), '{}_param'.format(_model))()
+            self.model_param = getattr(Classification(**self.kwargs), '{}_param'.format(_model))()
             self.clf_params = copy.deepcopy(self.model_param)
             _idx: int = 0 if len(self.model_param_mutated.keys()) == 0 else len(self.model_param_mutated.keys()) + 1
             self.model_param_mutated.update({str(_idx): {copy.deepcopy(self.model_name): {}}})
             for param in self.model_param.keys():
                 self.model_param_mutated[str(_idx)][copy.deepcopy(self.model_name)].update({param: copy.deepcopy(self.model_param.get(param))})
         else:
-            self.model_param = copy.deepcopy(self.clf_params)
-        self.model_param_mutation = 'params'
+            if len(self.model_param_mutation) > 0:
+                self.model_param = getattr(Classification(**self.kwargs), '{}_param'.format(_model))()
+                self.clf_params = copy.deepcopy(self.model_param)
+            else:
+                self.model_param = copy.deepcopy(self.clf_params)
+        self.model_param_mutation = 'new_model'
         self.model = copy.deepcopy(getattr(Classification(clf_params=self.clf_params), _model)())
-        return self
 
-    def generate_params(self, param_rate: float = 0.1, force_param: dict = None) -> object:
+    def generate_params(self, param_rate: float = 0.1, force_param: dict = None):
         """
         Generate parameter for supervised learning models
 
@@ -3173,9 +3181,6 @@ class ModelGeneratorClf(Classification):
 
         :param force_param: dict
             Parameter config to force explicitly
-
-        :return object
-            Model object itself (self)
         """
         if param_rate > 1:
             _rate: float = 1.0
@@ -3184,7 +3189,7 @@ class ModelGeneratorClf(Classification):
                 _rate: float = param_rate
             else:
                 _rate: float = 0.1
-        _params: dict = getattr(Classification(), '{}_param'.format(CLF_ALGORITHMS.get(self.model_name)))()
+        _params: dict = getattr(Classification(**self.kwargs), '{}_param'.format(CLF_ALGORITHMS.get(self.model_name)))()
         _force_param: dict = {} if force_param is None else force_param
         _param_choices: List[str] = [p for p in _params.keys() if p not in _force_param.keys()]
         _gen_n_params: int = round(len(_params.keys()) * _rate)
@@ -3196,13 +3201,12 @@ class ModelGeneratorClf(Classification):
             _new_model_params.update({param: _force_param.get(param)})
         for _ in range(0, _gen_n_params, 1):
             _param: str = np.random.choice(a=_param_choices)
-            _new_model_params.update({_param: _params.get(_param)})
+            _new_model_params.update({_param: copy.deepcopy(_params.get(_param))})
             self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update({_param: _params.get(_param)})
-        self.model_param_mutation = 'new_model'
+        self.model_param_mutation = 'params'
         self.model_param = copy.deepcopy(_new_model_params)
         self.clf_params = self.model_param
-        self.model = getattr(Classification(clf_params=self.clf_params), CLF_ALGORITHMS.get(self.model_name))()
-        return self
+        self.model = getattr(Classification(clf_params=self.clf_params, **self.kwargs), CLF_ALGORITHMS.get(self.model_name))()
 
     def get_model_parameter(self) -> dict:
         """
@@ -3226,7 +3230,11 @@ class ModelGeneratorClf(Classification):
                     _model_param.update({model: copy.deepcopy(_param)})
         return _model_param
 
-    def eval(self, obs: np.array, pred: np.array, eval_metric: List[str] = None, train_error: bool = False):
+    def eval(self,
+             obs: np.array,
+             pred: np.array,
+             eval_metric: List[str] = None,
+             train_error: bool = False):
         """
         Evaluate supervised machine learning classification model
 
@@ -3257,6 +3265,8 @@ class ModelGeneratorClf(Classification):
                 _eval_metric: List[str] = [SML_SCORE['ml_metric'].get('clf_multi')]
             else:
                 _eval_metric: List[str] = [SML_SCORE['ml_metric'].get('clf_binary')]
+            _eval_metric.append('mcc')
+            _eval_metric.append('classification_report')
         else:
             if len(eval_metric) > 0:
                 _eval_metric: List[str] = eval_metric
@@ -3266,7 +3276,16 @@ class ModelGeneratorClf(Classification):
                 else:
                     _eval_metric: List[str] = [SML_SCORE['ml_metric'].get('clf_binary')]
         for metric in _eval_metric:
-            self.fitness[_error_kind].update({metric: copy.deepcopy(getattr(EvalClf(obs=obs, pred=pred, probability=False), metric)())})
+            self.fitness[_error_kind].update({metric: copy.deepcopy(getattr(EvalClf(obs=obs,
+                                                                                    pred=pred,
+                                                                                    probability=False,
+                                                                                    labels=self.target_labels
+                                                                                    ),
+                                                                            metric
+                                                                            )
+                                                                    ()
+                                                                    )
+                                              })
 
     def predict(self, x: np.ndarray, probability: bool = False) -> np.array:
         """
@@ -3387,12 +3406,9 @@ class ModelGeneratorReg(Regression):
         self.model_param_mutation: str = ''
         self.train_time = None
 
-    def generate_model(self) -> object:
+    def generate_model(self):
         """
         Generate supervised machine learning model with randomized parameter configuration
-
-        :return object
-            Model object itself (self)
         """
         if self.random:
             if self.models is None:
@@ -3411,12 +3427,15 @@ class ModelGeneratorReg(Regression):
                 self.model_param_mutated[str(_idx)][copy.deepcopy(self.model_name)].update(
                     {param: copy.deepcopy(self.model_param.get(param))})
         else:
-            self.model_param = copy.deepcopy(self.reg_params)
-        self.model_param_mutation = 'params'
+            if len(self.model_param_mutation) > 0:
+                self.model_param = getattr(Regression(**self.kwargs), '{}_param'.format(_model))()
+                self.reg_params = copy.deepcopy(self.model_param)
+            else:
+                self.model_param = copy.deepcopy(self.reg_params)
+        self.model_param_mutation = 'new_model'
         self.model = getattr(Regression(reg_params=self.reg_params, **self.kwargs), _model)()
-        return self
 
-    def generate_params(self, param_rate: float = 0.1, force_param: dict = None) -> object:
+    def generate_params(self, param_rate: float = 0.1, force_param: dict = None):
         """
         Generate parameter for supervised learning models
 
@@ -3425,9 +3444,6 @@ class ModelGeneratorReg(Regression):
 
         :param force_param: dict
             Parameter config to force explicitly
-
-        :return object
-            Model object itself (self)
         """
         if param_rate > 1:
             _rate: float = 1.0
@@ -3449,16 +3465,13 @@ class ModelGeneratorReg(Regression):
             _new_model_params.update({param: _force_param.get(param)})
         for _ in range(0, _gen_n_params, 1):
             _param: str = np.random.choice(a=_param_choices)
-            _new_model_params.update({_param: _params.get(_param)})
+            _new_model_params.update({_param: copy.deepcopy(_params.get(_param))})
             self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update(
                 {_param: _params.get(_param)})
-        #print('old', self.model_param)
-        #print('new', _new_model_params)
-        self.model_param_mutation = 'new_model'
+        self.model_param_mutation = 'params'
         self.model_param = copy.deepcopy(_new_model_params)
         self.reg_params = self.model_param
         self.model = getattr(Regression(reg_params=self.reg_params, **self.kwargs), REG_ALGORITHMS.get(self.model_name))()
-        return self
 
     def get_model_parameter(self) -> dict:
         """

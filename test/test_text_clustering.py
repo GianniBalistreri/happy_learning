@@ -3,7 +3,9 @@ import re
 import unittest
 
 from gensim import corpora
-from happy_learning.text_clustering import GibbsSamplingDirichletMultinomialModeling, LatentDirichletAllocation, LatentSemanticIndexing, NonNegativeMatrixFactorization
+from happy_learning.text_clustering import (
+    GibbsSamplingDirichletMultinomialModeling, LatentDirichletAllocation, LatentSemanticIndexing, NonNegativeMatrixFactorization
+)
 from typing import List
 
 DATA_FILE_PATH: str = 'data/tweets.csv'
@@ -17,13 +19,13 @@ class GibbsSamplingDirichletMultinomialModelingTest(unittest.TestCase):
     """
     Class for testing class GibbsSamplingDirichletMultinomialModeling
     """
+    vocab: List[str] = list(set(x for doc in TWEETS_TOKENS for x in doc))
+
     def test_doc_to_label(self):
         pass
 
     def test_fit(self):
-        _vocab = set(x for doc in TWEETS_TOKENS for x in doc)
-        _n_terms: int = len(_vocab)
-        _mgp = GibbsSamplingDirichletMultinomialModeling(vocab_size=_n_terms,
+        _mgp = GibbsSamplingDirichletMultinomialModeling(vocab=self.vocab,
                                                          n_clusters=N_CLUSTERS,
                                                          alpha=0.1,
                                                          beta=0.5,
@@ -33,9 +35,7 @@ class GibbsSamplingDirichletMultinomialModelingTest(unittest.TestCase):
         self.assertTrue(expr=N_CLUSTERS == len(set(_y)) and len(TWEETS_TOKENS) == len(_y))
 
     def test_get_word_count_each_cluster(self):
-        _vocab = set(x for doc in TWEETS_TOKENS for x in doc)
-        _n_terms: int = len(_vocab)
-        _mgp = GibbsSamplingDirichletMultinomialModeling(vocab_size=_n_terms,
+        _mgp = GibbsSamplingDirichletMultinomialModeling(vocab=self.vocab,
                                                          n_clusters=N_CLUSTERS,
                                                          alpha=0.1,
                                                          beta=0.5,
@@ -47,31 +47,27 @@ class GibbsSamplingDirichletMultinomialModelingTest(unittest.TestCase):
         self.assertTrue(expr=N_CLUSTERS == len(_top_words_each_cluster.keys()) and _top_n_words == len(_top_words_each_cluster['0']))
 
     def test_generate_topic_allocation(self):
-        _vocab = set(x for doc in TWEETS_TOKENS for x in doc)
-        _n_terms: int = len(_vocab)
-        _mgp = GibbsSamplingDirichletMultinomialModeling(vocab_size=_n_terms,
+        _mgp = GibbsSamplingDirichletMultinomialModeling(vocab=self.vocab,
                                                          n_clusters=N_CLUSTERS,
                                                          alpha=0.1,
                                                          beta=0.5,
                                                          n_iterations=5
                                                          )
         _y: List[int] = _mgp.fit(documents=TWEETS_TOKENS)
-        _topic_allocation: dict = _mgp.generate_topic_allocation(documents=TWEETS_DF['tweet'].values.tolist())
-        self.assertTrue(expr=len(_topic_allocation['cluster']) == TWEETS_DF.shape[0])
+        _topic_allocation: List[int] = _mgp.generate_topic_allocation(documents=TWEETS_DF['tweet'].values.tolist())
+        self.assertTrue(expr=len(_topic_allocation) == TWEETS_DF.shape[0])
 
     def test_word_importance_each_cluster(self):
-        _vocab = set(x for doc in TWEETS_TOKENS for x in doc)
-        _n_terms: int = len(_vocab)
-        _mgp = GibbsSamplingDirichletMultinomialModeling(vocab_size=_n_terms,
+        _mgp = GibbsSamplingDirichletMultinomialModeling(vocab=self.vocab,
                                                          n_clusters=N_CLUSTERS,
                                                          alpha=0.1,
                                                          beta=0.5,
                                                          n_iterations=5
                                                          )
         _y: List[int] = _mgp.fit(documents=TWEETS_TOKENS)
-        _word_importance: dict = _mgp.word_importance_each_cluster()
-        _words: List[str] = list(_word_importance.keys())
-        self.assertTrue(expr=len(_word_importance) > 0 and isinstance(_word_importance.get(_words[0]), float))
+        _word_importance: List[dict] = _mgp.word_importance_each_cluster()
+        _words: List[str] = list(_word_importance[0].keys())
+        self.assertTrue(expr=len(_word_importance) > 0 and isinstance(_word_importance[0].get(_words[0]), float))
 
 
 class LatentDirichletAllocationTest(unittest.TestCase):

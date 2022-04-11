@@ -75,7 +75,6 @@ class Clustering:
         """
         self.cluster_params: dict = {} if cluster_params is None else cluster_params
         self.seed: int = seed
-        self.vocab = None
         self.vocab_size: int = 0
         self.document_term_matrix: list = []
         self.df: pd.DataFrame = df
@@ -92,7 +91,7 @@ class Clustering:
             Model object
         """
         return GibbsSamplingDirichletMultinomialModeling(
-            vocab_size=self.vocab_size,
+            vocab=self.kwargs.get('vocab'),
             n_clusters=4 if self.cluster_params.get('n_clusters') is None else self.cluster_params.get('n_clusters'),
             n_iterations=5 if self.cluster_params.get('n_iterations') is None else self.cluster_params.get('n_iterations'),
             alpha=0.1 if self.cluster_params.get('alpha') is None else self.cluster_params.get('alpha'),
@@ -128,7 +127,7 @@ class Clustering:
             Model object
         """
         return LatentDirichletAllocation(doc_term_matrix=self.document_term_matrix,
-                                         vocab=self.vocab,
+                                         vocab=self.kwargs.get('vocab'),
                                          n_clusters=10 if self.cluster_params.get(
                                              'n_clusters') is None else self.cluster_params.get('n_clusters'),
                                          n_iterations=5 if self.cluster_params.get(
@@ -162,7 +161,7 @@ class Clustering:
             Model object
         """
         return LatentSemanticIndexing(doc_term_matrix=self.document_term_matrix,
-                                      vocab=self.vocab,
+                                      vocab=self.kwargs.get('vocab'),
                                       n_clusters=10 if self.cluster_params.get(
                                           'n_clusters') is None else self.cluster_params.get('n_clusters'),
                                       n_iterations=5 if self.cluster_params.get(
@@ -376,6 +375,7 @@ class ClusteringGenerator(Clustering):
         self.model = None
         self.model_param: dict = {}
         self.tokenize: bool = tokenize
+        self.x: List[List[str]] = None
         self.stc = None
         self.fitness: float = 0.0
         self.fitness_score: float = 0.0
@@ -388,7 +388,6 @@ class ClusteringGenerator(Clustering):
             raise ClusteringException('Evaluation method ({}) not supported'.format(eval_method))
         self.eval_method: str = eval_method
         self.sep: str = sep
-        self.x: np.ndarray = None
         self.cloud: str = cloud
         self.sentence_embedding_model_path: str = sentence_embedding_model_path
         self.language_model_path: str = language_model_path
@@ -402,13 +401,14 @@ class ClusteringGenerator(Clustering):
                 self.bucket_name: str = None
             else:
                 self.bucket_name: str = self.train_data_path.split("//")[1].split("/")[0]
+        self._import_data()
 
     def _build_vocab(self):
         """
         Build text vocabulary
         """
-        self.vocab = set(d for doc in self.x for d in doc)
-        self.vocab_size = len(self.vocab)
+        self.kwargs.update({'vocab': list(set(d for doc in self.x for d in doc))})
+        self.vocab_size = len(self.kwargs.get('vocab'))
 
     def _doc_term_matrix(self):
         """
@@ -426,15 +426,15 @@ class ClusteringGenerator(Clustering):
             _top_words: List[List[str]] = []
             for cluster in _top_n_words_each_cluster.keys():
                 _top_words.append([w[0] for w in _top_n_words_each_cluster.get(cluster)])
-            self.fitness = EvalCluster(obs=self.x, pred=np.array(self.cluster_label)).coherence_score_uci(top_n_words_each_cluster=_top_words, epsilon=1)
+            self.fitness = EvalCluster(obs=np.array(self.x), pred=np.array(self.cluster_label)).coherence_score_uci(top_n_words_each_cluster=_top_words, epsilon=1)
         elif self.eval_method == 'c_umass':
             _top_n_words_each_cluster: dict = self.model.get_top_words_each_cluster(top_n_words=self.top_n_words)
             _top_words: List[List[str]] = []
             for cluster in _top_n_words_each_cluster.keys():
                 _top_words.append([w[0] for w in _top_n_words_each_cluster.get(cluster)])
-            self.fitness = EvalCluster(obs=self.x, pred=np.array(self.cluster_label)).coherence_score_umass(top_n_words_each_cluster=_top_words, epsilon=1)
+            self.fitness = EvalCluster(obs=np.array(self.x), pred=np.array(self.cluster_label)).coherence_score_umass(top_n_words_each_cluster=_top_words, epsilon=1)
         elif self.eval_method == 'stc':
-            _embedding: np.ndarray = get_sentence_embedding(text_data=self.x,
+            _embedding: np.ndarray = get_sentence_embedding(text_data=np.array(self.x),
                                                             lang_model_name='paraphrase-xlm-r-multilingual-v1' if self.cluster_params.get('lang_model_name') is None else self.cluster_params.get('lang_model_name'),
                                                             lang_model_path=self.sentence_embedding_model_path
                                                             )
@@ -448,7 +448,7 @@ class ClusteringGenerator(Clustering):
             self.stc.fit(x=_embedding_tensor)
             self.fitness = self.stc.nmi_score
         elif self.eval_method == 'trans':
-            _df_train: pd.DataFrame = pd.DataFrame(data=dict(text=self.x, label=self.cluster_label))
+            _df_train: pd.DataFrame = pd.DataFrame(data=dict(text=np.array(self.x), label=self.cluster_label))
             _args: dict = dict(do_lower_case=True,
                                evaluate_during_training=False,
                                manual_seed=1234,
@@ -458,7 +458,7 @@ class ClusteringGenerator(Clustering):
                                silent=True
                                )
             _kwargs: dict = dict(cache_dir=self.language_model_path, local_files_only=False if self.language_model_path is None else True)
-            _model_type: str = 'xlmroberta' if self.language_model_path is None else self.language_model_path.split('/')[-2].split('-')[0]
+            _model_type: str = 'xlm' if self.language_model_path is None else self.language_model_path.split('/')[-2].split('-')[0]
             _transformer = ClassificationModel(model_type=_model_type,
                                                model_name='xlm-roberta-large' if self.language_model_path is None else self.language_model_path,
                                                tokenizer_type=None,
@@ -497,17 +497,14 @@ class ClusteringGenerator(Clustering):
                                    bucket_name=self.bucket_name
                                    ).file(table_name=None)
         if self.tokenize:
-            self.x = self.df[self.predictor].apply(lambda x: re.split('\s', x)).values
+            self.x = self.df[self.predictor].apply(lambda x: re.split('\s', x)).values.tolist()
         else:
-            self.x = self.df[self.predictor].values
+            self.x = self.df[self.predictor].values.tolist()
         self.df = None
 
-    def generate_model(self) -> object:
+    def generate_model(self):
         """
         Generate clustering model with randomized parameter configuration
-
-        :return object
-            Model object itself (self)
         """
         if self.random:
             if self.models is None:
@@ -517,6 +514,9 @@ class ClusteringGenerator(Clustering):
             _model = copy.deepcopy(CLUSTER_ALGORITHMS.get(self.model_name))
         else:
             _model = copy.deepcopy(CLUSTER_ALGORITHMS.get(self.model_name))
+        if self.model_name in ['gsdmm', 'lda', 'lsi']:
+            if self.kwargs.get('vocab') is None:
+                self._build_vocab()
         if len(self.cluster_params.keys()) == 0:
             self.model_param = getattr(Clustering(**self.kwargs), '{}_param'.format(_model))()
             self.cluster_params = copy.deepcopy(self.model_param)
@@ -526,12 +526,16 @@ class ClusteringGenerator(Clustering):
                 self.model_param_mutated[str(_idx)][copy.deepcopy(self.model_name)].update(
                     {param: copy.deepcopy(self.model_param.get(param))})
         else:
-            self.model_param = copy.deepcopy(self.cluster_params)
-        self.model_param_mutation = 'params'
-        self.model = copy.deepcopy(getattr(Clustering(cluster_params=self.cluster_params, **self.kwargs), _model)())
+            if len(self.model_param_mutation) > 0:
+                self.model_param = getattr(Clustering(**self.kwargs), '{}_param'.format(_model))()
+                self.cluster_params = copy.deepcopy(self.model_param)
+            else:
+                self.model_param = copy.deepcopy(self.cluster_params)
+        self.model_param_mutation = 'new_model'
+        self.model = getattr(Clustering(cluster_params=self.cluster_params, **self.kwargs), _model)()
         return self
 
-    def generate_params(self, param_rate: float = 0.1, force_param: dict = None) -> object:
+    def generate_params(self, param_rate: float = 0.1, force_param: dict = None):
         """
         Generate parameter for clustering models
 
@@ -540,9 +544,6 @@ class ClusteringGenerator(Clustering):
 
         :param force_param: dict
             Parameter config to force explicitly
-
-        :return object
-            Model object itself (self)
         """
         if param_rate > 1:
             _rate: float = 1.0
@@ -551,6 +552,9 @@ class ClusteringGenerator(Clustering):
                 _rate: float = param_rate
             else:
                 _rate: float = 0.1
+        if self.model_name in ['gsdmm', 'lda', 'lsi']:
+            if self.kwargs.get('vocab') is None:
+                self._build_vocab()
         _params: dict = getattr(Clustering(**self.kwargs), '{}_param'.format(CLUSTER_ALGORITHMS.get(self.model_name)))()
         _force_param: dict = {} if force_param is None else force_param
         _param_choices: List[str] = [p for p in _params.keys() if p not in _force_param.keys()]
@@ -564,14 +568,13 @@ class ClusteringGenerator(Clustering):
             _new_model_params.update({param: _force_param.get(param)})
         for _ in range(0, _gen_n_params, 1):
             _param: str = np.random.choice(a=_param_choices)
-            _new_model_params.update({_param: _params.get(_param)})
+            _new_model_params.update({_param: copy.deepcopy(_params.get(_param))})
             self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update(
                 {_param: _params.get(_param)})
-        self.model_param_mutation = 'new_model'
+        self.model_param_mutation = 'params'
         self.model_param = copy.deepcopy(_new_model_params)
         self.cluster_params = self.model_param
         self.model = getattr(Clustering(cluster_params=self.cluster_params, **self.kwargs), CLUSTER_ALGORITHMS.get(self.model_name))()
-        return self
 
     def get_model_parameter(self) -> dict:
         """
@@ -586,6 +589,9 @@ class ClusteringGenerator(Clustering):
         else:
             for model in self.models:
                 if model in CLUSTER_ALGORITHMS.keys():
+                    if model in ['gsdmm', 'lda', 'lsi']:
+                        if self.kwargs.get('vocab') is None:
+                            self._build_vocab()
                     _model = getattr(Clustering(**self.kwargs), CLUSTER_ALGORITHMS.get(model))()
                     _param: dict = getattr(Clustering(**self.kwargs), '{}_param'.format(CLUSTER_ALGORITHMS.get(model)))()
                     _model_random_param: dict = _model.__dict__.items()
@@ -605,11 +611,7 @@ class ClusteringGenerator(Clustering):
         """
         Train or fit clustering model
         """
-        self._import_data()
-        if self.model in ['gsdmm', 'lda', 'lsi']:
-            self._build_vocab()
         _t0: datetime = datetime.now()
         self.cluster_label = self.model.fit(documents=self.x)
         self.train_time = (datetime.now() - _t0).seconds
         self._eval()
-        self.x = None

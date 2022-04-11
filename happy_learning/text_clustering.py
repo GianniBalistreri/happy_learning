@@ -48,7 +48,7 @@ class GibbsSamplingDirichletMultinomialModeling:
     """
     def __init__(self,
                  vocab: List[str],
-                 n_clusters: int = 8,
+                 n_clusters: int = 10,
                  n_iterations: int = 30,
                  alpha: float = 0.1,
                  beta: float = 0.1,
@@ -85,16 +85,6 @@ class GibbsSamplingDirichletMultinomialModeling:
         self.cluster_word_count: List[int] = [0 for _ in range(0, self.n_clusters, 1)]
         self.cluster_document_count: List[int] = [0 for _ in range(0, self.n_clusters, 1)]
         self.cluster_word_distribution: List[dict] = [{} for _ in range(0, self.n_clusters, 1)]
-        if self.fast:
-            self.model: GSDMM = GSDMM(self.vocab,
-                                      self.vocab_size,
-                                      self.n_clusters,
-                                      self.n_iterations,
-                                      self.alpha,
-                                      self.beta
-                                      )
-        else:
-            self.model = None
 
     def _document_scoring(self, document: List[str]) -> List[float]:
         """
@@ -257,7 +247,13 @@ class GibbsSamplingDirichletMultinomialModeling:
         self.n_documents = len(documents)
         if self.fast:
             # Use C++ implementation:
-            _document_cluster, self.cluster_word_count, self.cluster_document_count, self.cluster_word_distribution = self.model.fit(documents)
+            _document_cluster, self.cluster_word_count, self.cluster_document_count, self.cluster_word_distribution = GSDMM(self.vocab,
+                                                                                                                            self.vocab_size,
+                                                                                                                            self.n_clusters,
+                                                                                                                            self.n_iterations,
+                                                                                                                            self.alpha,
+                                                                                                                            self.beta
+                                                                                                                            ).fit(documents)
         else:
             # Use Python implementation:
             _document_cluster: List[int] = [_ for _ in range(0, self.n_documents, 1)]

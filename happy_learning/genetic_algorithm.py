@@ -5,6 +5,7 @@ Reinforcement Learning Environment using genetic algorithm
 """
 
 import copy
+import mlflow
 import numpy as np
 import os
 import pandas as pd
@@ -23,7 +24,7 @@ from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter
 from easyexplore.data_visualizer import DataVisualizer
 from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
-from typing import Dict, List
+from typing import Dict, List, Union
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -95,6 +96,7 @@ class GeneticAlgorithm:
                  log: bool = False,
                  verbose: bool = False,
                  checkpoint: bool = True,
+                 mlflow_log: bool = True,
                  feature_engineer=None,
                  fitness_function=sml_score,
                  sampling_function=None,
@@ -103,8 +105,8 @@ class GeneticAlgorithm:
         """
         :param mode: str
             Optimization specification
-                -> model: Optimize model or hyper parameter set
-                -> model_sampler: Optimize model or hyper parameter set and resample data set each mutation
+                -> model: Optimize model or hyperparameter set
+                -> model_sampler: Optimize model or hyperparameter set and resample data set each mutation
                 -> feature_engineer: Optimize feature engineering
                 -> feature_selector: Optimize feature selection
 
@@ -260,6 +262,9 @@ class GeneticAlgorithm:
         :param checkpoint: bool
             Save checkpoint after each adjustment
 
+        :param mlflow_log: bool
+            Track experiment results using mlflow
+
         :param kwargs: dict
             Key-word arguments
         """
@@ -346,9 +351,23 @@ class GeneticAlgorithm:
         self.kwargs.pop('language_model_path', None)
         self.kwargs.pop('sentence_embedding_model_path', None)
         self._input_manager()
-        self.target_labels: List[str] = labels
+        if labels is None:
+            self.target_labels: List[str] = [f'{label}' for label in range(0, self.target_classes, 1)]
+        else:
+            if len(labels) == self.target_classes:
+                self.target_labels: List[str] = labels
+            else:
+                self.target_labels: List[str] = [f'{label}' for label in range(0, self.target_classes, 1)]
         self.log: bool = log
         self.verbose: bool = verbose
+        self.mlflow_log: bool = mlflow_log
+        if self.mlflow_log:
+            self.mlflow_client: mlflow.tracking.MlflowClient = mlflow.tracking.MlflowClient(
+                tracking_uri=self.kwargs.get('tracking_uri'),
+                registry_uri=self.kwargs.get('registry_uri')
+            )
+        else:
+            self.mlflow_client = None
         self.warm_start: bool = warm_start
         self.warm_start_strategy: str = warm_start_strategy if warm_start_strategy in HIDDEN_LAYER_CATEGORY_EVOLUTION else 'monotone'
         self.warm_start_constant_hidden_layers: int = warm_start_constant_hidden_layers if warm_start_constant_hidden_layers > 0 else 0
@@ -415,10 +434,10 @@ class GeneticAlgorithm:
 
     def _collect_meta_data(self, current_gen: bool, idx: int = None):
         """
-        Collect evolution meta data
+        Collect evolution metadata
 
         :param current_gen: bool
-            Whether to write evolution meta data of each individual of current generation or not
+            Whether to write evolution metadata of each individual of current generation or not
 
         :param idx: int
             Index number of individual within population
@@ -573,68 +592,109 @@ class GeneticAlgorithm:
         """
         Generate final model based on the evolved parameters / features
         """
+        if self.verbose and self.stopping_reason is not None:
+            Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Generate final model {self.best_individual_idx}')
         if self.deep_learning:
-            _net_gen = NetworkGenerator(target=self.target,
-                                        predictors=self.features,
-                                        output_layer_size=self.deep_learning_output_size,
-                                        x_train=self.data_set.get('x_train').values if self.data_set is not None else self.data_set,
-                                        y_train=self.data_set.get('y_train').values if self.data_set is not None else self.data_set,
-                                        x_test=self.data_set.get('x_test').values if self.data_set is not None else self.data_set,
-                                        y_test=self.data_set.get('y_test').values if self.data_set is not None else self.data_set,
-                                        x_val=self.data_set.get('x_val').values if self.data_set is not None else self.data_set,
-                                        y_val=self.data_set.get('y_val').values if self.data_set is not None else self.data_set,
-                                        train_data_path=self.train_data_file_path,
-                                        test_data_path=self.test_data_file_path,
-                                        validation_data_path=self.valid_data_file_path,
-                                        models=[self.current_generation_meta_data['model_name'][self.best_individual_idx]],
-                                        model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
-                                        input_param=self.current_generation_meta_data['param'][self.best_individual_idx],
-                                        model_param=self.current_generation_meta_data['param'][self.best_individual_idx],
-                                        hidden_layer_size=self.warm_start_constant_hidden_layers,
-                                        hidden_layer_size_category=self.warm_start_constant_category,
-                                        cloud=self.cloud,
-                                        sep='\t' if self.sep is None else self.sep,
-                                        cache_dir=self.cache_dir,
-                                        **self.kwargs
-                                        ).generate_model()
-            _net_gen.train()
-            self.model = _net_gen.model
+            _network_generator: NetworkGenerator = NetworkGenerator(target=self.target,
+                                                                    predictors=self.features,
+                                                                    output_layer_size=self.deep_learning_output_size,
+                                                                    train_data_path=self.train_data_file_path,
+                                                                    test_data_path=self.test_data_file_path,
+                                                                    validation_data_path=self.valid_data_file_path,
+                                                                    models=[self.current_generation_meta_data['model_name'][self.best_individual_idx]],
+                                                                    model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
+                                                                    input_param=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                                                    model_param=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                                                    hidden_layer_size=self.warm_start_constant_hidden_layers,
+                                                                    hidden_layer_size_category=self.warm_start_constant_category,
+                                                                    cloud=self.cloud,
+                                                                    sep='\t' if self.sep is None else self.sep,
+                                                                    cache_dir=self.cache_dir,
+                                                                    **self.kwargs
+                                                                    )
+            _network_generator.generate_model()
+            _network_generator.train()
+            _generator: NetworkGenerator = _network_generator
+            self.model = _network_generator.model
         else:
             if self.text_clustering:
-                _cluster_gen = ClusteringGenerator(predictor=self.features[0],
-                                                   models=[self.current_generation_meta_data['model_name'][self.best_individual_idx]],
-                                                   model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
-                                                   cluster_params=self.current_generation_meta_data['param'][self.best_individual_idx],
-                                                   tokenize=False if self.tokenize else self.tokenize,
-                                                   cloud=self.cloud,
-                                                   df=self.df,
-                                                   train_data_path=self.train_data_file_path,
-                                                   sep='\t' if self.sep is None else self.sep,
-                                                   eval_method='c_umass' if self.eval_method is None else self.eval_method,
-                                                   language_model_path=self.language_model_path,
-                                                   sentence_embedding_model_path=self.sentence_embedding_model_path,
-                                                   **self.kwargs
-                                                   ).generate_model()
-                _cluster_gen.train()
-                self.model = _cluster_gen.model
+                _cluster_generator: ClusteringGenerator = ClusteringGenerator(predictor=self.features[0],
+                                                                              models=[self.current_generation_meta_data['model_name'][self.best_individual_idx]],
+                                                                              model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
+                                                                              cluster_params=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                                                              tokenize=False if self.tokenize is None else self.tokenize,
+                                                                              cloud=self.cloud,
+                                                                              df=self.df,
+                                                                              train_data_path=self.train_data_file_path,
+                                                                              sep='\t' if self.sep is None else self.sep,
+                                                                              eval_method='c_umass' if self.eval_method is None else self.eval_method,
+                                                                              language_model_path=self.language_model_path,
+                                                                              sentence_embedding_model_path=self.sentence_embedding_model_path,
+                                                                              **self.kwargs
+                                                                              )
+                _cluster_generator.generate_model()
+                _cluster_generator.train()
+                _generator: ClusteringGenerator = _cluster_generator
+                self.model = _cluster_generator.model
             else:
                 if self.target_type == 'reg':
-                    _model_gen = ModelGeneratorReg(reg_params=self.current_generation_meta_data['param'][self.best_individual_idx],
-                                                   model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
-                                                   **self.kwargs
-                                                   ).generate_model()
+                    _model_generator: ModelGeneratorReg = ModelGeneratorReg(reg_params=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                                                            model_name=
+                                                                            self.current_generation_meta_data['model_name'][self.best_individual_idx],
+                                                                            **self.kwargs
+                                                                            )
                 else:
-                    _model_gen = ModelGeneratorClf(clf_params=self.current_generation_meta_data['param'][self.best_individual_idx],
-                                                   model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
-                                                   **self.kwargs
-                                                   ).generate_model()
-                _model_gen.train(x=copy.deepcopy(self.data_set.get('x_train').values),
-                                 y=copy.deepcopy(self.data_set.get('y_train').values),
-                                 validation=dict(x_val=copy.deepcopy(self.data_set.get('x_val').values),
-                                                 y_val=copy.deepcopy(self.data_set.get('y_val').values)
-                                                 )
-                                 )
-                self.model = _model_gen.model
+                    _model_generator: ModelGeneratorClf = ModelGeneratorClf(clf_params=self.current_generation_meta_data['param'][self.best_individual_idx],
+                                                                            model_name=
+                                                                            self.current_generation_meta_data['model_name'][self.best_individual_idx],
+                                                                            labels=self.target_labels,
+                                                                            **self.kwargs
+                                                                            )
+                _model_generator.generate_model()
+                _model_generator.train(x=copy.deepcopy(self.data_set.get('x_train').values),
+                                       y=copy.deepcopy(self.data_set.get('y_train').values),
+                                       validation=dict(x_val=copy.deepcopy(self.data_set.get('x_val').values),
+                                                       y_val=copy.deepcopy(self.data_set.get('y_val').values)
+                                                       )
+                                       )
+                _generator: Union[ModelGeneratorClf, ModelGeneratorReg] = _model_generator
+                self.model = _model_generator.model
+        if self.mlflow_log:
+            if self.text_clustering:
+                self._fitness(individual=_generator, ml_metric='nmi')
+            else:
+                if self.deep_learning:
+                    _generator.predict()
+                else:
+                    if self.target_type == 'reg':
+                        self.data_set.update({'pred': _generator.predict(x=self.data_set.get('x_test').values)})
+                    else:
+                        self.data_set.update({'pred': _generator.predict(x=self.data_set.get('x_test').values,
+                                                                         probability=False
+                                                                         )
+                                              })
+                    _generator.eval(obs=self.data_set.get('y_test').values,
+                                    pred=self.data_set.get('pred'),
+                                    eval_metric=None
+                                    )
+                if self.target_type == 'reg':
+                    self._fitness(individual=_generator, ml_metric='rmse_norm')
+                elif self.target_type == 'clf_multi':
+                    self._fitness(individual=_generator, ml_metric='cohen_kappa')
+                else:
+                    self._fitness(individual=_generator, ml_metric='auc')
+            try:
+                mlflow.set_experiment(experiment_name='GA: Evolved model',
+                                      experiment_id=None
+                                      )
+                self._mlflow_tracking(individual=_generator, register=True)
+                Log(write=self.log,
+                    logger_file_path=self.output_file_path
+                    ).log(msg='Register model artifact on MLflow')
+            except:
+                Log(write=self.log,
+                    logger_file_path=self.output_file_path
+                    ).log(msg='Model artifact could not be registered on MLflow')
 
     def _input_manager(self):
         """
@@ -895,6 +955,84 @@ class GeneticAlgorithm:
                 # Mutation without crossover strategy (used for optimizing ml models / parameters)
                 self._mutate(parent=parent, child=child)
 
+    def _mlflow_tracking(self, individual, register: bool = False):
+        """
+        Track training information using mlflow
+        """
+        _tags: dict = dict(n_cases=self.n_cases,
+                           n_features=1 if self.text_clustering else len(self.features),
+                           train_cases=self.n_cases if self.text_clustering else self.n_train_cases,
+                           test_cases=0 if self.text_clustering else self.n_test_cases,
+                           target=self.target,
+                           target_type=self.target_type,
+                           model_name=individual.model_name,
+                           individual=individual.id,
+                           train_time=individual.train_time
+                           )
+        with mlflow.start_run():
+            if self.deep_learning:
+                mlflow.pytorch.log_model(pytorch_model=individual.model,
+                                         artifact_path='model',
+                                         registered_model_name=individual.model_name if register else None
+                                         )
+                _params: dict = copy.deepcopy(individual.model_param)
+                del _params['weights']
+                mlflow.log_params(params=_params)
+                for p, predictor in enumerate(individual.predictors):
+                    _tags.update({f'text_feature_{p}': predictor})
+                #mlflow.pytorch.log_state_dict(state_dict=individual.model.state_dict(),
+                #                              artifact_path='state_dict.yml'
+                #                              )
+            if self.text_clustering:
+                mlflow.sklearn.log_model(sk_model=individual.model,
+                                         artifact_path='model',
+                                         registered_model_name=individual.model_name if register else None
+                                         )
+                mlflow.log_metric(key=individual.eval_method, value=individual.fitness)
+                mlflow.log_params(params=individual.model_param)
+                _tags.update({'text_feature': individual.predictor})
+            if not self.deep_learning and not self.text_clustering:
+                mlflow.log_dict(dictionary=dict(features=individual.features),
+                                artifact_file='features.yaml'
+                                )
+                mlflow.sklearn.log_model(sk_model=individual.model,
+                                         artifact_path='model',
+                                         registered_model_name=individual.model_name if register else None
+                                         )
+                mlflow.log_params(params=individual.model_param)
+            #if self.current_generation_meta_data['generation'] > 0:
+            #    mlflow.log_dict(dictionary=dict(features=individual.model_param_mutated),
+            #                    artifact_file='param_mutation.txt'
+            #                    )
+            mlflow.set_tags(tags=_tags)
+            if not self.text_clustering:
+                for metric_context in individual.fitness:
+                    for metric in individual.fitness[metric_context]:
+                        if self.target_type.find('clf') >= 0:
+                            if isinstance(individual.fitness[metric_context][metric], dict):
+                                for clf_metric in individual.fitness[metric_context][metric]:
+                                    if isinstance(individual.fitness[metric_context][metric][clf_metric], dict):
+                                        for clf_metric_element in individual.fitness[metric_context][metric][clf_metric]:
+                                            mlflow.log_metric(key=f'{clf_metric}_{clf_metric_element}_{metric_context}',
+                                                              value=individual.fitness[metric_context][metric][clf_metric][clf_metric_element]
+                                                              )
+                                    else:
+                                        mlflow.log_metric(key=f'{clf_metric}_{metric_context}',
+                                                          value=individual.fitness[metric_context][metric][clf_metric]
+                                                          )
+                            else:
+                                if metric == 'confusion':
+                                    continue
+                                mlflow.log_metric(key=f'{metric}_{metric_context}',
+                                                  value=individual.fitness[metric_context][metric]
+                                                  )
+                        else:
+                            mlflow.log_metric(key=f'{metric}_{metric_context}',
+                                              value=individual.fitness[metric_context][metric]
+                                              )
+            mlflow.log_metric(key='sml_score', value=individual.fitness_score)
+            self._track_visualization()
+
     def _modeling(self, pop_idx: int):
         """
         Generate, train and evaluate supervised & unsupervised machine learning model
@@ -913,7 +1051,10 @@ class GeneticAlgorithm:
                     if _re_generate:
                         if self.verbose:
                             Log(write=self.log, logger_file_path=self.output_file_path).log('Re-generate individual {}'.format(pop_idx))
-                        self.population[pop_idx] = copy.deepcopy(self.population[pop_idx].generate_params(param_rate=self.mutation_rate))
+                        if self.deep_learning:
+                            self.population[pop_idx].generate_model()
+                        else:
+                            self.population[pop_idx].generate_params(param_rate=self.mutation_rate)
                 elif self.mode == 'feature_engineer':
                     if self.verbose:
                         Log(write=self.log, logger_file_path=self.output_file_path).log('Re-sample features for individual {}'.format(pop_idx))
@@ -958,16 +1099,31 @@ class GeneticAlgorithm:
             if self.target_type == 'reg':
                 if self.deep_learning:
                     self.population[pop_idx].predict()
+                    self.data_set = dict(y_test=self.population[pop_idx].obs,
+                                         pred=self.population[pop_idx].pred
+                                         )
                 else:
-                    _pred: np.array = self.population[pop_idx].predict(x=self.data_set.get('x_test').values)
-                    self.population[pop_idx].eval(obs=self.data_set.get('y_test').values, pred=_pred, eval_metric=None)
+                    self.data_set.update({'pred': self.population[pop_idx].predict(x=self.data_set.get('x_test').values)})
+                    self.population[pop_idx].eval(obs=self.data_set.get('y_test').values,
+                                                  pred=self.data_set.get('pred'),
+                                                  eval_metric=None
+                                                  )
                 self._fitness(individual=self.population[pop_idx], ml_metric='rmse_norm')
             else:
                 if self.deep_learning:
                     self.population[pop_idx].predict()
+                    self.data_set = dict(y_test=self.population[pop_idx].obs,
+                                         pred=self.population[pop_idx].pred
+                                         )
                 else:
-                    _pred: np.array = self.population[pop_idx].predict(x=self.data_set.get('x_test').values, probability=False)
-                    self.population[pop_idx].eval(obs=self.data_set.get('y_test').values, pred=_pred, eval_metric=None)
+                    self.data_set.update({'pred': self.population[pop_idx].predict(x=self.data_set.get('x_test').values,
+                                                                                   probability=False
+                                                                                   )
+                                          })
+                    self.population[pop_idx].eval(obs=self.data_set.get('y_test').values,
+                                                  pred=self.data_set.get('pred'),
+                                                  eval_metric=None
+                                                  )
                 if self.target_type == 'clf_multi':
                     self._fitness(individual=self.population[pop_idx], ml_metric='cohen_kappa')
                 else:
@@ -989,95 +1145,109 @@ class GeneticAlgorithm:
         """
         if self.mode.find('model') >= 0:
             if np.random.uniform(low=0, high=1) > self.mutation_prob:
+                # Generate new individual:
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log('Generate new model for individual {}'.format(child))
                 if self.mode == 'model_sampler':
                     self._sampling(features=self.population[child].features)
                 if self.text_clustering:
-                    self.population[child] = ClusteringGenerator(predictor=self.features[0],
-                                                                 models=[self.current_generation_meta_data['model_name'][self.best_individual_idx]],
-                                                                 model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
-                                                                 cluster_params=self.current_generation_meta_data['param'][self.best_individual_idx],
-                                                                 tokenize=False if self.tokenize else self.tokenize,
-                                                                 cloud=self.cloud,
-                                                                 df=self.df,
-                                                                 train_data_path=self.train_data_file_path,
-                                                                 sep='\t' if self.sep is None else self.sep,
-                                                                 eval_method='c_umass' if self.eval_method is None else self.eval_method,
-                                                                 language_model_path=self.language_model_path,
-                                                                 sentence_embedding_model_path=self.sentence_embedding_model_path,
-                                                                 **self.kwargs
-                                                                 ).generate_model()
+                    _cluster_generator: ClusteringGenerator = ClusteringGenerator(predictor=self.features[0],
+                                                                                  models=self.models,
+                                                                                  tokenize=False if self.tokenize is None else self.tokenize,
+                                                                                  cloud=self.cloud,
+                                                                                  df=self.df,
+                                                                                  train_data_path=self.train_data_file_path,
+                                                                                  sep='\t' if self.sep is None else self.sep,
+                                                                                  eval_method='c_umass' if self.eval_method is None else self.eval_method,
+                                                                                  language_model_path=self.language_model_path,
+                                                                                  sentence_embedding_model_path=self.sentence_embedding_model_path,
+                                                                                  **self.kwargs
+                                                                                  )
+                    _cluster_generator.generate_model()
+                    self.population[child] = _cluster_generator
                 else:
                     if self.deep_learning:
                         # if self.warm_start_strategy == 'adaptive':
                         _hidden_layer_size: int = self.population[child].hidden_layer_size
-                        self.population[child] = NetworkGenerator(target=self.target,
-                                                                  predictors=self.features,
-                                                                  output_layer_size=self.deep_learning_output_size,
-                                                                  x_train=self.data_set.get('x_train').values if self.data_set is not None else self.data_set,
-                                                                  y_train=self.data_set.get('y_train').values if self.data_set is not None else self.data_set,
-                                                                  x_test=self.data_set.get('x_test').values if self.data_set is not None else self.data_set,
-                                                                  y_test=self.data_set.get('y_test').values if self.data_set is not None else self.data_set,
-                                                                  x_val=self.data_set.get('x_val').values if self.data_set is not None else self.data_set,
-                                                                  y_val=self.data_set.get('y_val').values if self.data_set is not None else self.data_set,
-                                                                  train_data_path=self.train_data_file_path,
-                                                                  test_data_path=self.test_data_file_path,
-                                                                  validation_data_path=self.valid_data_file_path,
-                                                                  models=self.models,
-                                                                  hidden_layer_size=_hidden_layer_size,
-                                                                  hidden_layer_size_category=self.warm_start_constant_category,
-                                                                  sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                                  cache_dir=self.cache_dir,
-                                                                  **self.kwargs
-                                                                  ).generate_model()
+                        _network_generator: NetworkGenerator = NetworkGenerator(target=self.target,
+                                                                                predictors=self.features,
+                                                                                output_layer_size=self.deep_learning_output_size,
+                                                                                train_data_path=self.train_data_file_path,
+                                                                                test_data_path=self.test_data_file_path,
+                                                                                validation_data_path=self.valid_data_file_path,
+                                                                                models=self.models,
+                                                                                hidden_layer_size=_hidden_layer_size,
+                                                                                hidden_layer_size_category=self.warm_start_constant_category,
+                                                                                sep='\t' if self.sep is None else self.sep,
+                                                                                cache_dir=self.cache_dir,
+                                                                                **self.kwargs
+                                                                                )
+                        _network_generator.generate_model()
+                        self.population[child] = _network_generator
                     else:
-                        self.population[child] = ModelGeneratorReg(models=self.models, **self.kwargs).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(models=self.models, **self.kwargs).generate_model()
+                        if self.target_type == 'reg':
+                            _model_generator: ModelGeneratorReg = ModelGeneratorReg(models=self.models, **self.kwargs)
+                        else:
+                            _model_generator: ModelGeneratorClf = ModelGeneratorClf(models=self.models, **self.kwargs)
+                        _model_generator.generate_model()
+                        self.population[child] = _model_generator
             else:
+                # Mutate individual:
                 if self.text_clustering:
-                    self.population[child] = ClusteringGenerator(predictor=self.features[0],
-                                                                 models=[self.current_generation_meta_data['model_name'][self.best_individual_idx]],
-                                                                 model_name=self.current_generation_meta_data['model_name'][self.best_individual_idx],
-                                                                 cluster_params=self.current_generation_meta_data['param'][self.best_individual_idx],
-                                                                 tokenize=False if self.tokenize else self.tokenize,
-                                                                 cloud=self.cloud,
-                                                                 df=self.df,
-                                                                 train_data_path=self.train_data_file_path,
-                                                                 sep='\t' if self.sep is None else self.sep,
-                                                                 eval_method='c_umass' if self.eval_method is None else self.eval_method,
-                                                                 language_model_path=self.language_model_path,
-                                                                 sentence_embedding_model_path=self.sentence_embedding_model_path,
-                                                                 **self.kwargs
-                                                                 ).generate_model()
-                    self.population[child].generate_params(param_rate=self.mutation_rate, force_param=force_param)
+                    _cluster_generator: ClusteringGenerator = ClusteringGenerator(predictor=self.features[0],
+                                                                                  models=self.models,
+                                                                                  model_name=self.population[parent].model_name,
+                                                                                  cluster_params=self.population[parent].model_param,
+                                                                                  tokenize=False if self.tokenize is None else self.tokenize,
+                                                                                  cloud=self.cloud,
+                                                                                  df=self.df,
+                                                                                  train_data_path=self.train_data_file_path,
+                                                                                  sep='\t' if self.sep is None else self.sep,
+                                                                                  eval_method='c_umass' if self.eval_method is None else self.eval_method,
+                                                                                  language_model_path=self.language_model_path,
+                                                                                  sentence_embedding_model_path=self.sentence_embedding_model_path,
+                                                                                  **self.kwargs
+                                                                                  )
+                    _cluster_generator.generate_model()
+                    _cluster_generator.generate_params(param_rate=self.mutation_rate, force_param=force_param)
+                    self.population[child] = _cluster_generator
                 else:
                     if self.verbose:
                         Log(write=self.log, logger_file_path=self.output_file_path).log('Mutate individual {} inherited from parent {}'.format(child, parent))
                     if self.deep_learning:
-                        self.population[child] = NetworkGenerator(target=self.target,
-                                                                  predictors=self.features,
-                                                                  output_layer_size=self.deep_learning_output_size,
-                                                                  x_train=self.data_set.get('x_train').values if self.data_set is not None else self.data_set,
-                                                                  y_train=self.data_set.get('y_train').values if self.data_set is not None else self.data_set,
-                                                                  x_test=self.data_set.get('x_test').values if self.data_set is not None else self.data_set,
-                                                                  y_test=self.data_set.get('y_test').values if self.data_set is not None else self.data_set,
-                                                                  x_val=self.data_set.get('x_val').values if self.data_set is not None else self.data_set,
-                                                                  y_val=self.data_set.get('y_val').values if self.data_set is not None else self.data_set,
-                                                                  train_data_path=self.train_data_file_path,
-                                                                  test_data_path=self.test_data_file_path,
-                                                                  validation_data_path=self.valid_data_file_path,
-                                                                  models=self.models,
-                                                                  input_param=self.population[parent].model_param,
-                                                                  hidden_layer_size=self.population[parent].hidden_layer_size,
-                                                                  hidden_layer_size_category=self.warm_start_constant_category,
-                                                                  sep='\t' if self.kwargs.get('sep') is None else self.kwargs.get('sep'),
-                                                                  cache_dir=self.cache_dir,
-                                                                  **self.kwargs
-                                                                  ).generate_model()
-                        self.population[child].generate_params(param_rate=self.mutation_rate)
+                        _network_generator: NetworkGenerator = NetworkGenerator(target=self.target,
+                                                                                predictors=self.features,
+                                                                                output_layer_size=self.deep_learning_output_size,
+                                                                                train_data_path=self.train_data_file_path,
+                                                                                test_data_path=self.test_data_file_path,
+                                                                                validation_data_path=self.valid_data_file_path,
+                                                                                models=self.models,
+                                                                                model_name=self.population[parent].model_name,
+                                                                                input_param=self.population[parent].model_param,
+                                                                                hidden_layer_size=self.population[parent].hidden_layer_size,
+                                                                                hidden_layer_size_category=self.warm_start_constant_category,
+                                                                                sep='\t' if self.sep is None else self.sep,
+                                                                                cache_dir=self.cache_dir,
+                                                                                **self.kwargs
+                                                                                )
+                        _network_generator.generate_model()
+                        _network_generator.generate_params(param_rate=self.mutation_rate)
+                        self.population[child] = _network_generator
                     else:
-                        self.population[child] = ModelGeneratorReg(reg_params=self.population[parent].model_param, models=self.models, **self.kwargs).generate_model() if self.target_type == 'reg' else ModelGeneratorClf(clf_params=self.population[parent].model_param, models=self.models, **self.kwargs).generate_model()
-                        self.population[child].generate_params(param_rate=self.mutation_rate, force_param=force_param)
+                        if self.target_type == 'reg':
+                            _model_generator: ModelGeneratorReg = ModelGeneratorReg(model_name=self.population[parent].model_name,
+                                                                                    reg_params=self.population[parent].model_param,
+                                                                                    models=self.models,
+                                                                                    **self.kwargs
+                                                                                    )
+                        else:
+                            _model_generator: ModelGeneratorClf = ModelGeneratorClf(model_name=self.population[parent].model_name,
+                                                                                    clf_params=self.population[parent].model_param,
+                                                                                    models=self.models,
+                                                                                    **self.kwargs
+                                                                                    )
+                        _model_generator.generate_params(param_rate=self.mutation_rate, force_param=force_param)
+                        self.population[child] = _model_generator
             if self.verbose:
                 Log(write=self.log, logger_file_path=self.output_file_path).log('Hyperparameter setting of individual {}: {}'.format(child, self.population[child].model_param))
         elif self.mode.find('feature') >= 0:
@@ -1135,7 +1305,7 @@ class GeneticAlgorithm:
             if self.warm_start:
                 _warm_model = ClusteringGenerator(predictor=self.features[0],
                                                   models=self.models,
-                                                  tokenize=False if self.tokenize else self.tokenize,
+                                                  tokenize=False if self.tokenize is None else self.tokenize,
                                                   cloud=self.cloud,
                                                   df=self.df,
                                                   train_data_path=self.train_data_file_path,
@@ -1162,19 +1332,21 @@ class GeneticAlgorithm:
                         _params: dict = self.model_params
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(p))
-                self.population.append(ClusteringGenerator(predictor=self.features[0],
-                                                           models=self.models,
-                                                           tokenize=False if self.tokenize else self.tokenize,
-                                                           cloud=self.cloud,
-                                                           df=self.df,
-                                                           train_data_path=self.train_data_file_path,
-                                                           sep='\t' if self.sep is None else self.sep,
-                                                           eval_method='c_umass' if self.eval_method is None else self.eval_method,
-                                                           language_model_path=self.language_model_path,
-                                                           sentence_embedding_model_path=self.sentence_embedding_model_path,
-                                                           **self.kwargs
-                                                           ).generate_model()
-                                       )
+                _cluster_generator: ClusteringGenerator = ClusteringGenerator(predictor=self.features[0],
+                                                                              models=self.models,
+                                                                              cluster_params=_params,
+                                                                              tokenize=False if self.tokenize is None else self.tokenize,
+                                                                              cloud=self.cloud,
+                                                                              df=self.df,
+                                                                              train_data_path=self.train_data_file_path,
+                                                                              sep='\t' if self.sep is None else self.sep,
+                                                                              eval_method='c_umass' if self.eval_method is None else self.eval_method,
+                                                                              language_model_path=self.language_model_path,
+                                                                              sentence_embedding_model_path=self.sentence_embedding_model_path,
+                                                                              **self.kwargs
+                                                                              )
+                _cluster_generator.generate_model()
+                self.population.append(_cluster_generator)
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log('Hyperparameter setting of individual {}: {}'.format(p, self.population[p].model_param))
         else:
@@ -1183,7 +1355,7 @@ class GeneticAlgorithm:
                 if self.target_type == 'reg':
                     _warm_model = ModelGeneratorReg(models=self.models, **self.kwargs).get_model_parameter()
                 else:
-                    _warm_model = ModelGeneratorClf(models=self.models, **self.kwargs).get_model_parameter()
+                    _warm_model = ModelGeneratorClf(models=self.models, labels=self.target_labels, **self.kwargs).get_model_parameter()
             for p in range(0, self.pop_size, 1):
                 if self.mode.find('feature') >= 0:
                     if self.verbose:
@@ -1206,9 +1378,11 @@ class GeneticAlgorithm:
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(p))
                 if self.target_type == 'reg':
-                    self.population.append(ModelGeneratorReg(reg_params=_params, models=self.models, **self.kwargs).generate_model())
+                    _model_generator: ModelGeneratorReg = ModelGeneratorReg(reg_params=_params, models=self.models, **self.kwargs)
                 else:
-                    self.population.append(ModelGeneratorClf(clf_params=_params, models=self.models, **self.kwargs).generate_model())
+                    _model_generator: ModelGeneratorClf = ModelGeneratorClf(clf_params=_params, models=self.models, labels=self.target_labels, **self.kwargs)
+                _model_generator.generate_model()
+                self.population.append(_model_generator)
                 if self.verbose:
                     Log(write=self.log, logger_file_path=self.output_file_path).log('Hyperparameter setting of individual {}: {}'.format(p, self.population[p].model_param))
 
@@ -1228,27 +1402,22 @@ class GeneticAlgorithm:
                     if self.verbose:
                         Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(_p))
                     _p += 1
-                    self.population.append(NetworkGenerator(target=self.target,
-                                                            predictors=self.features,
-                                                            output_layer_size=self.deep_learning_output_size,
-                                                            x_train=self.data_set.get('x_train').values if self.data_set is not None else self.data_set,
-                                                            y_train=self.data_set.get('y_train').values if self.data_set is not None else self.data_set,
-                                                            x_test=self.data_set.get('x_test').values if self.data_set is not None else self.data_set,
-                                                            y_test=self.data_set.get('y_test').values if self.data_set is not None else self.data_set,
-                                                            x_val=self.data_set.get('x_val').values if self.data_set is not None else self.data_set,
-                                                            y_val=self.data_set.get('y_val').values if self.data_set is not None else self.data_set,
-                                                            train_data_path=self.train_data_file_path,
-                                                            test_data_path=self.test_data_file_path,
-                                                            validation_data_path=self.valid_data_file_path,
-                                                            model_name=model,
-                                                            input_param=_model_param,
-                                                            hidden_layer_size=self.warm_start_constant_hidden_layers,
-                                                            hidden_layer_size_category=self.warm_start_constant_category,
-                                                            sep='\t' if self.sep is None else self.sep,
-                                                            cache_dir=self.cache_dir,
-                                                            **self.kwargs
-                                                            ).get_vanilla_model()
-                                           )
+                    _network_generator: NetworkGenerator = NetworkGenerator(target=self.target,
+                                                                            predictors=self.features,
+                                                                            output_layer_size=self.deep_learning_output_size,
+                                                                            train_data_path=self.train_data_file_path,
+                                                                            test_data_path=self.test_data_file_path,
+                                                                            validation_data_path=self.valid_data_file_path,
+                                                                            model_name=model,
+                                                                            input_param=_model_param,
+                                                                            hidden_layer_size=self.warm_start_constant_hidden_layers,
+                                                                            hidden_layer_size_category=self.warm_start_constant_category,
+                                                                            sep='\t' if self.sep is None else self.sep,
+                                                                            cache_dir=self.cache_dir,
+                                                                            **self.kwargs
+                                                                            )
+                    _network_generator.get_vanilla_model()
+                    self.population.append(_network_generator)
                     if self.verbose:
                         Log(write=self.log, logger_file_path=self.output_file_path).log('Hyperparameter setting of individual {}: {}'.format(_p - 1, self.population[_p - 1].model_param))
         else:
@@ -1267,27 +1436,22 @@ class GeneticAlgorithm:
                 self._sampling(features=self.feature_pairs[p])
             if self.verbose:
                 Log(write=self.log, logger_file_path=self.output_file_path).log('Populate individual {}'.format(p))
-            _net_gen: NetworkGenerator = NetworkGenerator(target=self.target,
-                                                          predictors=self.features,
-                                                          output_layer_size=self.deep_learning_output_size,
-                                                          x_train=self.data_set.get('x_train').values if self.data_set is not None else self.data_set,
-                                                          y_train=self.data_set.get('y_train').values if self.data_set is not None else self.data_set,
-                                                          x_test=self.data_set.get('x_test').values if self.data_set is not None else self.data_set,
-                                                          y_test=self.data_set.get('y_test').values if self.data_set is not None else self.data_set,
-                                                          x_val=self.data_set.get('x_val').values if self.data_set is not None else self.data_set,
-                                                          y_val=self.data_set.get('y_val').values if self.data_set is not None else self.data_set,
-                                                          train_data_path=self.train_data_file_path,
-                                                          test_data_path=self.test_data_file_path,
-                                                          validation_data_path=self.valid_data_file_path,
-                                                          models=self.models,
-                                                          input_param=_model_param,
-                                                          hidden_layer_size=self.warm_start_constant_hidden_layers,
-                                                          hidden_layer_size_category=self.warm_start_constant_category,
-                                                          sep='\t' if self.sep is None else self.sep,
-                                                          cache_dir=self.cache_dir,
-                                                          **self.kwargs
-                                                          )
-            self.population.append(_net_gen.generate_model())
+            _network_generator: NetworkGenerator = NetworkGenerator(target=self.target,
+                                                                    predictors=self.features,
+                                                                    output_layer_size=self.deep_learning_output_size,
+                                                                    train_data_path=self.train_data_file_path,
+                                                                    test_data_path=self.test_data_file_path,
+                                                                    validation_data_path=self.valid_data_file_path,
+                                                                    models=self.models,
+                                                                    input_param=_model_param,
+                                                                    hidden_layer_size=self.warm_start_constant_hidden_layers,
+                                                                    hidden_layer_size_category=self.warm_start_constant_category,
+                                                                    sep='\t' if self.sep is None else self.sep,
+                                                                    cache_dir=self.cache_dir,
+                                                                    **self.kwargs
+                                                                    )
+            _network_generator.generate_model()
+            self.population.append(_network_generator)
             if self.verbose:
                 Log(write=self.log, logger_file_path=self.output_file_path).log('Hyperparameter setting of individual {}: {}'.format(p, self.population[p].model_param))
 
@@ -1412,6 +1576,147 @@ class GeneticAlgorithm:
         """
         self._post_processing()
 
+    def _track_visualization(self):
+        """
+        Track model visualization using mlflow
+        """
+        if not self.text_clustering:
+            _charts: dict = {}
+            _file_paths: List[str] = []
+            _best_model_results: pd.DataFrame = pd.DataFrame(data=dict(obs=self.data_set.get('y_test'),
+                                                                       pred=self.data_set.get('pred')
+                                                                       )
+                                                             )
+            if self.target_type == 'reg':
+                _best_model_results['abs_diff'] = _best_model_results['obs'] - _best_model_results['pred']
+                _best_model_results['rel_diff'] = _best_model_results['obs'] / _best_model_results['pred']
+            elif self.target_type == 'clf_multi':
+                _best_model_results['abs_diff'] = _best_model_results['obs'] - _best_model_results['pred']
+            _best_model_results = _best_model_results.round(decimals=4)
+            if self.target_type == 'reg':
+                _file_paths.append(os.path.join(self.output_file_path, 'evaluation_coords.html'))
+                _file_paths.append(os.path.join(self.output_file_path, 'scatter_contour.html'))
+                _charts.update({'Prediction Evaluation of final inherited ML Model:': dict(data=_best_model_results,
+                                                                                           features=['obs', 'abs_diff',
+                                                                                                     'rel_diff', 'pred'],
+                                                                                           color_feature='pred',
+                                                                                           plot_type='parcoords',
+                                                                                           file_path=_file_paths[0]
+                                                                                           ),
+                                'Prediction vs. Observation of final inherited ML Model:': dict(data=_best_model_results,
+                                                                                                features=['obs', 'pred'],
+                                                                                                plot_type='joint',
+                                                                                                file_path=_file_paths[1]
+                                                                                                )
+                                })
+                _file_paths[-1] = _file_paths[-1].replace('.', '_obs_pred.')
+            else:
+                _file_paths.append(os.path.join(self.output_file_path, 'confusion_table.html'))
+                _file_paths.append(os.path.join(self.output_file_path, 'confusion_heatmap.html'))
+                _file_paths.append(os.path.join(self.output_file_path, 'confusion_normal_heatmap.html'))
+                _file_paths.append(os.path.join(self.output_file_path, 'clf_report_table.html'))
+                _file_paths.append(os.path.join(self.output_file_path, 'clf_metrics_table.html'))
+                _eval_clf: EvalClf = EvalClf(obs=self.data_set.get('y_test'),
+                                             pred=self.data_set.get('pred'),
+                                             labels=self.target_labels
+                                             )
+                _confusion_matrix: pd.DataFrame = pd.DataFrame(data=_eval_clf.confusion(),
+                                                               index=[f'{label}_obs' for label in self.target_labels],
+                                                               columns=[f'{label}_pred' for label in self.target_labels]
+                                                               )
+                _cf_row_sum = pd.DataFrame()
+                _cf_row_sum[' '] = _confusion_matrix.sum()
+                _confusion_matrix = pd.concat([_confusion_matrix, _cf_row_sum.transpose()], axis=0)
+                _cf_col_sum = pd.DataFrame()
+                _cf_col_sum[' '] = _confusion_matrix.transpose().sum()
+                _confusion_matrix = pd.concat([_confusion_matrix, _cf_col_sum], axis=1)
+                _charts.update({'Confusion Matrix': dict(data=_confusion_matrix,
+                                                         plot_type='table',
+                                                         file_path=_file_paths[0]
+                                                         )
+                                })
+                _charts.update({'Confusion Matrix Heatmap': dict(data=_confusion_matrix,
+                                                                 features=self.target_labels,
+                                                                 plot_type='heat',
+                                                                 file_path=_file_paths[1]
+                                                                 )
+                                })
+                _confusion_matrix_normalized: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
+                                                                                       pred=self.data_set.get('pred')
+                                                                                       ).confusion(normalize='pred'),
+                                                                          # index=['obs', 'pred'],
+                                                                          # columns=['obs', 'pred']
+                                                                          )
+                _charts.update({'Confusion Matrix Normalized Heatmap:': dict(data=_confusion_matrix_normalized,
+                                                                             features=self.target_labels,
+                                                                             plot_type='heat',
+                                                                             file_path=_file_paths[2]
+                                                                             )
+                                })
+                _charts.update({'Classification Report:': dict(data=_best_model_results,
+                                                               plot_type='table',
+                                                               file_path=_file_paths[3]
+                                                               )
+                                })
+                _classification_report: dict = _eval_clf.classification_report()
+                _confusion_metrics: dict = dict(precision=[], recall=[], f1=[])
+                for label in self.target_labels:
+                    _confusion_metrics['precision'].append(_classification_report.get(label)['precision'])
+                    _confusion_metrics['recall'].append(_classification_report.get(label)['recall'])
+                    _confusion_metrics['f1'].append(_classification_report.get(label)['f1-score'])
+                _charts.update({'Classification Metrics': dict(data=pd.DataFrame(data=_confusion_metrics,
+                                                                                 index=self.target_labels,
+                                                                                 columns=list(_confusion_metrics.keys())
+                                                                                 ),
+                                                               plot_type='table',
+                                                               file_path=_file_paths[4]
+                                                               )
+                                })
+                if self.target_type == 'clf_multi':
+                    _file_paths.append(os.path.join(self.output_file_path, 'evaluation_category.html'))
+                    _charts.update({'Prediction Evaluation of final inherited ML Model:': dict(data=_best_model_results,
+                                                                                               features=['obs',
+                                                                                                         'abs_diff',
+                                                                                                         'pred'
+                                                                                                         ],
+                                                                                               color_feature='pred',
+                                                                                               plot_type='parcoords',
+                                                                                               brushing=True,
+                                                                                               file_path=_file_paths[-1]
+                                                                                               )
+                                    })
+                else:
+                    _file_paths.append(os.path.join(self.output_file_path, 'roc_auc_curve_baseline_baseline_baseline_baseline.html'))
+                    _roc_curve = pd.DataFrame()
+                    _roc_curve_values: dict = EvalClf(obs=_best_model_results['obs'],
+                                                      pred=_best_model_results['pred']
+                                                      ).roc_curve()
+                    _roc_curve['roc_curve'] = _roc_curve_values['true_positive_rate'][1]
+                    _roc_curve['baseline'] = _roc_curve_values['false_positive_rate'][1]
+                    _charts.update({'ROC-AUC Curve': dict(data=_roc_curve,
+                                                          features=['roc_curve', 'baseline'],
+                                                          time_features=['baseline'],
+                                                          # xaxis_label=['False Positive Rate'],
+                                                          # yaxis_label=['True Positive Rate'],
+                                                          plot_type='line',
+                                                          file_path=_file_paths[-1]
+                                                          )
+                                    })
+            DataVisualizer(subplots=_charts,
+                           interactive=True,
+                           file_path=self.output_file_path,
+                           render=True if self.output_file_path is None else False,
+                           height=750,
+                           width=750,
+                           unit='px'
+                           ).run()
+            for path in _file_paths:
+                _file_name: str = path.split('/')[-1].replace('.html', '')
+                try:
+                    mlflow.log_artifact(local_path=path, artifact_path=_file_name)
+                except FileNotFoundError:
+                    Log(write=self.log, logger_file_path=self.output_file_path).log(f'File artifact {path} not found')
+
     def _trainer(self):
         """
         Prepare data set, start training and collect meta data
@@ -1446,6 +1751,8 @@ class GeneticAlgorithm:
                         _threads.update({i: _thread_pool.apply_async(func=self._modeling, args=[i])})
                     else:
                         self._modeling(pop_idx=i)
+                    if self.mlflow_log:
+                        self._mlflow_tracking(individual=self.population[i], register=False)
             if self.multi_threading:
                 for thread in _threads.keys():
                     _threads.get(thread).get()
@@ -1495,7 +1802,11 @@ class GeneticAlgorithm:
         else:
             self._populate()
         while _evolve:
-            Log(write=self.log, logger_file_path=self.output_file_path).log(msg='Generation: {} / {}'.format(self.current_generation_meta_data['generation'], self.max_generations))
+            if self.mlflow_log:
+                mlflow.set_experiment(experiment_name=f'GA: Gen {self.current_generation_meta_data["generation"]}',
+                                      experiment_id=None
+                                      )
+            Log(write=self.log, logger_file_path=self.output_file_path).log(msg=f'Generation: {self.current_generation_meta_data["generation"]} / {self.max_generations}')
             if self.current_generation_meta_data['generation'] > 0:
                 self.n_threads = len(self.child_idx)
             if self.deep_learning:
