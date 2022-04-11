@@ -719,7 +719,7 @@ class NetworkGenerator(NeuralNetwork):
                 _, _pred = torch.max(input=_prediction, dim=1)
                 _loss = self.model_param.get('loss_torch')(_prediction, _target)
                 _loss.backward()
-                self._clip_gradient(self.model, 1e-1)
+                self._clip_gradient(model=self.model, clip_value=1e-1)
                 _optim.step()
                 _predictions.extend(_pred.detach().tolist())
                 _observations.extend(_target.detach().numpy().tolist())
@@ -776,8 +776,9 @@ class NetworkGenerator(NeuralNetwork):
                                                )()
                                            )
                 if len(_observations) == len(_predictions):
-                    self.obs = copy.deepcopy(_observations)
-                    self.pred = copy.deepcopy(_predictions)
+                    if _iter_type == 'test':
+                        self.obs = copy.deepcopy(_observations)
+                        self.pred = copy.deepcopy(_predictions)
                     self._eval(iter_type=_iter_type, obs=_observations, pred=_predictions)
 
     @staticmethod
@@ -964,18 +965,30 @@ class NetworkGenerator(NeuralNetwork):
         _target_type: str = 'clf' if self.output_size > 1 else 'reg'
         if self.output_size == 1:
             for metric in ML_METRIC.get('reg'):
-                self.fitness[iter_type].update({metric: copy.deepcopy(getattr(EvalReg(obs=obs, pred=pred), metric)())})
+                self.fitness[iter_type].update({metric: copy.deepcopy(getattr(EvalReg(obs=np.array(obs),
+                                                                                      pred=np.array(pred)
+                                                                                      ),
+                                                                              metric
+                                                                              )()
+                                                                      )
+                                                })
         else:
             if self.output_size == 2:
                 _eval_metric: List[str] = ML_METRIC.get('clf_binary')
             else:
                 _eval_metric: List[str] = ML_METRIC.get('clf_multi')
             for metric in _eval_metric:
-                self.fitness[iter_type].update({metric: copy.deepcopy(getattr(EvalClf(obs=obs, pred=pred), metric)())})
+                self.fitness[iter_type].update({metric: copy.deepcopy(getattr(EvalClf(obs=np.array(obs),
+                                                                                      pred=np.array(pred)
+                                                                                      ),
+                                                                              metric
+                                                                              )()
+                                                                      )
+                                                })
 
     def _get_param_space(self, general: bool = True) -> dict:
         """
-        Get randomly drawn hyper parameter settings
+        Get randomly drawn hyperparameter settings
 
         :param general: bool
             Get settings either of general hyper parameters or special hyper parameters like embeddings or transformers
@@ -1262,12 +1275,9 @@ class NetworkGenerator(NeuralNetwork):
         del _predictions
         del _raw_output
 
-    def generate_model(self) -> object:
+    def generate_model(self):
         """
         Generate supervised machine learning model with randomized parameter configuration
-
-        :return object
-            Model object itself (self)
         """
         if self.random:
             if self.models is None:
@@ -1307,7 +1317,7 @@ class NetworkGenerator(NeuralNetwork):
         self.model_param_mutated.update({str(_idx): {copy.deepcopy(self.model_name): {}}})
         for param in list(self.model_param.keys()):
             self.model_param_mutated[str(_idx)][copy.deepcopy(self.model_name)].update({param: copy.deepcopy(self.model_param.get(param))})
-        self.model_param_mutation = 'params'
+        self.model_param_mutation = 'new_model'
         if len(self.predictors) > 0:
             if self.target != '':
                 self._import_data_torch()
@@ -1332,9 +1342,8 @@ class NetworkGenerator(NeuralNetwork):
                                            ),
                              _model
                              )()
-        return self
 
-    def generate_params(self, param_rate: float = 0.1, force_param: dict = None) -> object:
+    def generate_params(self, param_rate: float = 0.1, force_param: dict = None):
         """
         Generate parameter for supervised learning models
 
@@ -1343,9 +1352,6 @@ class NetworkGenerator(NeuralNetwork):
 
         :param force_param: dict
             Parameter config to force explicitly
-
-        :return object
-            Model object itself (self)
         """
         if param_rate > 1:
             _rate: float = 1.0
@@ -1391,7 +1397,7 @@ class NetworkGenerator(NeuralNetwork):
                         if self.model_param.get(_param) is not None:
                             break
                 self.model_param_mutated[list(self.model_param_mutated.keys())[-1]][copy.deepcopy(self.model_name)].update({_param: self.model_param.get(_param)})
-            self.model_param_mutation = 'new_model'
+            self.model_param_mutation = 'params'
         else:
             for fixed in ['hidden_layers', 'hidden_layer_size_category']:
                 if fixed in list(self.model_param.keys()):
@@ -1454,18 +1460,12 @@ class NetworkGenerator(NeuralNetwork):
                                            ),
                              NETWORK_TYPE.get(self.model_name)
                              )()
-        return self
 
-    def get_vanilla_model(self) -> object:
+    def get_vanilla_model(self):
         """
         Get 'vanilla' typed neural network (one hidden layer only)
-
-        :return object
-            Model object itself (self)
         """
-        if self.model_name is None:
-            return self
-        else:
+        if self.model_name is not None:
             if self.transformer:
                 if len(self.input_param.keys()) == 0:
                     self.model_param = getattr(NeuralNetwork(target=self.target,
@@ -1558,7 +1558,7 @@ class NetworkGenerator(NeuralNetwork):
                                                ),
                                  NETWORK_TYPE.get(self.model_name)
                                  )()
-        return self
+            self.model_param_mutation = 'new_model'
 
     def eval(self, validation: bool = True):
         """
