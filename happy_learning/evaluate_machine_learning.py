@@ -10,18 +10,15 @@ import numpy as np
 import pandas as pd
 
 from easyexplore.data_visualizer import DataVisualizer
-from sklearn.metrics import accuracy_score, auc, classification_report, cohen_kappa_score, confusion_matrix, f1_score, precision_score, recall_score, roc_auc_score, roc_curve
+from sklearn.metrics import accuracy_score, auc, classification_report, cohen_kappa_score, confusion_matrix, f1_score, matthews_corrcoef, precision_score, recall_score, roc_auc_score, roc_curve
 from sklearn.metrics import mean_absolute_error, mean_gamma_deviance, mean_poisson_deviance, mean_squared_error, mean_squared_log_error, mean_tweedie_deviance
 from sklearn.metrics import adjusted_mutual_info_score, normalized_mutual_info_score
 from typing import Dict, List
 
 
-# TODO:
-#  Handle Multi-Class Problems using AUC: OVO / OVR
-
 ML_METRIC: Dict[str, List[str]] = dict(reg=['mae', 'mgd', 'mpd', 'mse', 'msle', 'mtd', 'rmse', 'rmse_norm'],
-                                       clf_binary=['accuracy', 'f1', 'precision', 'recall', 'roc_auc', 'confusion'],
-                                       clf_multi=['accuracy', 'cohen_kappa', 'f1', 'precision', 'recall', 'confusion']
+                                       clf_binary=['accuracy', 'classification_report', 'confusion', 'f1', 'mcc', 'precision', 'recall', 'roc_auc'],
+                                       clf_multi=['accuracy', 'classification_report', 'cohen_kappa', 'confusion', 'f1', 'mcc', 'precision', 'recall']
                                        )
 
 
@@ -81,7 +78,7 @@ def sml_score(ml_metric: tuple,
         Normalize final score or not
 
     :param capping_to_zero: bool
-        Cap scores smaller then zero to zero
+        Cap scores smaller than zero to zero
 
     :return dict
         Supervised machine learning scores for each dimension to evaluate general purpose machine learning model
@@ -272,7 +269,8 @@ class EvalClf:
                  pred: np.array,
                  average: str = 'macro',
                  probability: bool = False,
-                 extract_prob: int = 0
+                 extract_prob: int = 0,
+                 labels: List[str] = None
                  ):
         """
         :param obs: np.array
@@ -289,6 +287,9 @@ class EvalClf:
 
         :param extract_prob: int
             Number of class to use probability to classify category
+
+        :param labels: List[str]
+            Class labels
         """
         self.obs: np.array = copy.deepcopy(obs)
         _extract_prob: int = extract_prob if extract_prob >= 0 else 0
@@ -299,6 +300,7 @@ class EvalClf:
         self.average: str = average
         if self.average not in [None, 'micro', 'macro', 'weighted', 'samples']:
             self.average = 'macro'
+        self.labels: List[str] = labels
 
     def accuracy(self) -> float:
         """
@@ -315,7 +317,7 @@ class EvalClf:
         """
         return classification_report(y_true=self.obs,
                                      y_pred=self.pred,
-                                     labels=None,
+                                     target_names=self.labels,
                                      sample_weight=None,
                                      digits=2,
                                      output_dict=True,
@@ -362,6 +364,15 @@ class EvalClf:
                         sample_weight=None,
                         zero_division='warn'
                         )
+
+    def mcc(self) -> float:
+        """
+        Matthews correlation coefficient metric for classification problems
+        """
+        return matthews_corrcoef(y_true=self.obs,
+                                 y_pred=self.pred,
+                                 sample_weight=None
+                                 )
 
     def precision(self) -> float:
         """
