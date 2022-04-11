@@ -4,8 +4,9 @@ Feature tournament for measuring feature importance of structured (tabular) data
 
 """
 
-import numpy as np
 import dask.dataframe as dd
+import numpy as np
+import mlflow
 import pandas as pd
 import random
 
@@ -44,7 +45,8 @@ class FeatureTournament:
                  penalty_factor: float = 0.1,
                  max_iter: int = 50,
                  evolutionary_algorithm: str = 'ga',
-                 multi_threading: bool = True,
+                 mlflow_log: bool = True,
+                 multi_threading: bool = False,
                  **kwargs
                  ):
         """
@@ -80,6 +82,9 @@ class FeatureTournament:
                 -> ga: Genetic Algorithm
                 -> si: Swarm Intelligence
 
+        :param mlflow_log: bool
+            Track experiment results using mlflow
+
         :param multi_threading: bool
             Whether to run each game multi- or single-threaded during each iteration
 
@@ -90,7 +95,6 @@ class FeatureTournament:
                                                            client_address=kwargs.get('client_address'),
                                                            mode='threads' if kwargs.get('client_mode') is None else kwargs.get('client_mode')
                                                            )
-        self.feature_tournament_ai: dict = {}
         if isinstance(df, pd.DataFrame):
             self.df: dd.DataFrame = dd.from_pandas(data=df, npartitions=4 if kwargs.get('partitions') is None else kwargs.get('partitions'))
         elif isinstance(df, dd.DataFrame):
@@ -128,6 +132,7 @@ class FeatureTournament:
         self.init_pairs: int = init_pairs
         self.init_games: int = init_games
         self.pair_size_factor: float = increasing_pair_size_factor
+        self.game: int = 0
         self.games: int = games
         self.penalty_factor: float = penalty_factor
         self.max_iter: int = max_iter
@@ -138,12 +143,28 @@ class FeatureTournament:
         self.shapley_additive_explanation: dict = dict(sum={}, game={}, tournament={})
         self.models: List[str] = models
         self.evolutionary_algorithm: str = evolutionary_algorithm
+        self.mlflow_log: bool = mlflow_log
+        if self.mlflow_log:
+            self.mlflow_client: mlflow.tracking.MlflowClient = mlflow.tracking.MlflowClient(tracking_uri=kwargs.get('tracking_uri'),
+                                                                                            registry_uri=kwargs.get('registry_uri')
+                                                                                            )
+        else:
+            self.mlflow_client = None
         self.kwargs: dict = kwargs
-        self._evolve_feature_tournament_ai()
+        if self.kwargs.get('model_param') is None:
+            self.feature_tournament_ai: dict = {}
+            self._evolve_feature_tournament_ai()
+            if self.target in self.features:
+                del self.features[self.features.index(self.target)]
+        else:
+            _model_name: str = list(self.kwargs.get('model_param').keys())[0]
+            self.feature_tournament_ai: dict = dict(model_name=_model_name,
+                                                    param=self.kwargs.get('model_param')[_model_name]
+                                                    )
 
     def _evolve_feature_tournament_ai(self):
         """
-        Evolve ai for feature tournament using genetic algorithm
+        Evolve machine learning model for feature tournament using genetic algorithm
         """
         Log(write=False, level='info').log(msg='Evolve feature tournament ai ...')
         if self.evolutionary_algorithm == 'ga':
@@ -174,7 +195,8 @@ class FeatureTournament:
                                                                                  multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
                                                                                  multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
                                                                                  log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
-                                                                                 verbose=False if self.kwargs.get('verbose') is None else self.kwargs.get('verbose')
+                                                                                 verbose=False if self.kwargs.get('verbose') is None else self.kwargs.get('verbose'),
+                                                                                 mlflow_log=False if self.kwargs.get('mlflow_log_evolutionary') is None else self.kwargs.get('mlflow_log_evolutionary')
                                                                                  )
         elif self.evolutionary_algorithm == 'si':
             _feature_tournament_ai_learning: SwarmIntelligence = SwarmIntelligence(mode='model',
@@ -203,13 +225,14 @@ class FeatureTournament:
                                                                                    multi_threading=False if self.kwargs.get('multi_threading') is None else self.kwargs.get('multi_threading'),
                                                                                    multi_processing=False if self.kwargs.get('multi_processing') is None else self.kwargs.get('multi_processing'),
                                                                                    log=False if self.kwargs.get('log') is None else self.kwargs.get('log'),
-                                                                                   verbose=False if self.kwargs.get('verbose') is None else self.kwargs.get('verbose')
+                                                                                   verbose=False if self.kwargs.get('verbose') is None else self.kwargs.get('verbose'),
+                                                                                   mlflow_log=False if self.kwargs.get('mlflow_log_evolutionary') is None else self.kwargs.get('mlflow_log_evolutionary')
                                                                                    )
         else:
             raise FeatureTournamentException('Reinforced evolutionary algorithm ({}) not supported'.format(self.evolutionary_algorithm))
         _feature_tournament_ai_learning.optimize()
         self.feature_tournament_ai = _feature_tournament_ai_learning.evolution
-        Log(write=False, level='error').log(msg='Feature tournament ai evolved -> {}'.format(self.feature_tournament_ai.get('model_name')))
+        Log(write=False, level='info').log(msg='Feature tournament ai evolved -> {}'.format(self.feature_tournament_ai.get('model_name')))
 
     def _game(self, iteration: int):
         """
@@ -220,9 +243,10 @@ class FeatureTournament:
         """
         for pair in self.pairs:
             if self.ml_type == 'reg':
-                _game = ModelGeneratorReg(model_name=self.feature_tournament_ai.get('model_name'),
-                                          reg_params=self.feature_tournament_ai.get('param')
-                                          ).generate_model()
+                _game: ModelGeneratorReg = ModelGeneratorReg(model_name=self.feature_tournament_ai.get('model_name'),
+                                                             reg_params=self.feature_tournament_ai.get('param')
+                                                             )
+                _game.generate_model()
                 _game.train(x=self.train_test.get('x_train')[pair].values,
                             y=self.train_test.get('y_train').values,
                             #validation=dict(x_val=self.train_test.get('x_val')[pair].values,
@@ -236,9 +260,10 @@ class FeatureTournament:
                                                        train_time_in_seconds=_game.train_time
                                                        )
             else:
-                _game = ModelGeneratorClf(model_name=self.feature_tournament_ai.get('model_name'),
-                                          clf_params=self.feature_tournament_ai.get('param')
-                                          ).generate_model()
+                _game: ModelGeneratorClf = ModelGeneratorClf(model_name=self.feature_tournament_ai.get('model_name'),
+                                                             clf_params=self.feature_tournament_ai.get('param')
+                                                             )
+                _game.generate_model()
                 _game.train(x=self.train_test.get('x_train')[pair].values,
                             y=self.train_test.get('y_train').values,
                             #validation=dict(x_val=self.train_test.get('x_val')[pair].values,
@@ -264,6 +289,27 @@ class FeatureTournament:
                         self.shapley_additive_explanation['game'][pair[j]].append(_shapley_value)
                     else:
                         self.shapley_additive_explanation['game'].update({pair[j]: [_shapley_value]})
+            if self.mlflow_log:
+                with mlflow.start_run():
+                    for j, imp in enumerate(_game.model.feature_importances_):
+                        _shapley_value: float = imp * _game_score
+                        mlflow.log_metric(key='sml_score', value=_game_score, step=None)
+                        for metric_context in _game.fitness:
+                            for metric in _game.fitness[metric_context]:
+                                mlflow.log_metric(key=f'{metric}_{metric_context}',
+                                                  value=_game.fitness[metric_context][metric]
+                                                  )
+                        _tags: dict = dict(model_name=self.feature_tournament_ai.get('model_name'),
+                                           target_type=self.ml_type,
+                                           game=self.game,
+                                           iteration=iteration,
+                                           init_game=True if iteration < self.init_games else False,
+                                           tree_importance=imp,
+                                           shapley_value=_shapley_value
+                                           )
+                        mlflow.set_tags(tags=_tags)
+                        for k, feature in enumerate(pair):
+                            mlflow.set_tag(key=f'feature_{k}', value=feature)
 
     def _permutation(self, n: int):
         """
@@ -291,6 +337,10 @@ class FeatureTournament:
         Play unreal tournament to extract the fittest or most important players based on the concept of shapley values
         """
         Log(write=False, level='info').log(msg='Start penalty with {} players...'.format(self.n_features))
+        if self.mlflow_log:
+            mlflow.set_experiment(experiment_name='Shapley Additive Explanation (Feature Tournament)',
+                                  experiment_id=None
+                                  )
         _game_scores: List[float] = []
         _permutation_space: int = self.init_pairs
         _pair_size_factor: float = self.max_iter * self.pair_size_factor
@@ -314,6 +364,7 @@ class FeatureTournament:
                                                                                                               _permutation_space
                                                                                                               )
                                                    )
+                self.game = g
                 if self.multi_threading:
                     self.threads.update({g: _pool.apply_async(func=self._game, args=[i])})
                 else:
