@@ -151,15 +151,24 @@ class FeatureTournament:
         else:
             self.mlflow_client = None
         self.kwargs: dict = kwargs
-        if self.kwargs.get('model_param') is None:
-            self.feature_tournament_ai: dict = {}
-            self._evolve_feature_tournament_ai()
-            if self.target in self.features:
-                del self.features[self.features.index(self.target)]
+        if self.kwargs.get('use_standard_param') is None:
+            if self.kwargs.get('model_param') is None:
+                self.feature_tournament_ai: dict = {}
+                self._evolve_feature_tournament_ai()
+                if self.target in self.features:
+                    del self.features[self.features.index(self.target)]
+            else:
+                _model_name: str = list(self.kwargs.get('model_param').keys())[0]
+                self.feature_tournament_ai: dict = dict(model_name=_model_name,
+                                                        param=self.kwargs.get('model_param')[_model_name]
+                                                        )
         else:
-            _model_name: str = list(self.kwargs.get('model_param').keys())[0]
-            self.feature_tournament_ai: dict = dict(model_name=_model_name,
-                                                    param=self.kwargs.get('model_param')[_model_name]
+            if self.ml_type == 'reg':
+                _model_param: dict = ModelGeneratorReg(models=self.models).get_model_parameter()
+            else:
+                _model_param: dict = ModelGeneratorClf(models=self.models).get_model_parameter()
+            self.feature_tournament_ai: dict = dict(model_name=self.models,
+                                                    param=_model_param
                                                     )
 
     def _evolve_feature_tournament_ai(self):
