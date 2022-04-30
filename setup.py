@@ -30,13 +30,13 @@ requires = [r.strip() for r in requires.split('\n') if ((r.strip()[0] != "#") an
 
 setuptools.setup(
     name='happy_learning',
-    version='0.4.4',
+    version='0.4.5',
     author='Gianni Francesco Balistreri',
     author_email='gbalistreri@gmx.de',
     description='Toolbox for reinforced developing of machine learning models (as proof-of-concept)',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    keywords='feature engineering feature selection evolutionary algorithm machine learning automl reinforcement shapley clustering',
+    keywords='feature-engineering feature-selection evolutionary-algorithm machine-learning automl reinforcement-learning deep-learning shapley clustering pytorch',
     license='GNU',
     url='https://github.com/GianniBalistreri/happy_learning',
     include_package_data=True,
