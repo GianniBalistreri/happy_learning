@@ -44,6 +44,7 @@ class FeatureTournament:
                  games: int = 3,
                  penalty_factor: float = 0.1,
                  max_iter: int = 50,
+                 max_players: int = -1,
                  evolutionary_algorithm: str = 'ga',
                  mlflow_log: bool = True,
                  multi_threading: bool = False,
@@ -76,6 +77,9 @@ class FeatureTournament:
 
         :param max_iter: int
             Maximum number of steps of the tournament
+
+        :param max_players: int
+            Maximum number of features used for training machine learning model
 
         :param evolutionary_algorithm: str
             Name of the reinforced evolutionary algorithm
@@ -136,6 +140,7 @@ class FeatureTournament:
         self.games: int = games
         self.penalty_factor: float = penalty_factor
         self.max_iter: int = max_iter
+        self.max_players: int = max_players if max_players > 1 else len(self.features)
         self.pairs: List[np.array] = []
         self.threads: dict = {}
         self.multi_threading: bool = multi_threading
@@ -367,6 +372,8 @@ class FeatureTournament:
             else:
                 if i == 0:
                     _permutation_space = self.init_pairs
+            if _permutation_space > self.max_players:
+                _permutation_space = self.max_players
             self._permutation(n=_permutation_space)
             _pool: ThreadPool = ThreadPool(processes=len(self.pairs)) if self.multi_threading else None
             for g in range(0, self.games, 1):
