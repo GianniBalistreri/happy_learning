@@ -257,7 +257,8 @@ class FeatureTournament:
                 _game.eval(obs=self.train_test.get('y_test').values, pred=_pred, train_error=False)
                 _game_score: float = sml_fitness_score(ml_metric=tuple([0, _game.fitness['test'].get(self.ml_metric)]),
                                                        train_test_metric=tuple([_game.fitness['train'].get(self.ml_metric), _game.fitness['test'].get(self.ml_metric)]),
-                                                       train_time_in_seconds=_game.train_time
+                                                       train_time_in_seconds=_game.train_time,
+                                                       capping_to_zero=True
                                                        )
             else:
                 _game: ModelGeneratorClf = ModelGeneratorClf(model_name=self.feature_tournament_ai.get('model_name'),
@@ -274,7 +275,8 @@ class FeatureTournament:
                 _game.eval(obs=self.train_test.get('y_test').values, pred=_pred, train_error=False)
                 _game_score: float = sml_fitness_score(ml_metric=tuple([1, _game.fitness['test'].get(self.ml_metric)]),
                                                        train_test_metric=tuple([_game.fitness['train'].get(self.ml_metric), _game.fitness['test'].get(self.ml_metric)]),
-                                                       train_time_in_seconds=_game.train_time
+                                                       train_time_in_seconds=_game.train_time,
+                                                       capping_to_zero=True
                                                        )
             for j, imp in enumerate(_game.model.feature_importances_):
                 _shapley_value: float = imp * _game_score
