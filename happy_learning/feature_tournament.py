@@ -9,6 +9,7 @@ import numpy as np
 import mlflow
 import pandas as pd
 import random
+import warnings
 
 from .evaluate_machine_learning import sml_fitness_score
 from .genetic_algorithm import GeneticAlgorithm
@@ -19,6 +20,12 @@ from .utils import HappyLearningUtils
 from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
 from typing import List, Union
+
+
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 
 class FeatureTournamentException(Exception):
