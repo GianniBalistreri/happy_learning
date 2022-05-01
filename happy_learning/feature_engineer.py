@@ -4789,15 +4789,8 @@ class FeatureEngineer:
                         continue
                     if str(DATA_PROCESSING['df'][feature].dtype).find('object') < 0:
                         DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].astype(dtype='object')
-                    #_dummies = pd.get_dummies(data=DATA_PROCESSING['df'][feature],
-                    #                          prefix=feature,
-                    #                          prefix_sep='_',
-                    #                          dummy_na=True,
-                    #                          sparse=False,
-                    #                          drop_first=False
-                    #                          )
                     _dummies: pd.DataFrame = pd.get_dummies(data=DATA_PROCESSING['df'][[feature]],
-                                                            prefix=None,
+                                                            prefix=feature,
                                                             prefix_sep='_',
                                                             dummy_na=True,
                                                             columns=None,
@@ -4807,13 +4800,13 @@ class FeatureEngineer:
                                                             )
                     _dummies = _dummies.loc[:, ~_dummies.columns.duplicated()]
                     _new_names: dict = {}
-                    for dummie in _dummies.columns:
-                        _new_feature: str = _avoid_overwriting(feature=dummie)
-                        if dummie != _new_feature:
-                            _new_names.update({dummie: _new_feature})
+                    for dummy in _dummies.columns:
+                        _new_feature: str = _avoid_overwriting(feature=dummy)
+                        if dummy != _new_feature:
+                            _new_names.update({dummy: _new_feature})
                     if len(_new_names) > 0:
                         _dummies = _dummies.rename(columns=_new_names)
-                    DATA_PROCESSING['df'] = dd.concat(dfs=[DATA_PROCESSING.get('df'), _dummies], axis=1)
+                    DATA_PROCESSING['df'] = pd.concat(objs=[DATA_PROCESSING.get('df'), _dummies], axis=1)
                     _process_handler(action='add',
                                      feature=feature,
                                      new_feature='',
