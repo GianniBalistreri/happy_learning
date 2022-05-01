@@ -1909,6 +1909,8 @@ class FeatureEngineer:
             _markers['cases'] = list(set(_markers['cases']))
             _markers['features'] = list(set(_markers['features']))
             self.clean(markers=_markers)
+        if DATA_PROCESSING.get('df') is not None:
+            DATA_PROCESSING['df'] = None
 
     def auto_engineering(self,
                          label_enc: bool = True,
