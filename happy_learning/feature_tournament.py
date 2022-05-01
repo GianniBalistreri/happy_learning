@@ -21,7 +21,6 @@ from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
 from typing import List, Union
 
-
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)

@@ -4,14 +4,6 @@ Feature engineer for structured (tabular) data
 
 """
 
-#TODO:
-# Check pre-defined feature types & save temp files
-# processing: process -> graph for re-engineer data for prediction in "production" environment
-# clean internals if FeatureEngineer is re_initializing
-# sampler: feature, train_test - normal
-# disparity: processing of date features only (effect of SPECIAL_JOBS)
-# post-processing data for prediction from trained ml model
-
 import boto3
 import copy
 import dask.dataframe as dd

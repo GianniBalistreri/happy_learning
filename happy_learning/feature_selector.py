@@ -18,7 +18,6 @@ from easyexplore.data_visualizer import DataVisualizer
 from sklearn.feature_selection import SelectFromModel
 from typing import Dict, List, Union
 
-
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
