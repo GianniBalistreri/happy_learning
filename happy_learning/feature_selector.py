@@ -8,6 +8,7 @@ import dask.dataframe as dd
 import mlflow
 import os
 import pandas as pd
+import warnings
 
 from .feature_tournament import FeatureTournament
 from .sampler import MLSampler
@@ -16,6 +17,12 @@ from .utils import HappyLearningUtils
 from easyexplore.data_visualizer import DataVisualizer
 from sklearn.feature_selection import SelectFromModel
 from typing import Dict, List, Union
+
+
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 
 class FeatureSelectorException(Exception):
