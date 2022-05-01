@@ -42,6 +42,7 @@ DASK_INDEXER: str = '___dask_index___'
 TEMP_INDEXER: dict = {'__index__': []}
 IGNORE_FEATURES: List[str] = ['Unnamed: 0']
 TEMP_DIR: str = ''
+CLOUD: str = None
 NOTEPAD: dict = {}
 PREDICTORS: List[str] = []
 MERGES: Dict[str, List[str]] = {}
@@ -340,12 +341,16 @@ def _load_temp_files(features: List[str]):
     for feature in features:
         if feature in IGNORE_FEATURES:
             continue
+        if CLOUD is None:
+            _bucket_name: str = None
+        else:
+            _bucket_name: str = os.path.join(TEMP_DIR, '{}.json'.format(feature)).split("//")[1].split("/")[0]
         DATA_PROCESSING['df'][feature] = DataImporter(file_path=os.path.join(TEMP_DIR, '{}.json'.format(feature)),
                                                       as_data_frame=True,
                                                       use_dask=False,
                                                       create_dir=False,
-                                                      cloud=None,
-                                                      bucket_name=None
+                                                      cloud=CLOUD,
+                                                      bucket_name=_bucket_name
                                                       ).file()
 
 
@@ -676,6 +681,12 @@ def _process_handler(action: str,
 def _save_temp_files(feature: str, new_name: str = None):
     """
     Save temporary feature files
+
+    :param feature: str
+        Name of the feature to save
+
+    :param new_name: str
+        New name of the feature to save
     """
     if feature not in IGNORE_FEATURES:
         global ALL_FEATURES
@@ -690,12 +701,16 @@ def _save_temp_files(feature: str, new_name: str = None):
                 _feature: str = feature
             else:
                 _feature: str = new_name
+        if CLOUD is None:
+            _bucket_name: str = None
+        else:
+            _bucket_name: str = os.path.join(TEMP_DIR, '{}.json'.format(_feature)).split("//")[1].split("/")[0]
         DataExporter(obj={_feature: _data},
                      file_path=os.path.join(TEMP_DIR, '{}.json'.format(_feature)),
                      create_dir=False,
                      overwrite=True,
-                     cloud=None,
-                     bucket_name=None
+                     cloud=CLOUD,
+                     bucket_name=_bucket_name
                      ).file()
         if _feature not in ALL_FEATURES:
             ALL_FEATURES.append(_feature)
@@ -1114,6 +1129,11 @@ class FeatureEngineer:
         _init_global_variables()
         global TEMP_DIR
         TEMP_DIR = temp_dir
+        if cloud is not None:
+            if cloud not in CLOUD_PROVIDER:
+                raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
+        global CLOUD
+        CLOUD = cloud
         global DATA_PROCESSING
         if n_cpu_cores == -1:
             DATA_PROCESSING['cpu_cores'] = os.cpu_count() - 1
@@ -1216,7 +1236,7 @@ class FeatureEngineer:
                 Log(write=not print_msg, level='info', env='dev').log(msg='Feature files saved in {}'.format(TEMP_DIR))
         else:
             _init: bool = False
-            self.load(file_path=feature_engineer_file_path, cloud=cloud)
+            self.load(file_path=feature_engineer_file_path)
         if _init:
             DATA_PROCESSING['pre_defined_feature_types'] = {}
             _id_features: List[str] = []
@@ -4279,26 +4299,16 @@ class FeatureEngineer:
                                          )
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Generated numeric linguistic feature "{}" based on text feature "{}"'.format(lf, feature))
 
-    def load(self, file_path: str = None, cloud: str = None, **kwargs):
+    def load(self, file_path: str = None):
         """
         Load data engineering information (FeatureEngineer object)
 
         :param file_path: str
             Complete file path of the external stored engineering information
-
-        :param cloud: str
-            Name of the cloud provider
-                -> google: Google Cloud Storage
-                -> aws: AWS Cloud
-
-        :param kwargs: dict
-            Key-word arguments
         """
-        if cloud is None:
+        if CLOUD is None:
             _bucket_name: str = None
         else:
-            if cloud not in CLOUD_PROVIDER:
-                raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
             _bucket_name: str = file_path.split("//")[1].split("/")[0]
         global DATA_PROCESSING
         global FEATURE_TYPES
@@ -4313,7 +4323,7 @@ class FeatureEngineer:
                 self.data_processing = DataImporter(file_path=file_path,
                                                     as_data_frame=False,
                                                     create_dir=False,
-                                                    cloud=cloud,
+                                                    cloud=CLOUD,
                                                     bucket_name=_bucket_name
                                                     ).file()
                 self.kwargs = self.data_processing.data_processing.get('kwargs')
@@ -5080,7 +5090,6 @@ class FeatureEngineer:
              cls_obj: bool = True,
              overwrite: bool = True,
              create_dir: bool = False,
-             cloud: str = None
              ):
         """
         Save data engineering information
@@ -5096,16 +5105,10 @@ class FeatureEngineer:
 
         :param create_dir: bool
             Whether to create directory if they are not existed or not
-
-        :param cloud: str
-            Name of the cloud provider
-                -> google: Google Cloud Storage
         """
-        if cloud is None:
+        if CLOUD is None:
             _bucket_name: str = None
         else:
-            if cloud not in CLOUD_PROVIDER:
-                raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
             _bucket_name: str = file_path.split("//")[1].split("/")[0]
         global TEXT_MINER
         global DATA_PROCESSING
@@ -5132,7 +5135,7 @@ class FeatureEngineer:
                              file_path=_file_path,
                              create_dir=create_dir,
                              overwrite=overwrite,
-                             cloud=cloud,
+                             cloud=CLOUD,
                              bucket_name=_bucket_name
                              ).file()
             else:
@@ -5140,7 +5143,7 @@ class FeatureEngineer:
                              file_path=_file_path,
                              create_dir=create_dir,
                              overwrite=overwrite,
-                             cloud=cloud,
+                             cloud=CLOUD,
                              bucket_name=_bucket_name
                              ).file()
             self.data_processing = None
