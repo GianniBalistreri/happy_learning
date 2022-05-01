@@ -1837,8 +1837,8 @@ class FeatureEngineer:
                       missing_data: bool = False,
                       missing_data_threshold: float = 0.999,
                       invariant: bool = True,
-                      duplicated_cases: bool = True,
-                      duplicated_features: bool = True,
+                      duplicated_cases: bool = False,
+                      duplicated_features: bool = False,
                       unstable: bool = True
                       ):
         """
@@ -1872,15 +1872,15 @@ class FeatureEngineer:
             if len(_invariant_features):
                 _markers['features'].extend(_invariant_features)
                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Detected invariant features: {}'.format(_invariant_features))
-        #if duplicated_cases or duplicated_features:
-        #    Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Check duplicated cases / features ...')
-        #    _duplicates: dict = EasyExploreUtils().get_duplicates(df=DATA_PROCESSING.get('df'), cases=duplicated_cases, features=duplicated_features)
-        #    if len(_duplicates.get('cases')) > 0:
-        #        _markers['cases'].extend(_duplicates.get('cases'))
-        #        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Detected duplicated cases: {}'.format(_duplicates.get('cases')))
-        #    if len(_duplicates.get('features')) > 0:
-        #        _markers['cases'].extend(_duplicates.get('features'))
-        #        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Detected duplicated features: {}'.format(_duplicates.get('features')))
+        if duplicated_cases or duplicated_features:
+            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Check duplicated cases / features ...')
+            _duplicates: dict = EasyExploreUtils().get_duplicates(df=DATA_PROCESSING.get('df'), cases=duplicated_cases, features=duplicated_features)
+            if len(_duplicates.get('cases')) > 0:
+                _markers['cases'].extend(_duplicates.get('cases'))
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Detected duplicated cases: {}'.format(_duplicates.get('cases')))
+            if len(_duplicates.get('features')) > 0:
+                _markers['cases'].extend(_duplicates.get('features'))
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Detected duplicated features: {}'.format(_duplicates.get('features')))
         if missing_data:
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Check invalid values ...')
             _mis_threshold: float = missing_data_threshold if missing_data_threshold > 0 else 0.999
