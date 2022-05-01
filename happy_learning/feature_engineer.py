@@ -1865,6 +1865,8 @@ class FeatureEngineer:
         :param unstable: bool
             Clean unstable features containing values that are too big or small
         """
+        if missing_data or invariant or duplicated_cases or duplicated_features or unstable:
+            _load_temp_files(features=ALL_FEATURES)
         _markers: dict = dict(cases=[], features=[])
         if invariant:
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Check invariant features ...')
