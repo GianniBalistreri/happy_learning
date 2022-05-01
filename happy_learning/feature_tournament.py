@@ -178,7 +178,11 @@ class FeatureTournament:
                 _model_param: dict = ModelGeneratorReg(models=self.models).get_model_parameter()
             else:
                 _model_param: dict = ModelGeneratorClf(models=self.models).get_model_parameter()
-            self.feature_tournament_ai: dict = dict(model_name=self.models,
+            if len(self.models) > 1:
+                _model_name: str = random.choice(seq=self.models)
+            else:
+                _model_name: str = self.models[0]
+            self.feature_tournament_ai: dict = dict(model_name=_model_name,
                                                     param=_model_param
                                                     )
 
