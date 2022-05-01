@@ -127,12 +127,14 @@ class FeatureSelector:
         self.penalty_factor: float = self.kwargs.get('penalty_factor')
         self.evolutionary_algorithm: str = self.kwargs.get('evolutionary_algorithm')
         self.max_iter = self.kwargs.get('max_iter')
+        self.max_players: int = self.kwargs.get('max_players')
         self.kwargs.pop('init_pairs', None)
         self.kwargs.pop('init_games', None)
         self.kwargs.pop('increasing_pair_size_factor', None)
         self.kwargs.pop('games', None)
         self.kwargs.pop('evolutionary_algorithm', None)
         self.kwargs.pop('max_iter', None)
+        self.kwargs.pop('max_players', None)
 
     @staticmethod
     def _mlflow_tracking(stats: Dict[str, pd.DataFrame], file_paths: List[str]):
@@ -202,6 +204,7 @@ class FeatureSelector:
                                                   penalty_factor=0.1 if self.penalty_factor is None else self.penalty_factor,
                                                   evolutionary_algorithm='si' if self.evolutionary_algorithm is None else self.evolutionary_algorithm,
                                                   max_iter=50 if self.max_iter is None else self.max_iter,
+                                                  max_players=-1 if self.max_players is None else self.max_players,
                                                   mlflow_log=False if self.kwargs.get('mlflow_log_shapley') is None else self.kwargs.get('mlflow_log_shapley'),
                                                   **self.kwargs
                                                   ).play()
