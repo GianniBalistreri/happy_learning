@@ -414,9 +414,7 @@ class HappyLearningUtils:
                 if text_val == text_val:
                     if (str(text_val).find('.') >= 0) or (str(text_val).replace(',', '').isdigit()):
                         _dot = True
-                    if str(text_val).replace('.', '').replace('-', '').isdigit() or str(text_val).replace(',',
-                                                                                                          '').replace(
-                            '-', '').isdigit():
+                    if str(text_val).replace('.', '').replace('-', '').isdigit() or str(text_val).replace(',', '').replace('-', '').isdigit():
                         if (len(str(text_val).split('.')) == 2) or (len(str(text_val).split(',')) == 2):
                             _digits += 1
                     if len(str(text_val).split('.')) > _max_dots:

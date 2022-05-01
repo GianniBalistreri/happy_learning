@@ -2197,8 +2197,6 @@ class FeatureEngineer:
                                 del _predictors[_predictors.index(feature)]
                         else:
                             _predictors: List[str] = predictors
-                        #print(DATA_PROCESSING['df'][_predictors].values.compute())
-                        #print(DATA_PROCESSING['df'][feature].values.compute())
                         _chaid.train(x=DATA_PROCESSING['df'][_predictors].values, y=np.reshape(DATA_PROCESSING['df'][feature].values, (-1, 1)))
                         _chaid_pred: np.array = _chaid.predict()
                         _process_handler(action='add',
@@ -2233,16 +2231,16 @@ class FeatureEngineer:
                     #                                          encode=encode_meth,
                     #                                          strategy=strategy
                     #                                          )
-                    #    _kbins_discretizer.fit(X=np.reshape(DATA_PROCESSING['df'][feature].values.compute(), (-1, 1)))
+                    #    _kbins_discretizer.fit(X=np.reshape(DATA_PROCESSING['df'][feature].values), (-1, 1)))
                     #    #print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values, (-1, 1))))
-                    #    print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))))
+                    #    print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values, (-1, 1))))
                     #    _process_handler(action='add',
                     #                     feature=feature,
                     #                     new_feature='{}_kbins'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
                     #                     process='categorizer|continuous',
                     #                     meth='binning',
                     #                     param=_param,
-                    #                     data=_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))),
+                    #                     data=_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values, (-1, 1))),
                     #                     force_type='categorical',
                     #                     obj=_kbins_discretizer
                     #                     )
@@ -2261,7 +2259,7 @@ class FeatureEngineer:
                                      process='categorizer|continuous',
                                      meth='binning',
                                      param=_param,
-                                     data=pd.cut(x=DATA_PROCESSING['df'][feature].compute(), bins=edges, labels=_labels, retbins=False),
+                                     data=pd.cut(x=DATA_PROCESSING['df'][feature], bins=edges, labels=_labels, retbins=False),
                                      force_type='categorical',
                                      obj=_edges
                                      )
@@ -2278,7 +2276,7 @@ class FeatureEngineer:
                                      process='categorizer|continuous',
                                      meth='binning',
                                      param=_param,
-                                     data=pd.cut(x=DATA_PROCESSING['df'][feature].compute(), bins=bins, labels=_labels, retbins=False),
+                                     data=pd.cut(x=DATA_PROCESSING['df'][feature], bins=bins, labels=_labels, retbins=False),
                                      force_type='categorical',
                                      obj=_edges
                                      )
@@ -2504,9 +2502,9 @@ class FeatureEngineer:
                                  )
 
     @staticmethod
-    def data_export(file_path: str, create_dir: bool = True, overwrite: bool = False):
+    def data_export(file_path: str, create_dir: bool = False, overwrite: bool = True):
         """
-        Export data set to local file
+        Export data set
 
         :param file_path: str
             Complete file path of data set
@@ -2517,52 +2515,19 @@ class FeatureEngineer:
         :param overwrite: bool
             Overwrite file with same name or not
         """
-        if file_path.find('.parquet') >= 0:
-            DataExporter(obj=DATA_PROCESSING.get('df'), file_path=file_path, create_dir=create_dir, overwrite=overwrite).file()
+        _load_temp_files(features=ALL_FEATURES)
+        if CLOUD is None:
+            _bucket_name: str = None
         else:
-            DataExporter(obj=DATA_PROCESSING.get('df').compute(), file_path=file_path, create_dir=create_dir, overwrite=overwrite).file()
-        Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log('Data set saved as local file ({})'.format(file_path))
-
-    @staticmethod
-    def data_import(file_path: str, sep: str = ',', **kwargs):
-        """
-        Import data set from local file
-
-        :param file_path: str
-            Complete file path of data set
-
-        :param sep: str
-            Delimiter of data file
-
-        :param kwargs: dict
-            Key-word arguments for class DataImporter
-        """
-        global ALL_FEATURES
-        global MERGES
-        global PREDICTORS
-        global FEATURE_TYPES
-        global TEXT_MINER
-        ALL_FEATURES = []
-        MERGES = {}
-        PREDICTORS = []
-        FEATURE_TYPES = {ft: [] for ft in FEATURE_TYPES.keys()}
-        TEXT_MINER = dict(obj=None, segments={}, data=None, generated_features=[], linguistic={})
-        kwargs.update({'partitions': DATA_PROCESSING['partitions']})
-        DATA_PROCESSING['df'] = DataImporter(file_path=file_path, as_data_frame=True, use_dask=True, sep=sep, **kwargs).file(table_name=kwargs.get('table_name'))
-        DATA_PROCESSING['df'][DASK_INDEXER] = DATA_PROCESSING['df'].index.values
-        DATA_PROCESSING['df'] = DATA_PROCESSING['df'].set_index(DASK_INDEXER)
-        DATA_PROCESSING['n_cases'] = len(DATA_PROCESSING['df'])
-        global TEMP_INDEXER
-        TEMP_INDEXER = {'__index__': [i for i in range(0, DATA_PROCESSING['n_cases'], 1)]}
-        if 'Unnamed: 0' in list(DATA_PROCESSING['df'].columns):
-            del DATA_PROCESSING['df']['Unnamed: 0']
-        DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns})
-        DATA_PROCESSING['processing']['features']['raw'].update({feature: [] for feature in list(DATA_PROCESSING.get('df').columns)})
-        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Data set loaded from local file ({})\nCases: {}\nFeatures: {}'.format(file_path,
-                                                                                                                                      len(DATA_PROCESSING['df']),
-                                                                                                                                      len(DATA_PROCESSING['df'].columns)
-                                                                                                                                      )
-                                                           )
+            _bucket_name: str = file_path.split("//")[1].split("/")[0]
+        DataExporter(obj=DATA_PROCESSING.get('df'),
+                     file_path=file_path,
+                     create_dir=create_dir,
+                     overwrite=overwrite,
+                     cloud=CLOUD,
+                     bucket=_bucket_name
+                     ).file()
+        Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log(f'Data set saved: ({file_path})')
 
     @staticmethod
     @FeatureOrchestra(meth='date_categorizer', feature_types=['date'])
@@ -3477,7 +3442,7 @@ class FeatureEngineer:
         :return list:
             Index values
         """
-        return list(DATA_PROCESSING['df'].index.values.compute())
+        return list(DATA_PROCESSING['df'].index.values)
 
     @staticmethod
     def get_imp_features(feature_type: str = None) -> List[str]:
@@ -5968,7 +5933,7 @@ class FeatureEngineer:
                                          process='text|occurances',
                                          meth='text_occurances',
                                          param=dict(search_text=search_text),
-                                         data=_data[of].values.compute(),
+                                         data=_data[of].values,
                                          obj={feature: search_text}
                                          )
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Count occurances "{}" in feature "{}"'.format(search_text, feature))
@@ -6024,7 +5989,7 @@ class FeatureEngineer:
                         DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].astype(float)
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature "{}" from string to float'.format(feature))
                     elif feature_type[feature].find('int') >= 0:
-                        if any(DATA_PROCESSING['df'][feature].str.findall(pat='[a-z,A-Z]').isnull().compute()):
+                        if any(DATA_PROCESSING['df'][feature].str.findall(pat='[a-z,A-Z]').isnull()):
                             if MissingDataAnalysis(df=DATA_PROCESSING.get('df'), features=[feature]).has_nan():
                                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Cannot convert type of feature "{}" from string to integer because it contains missing values'.format(feature))
                                 continue
@@ -6034,15 +5999,15 @@ class FeatureEngineer:
                                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature "{}" from string to integer'.format(feature))
                         else:
                             _conversion: str = 'categorical'
-                            if any(DATA_PROCESSING['df'][feature].isnull().compute()):
-                                DATA_PROCESSING['df'][feature] = dd.from_array(x=DATA_PROCESSING['df'][feature].replace(to_replace={feature: {None: 'None'}}).values.compute())
-                            DATA_PROCESSING['encoder']['label'].update({feature: EasyExploreUtils().label_encoder(values=np.reshape(DATA_PROCESSING['df'][feature].values.compute(), (-1, 1)))})
+                            if any(DATA_PROCESSING['df'][feature].isnull()):
+                                DATA_PROCESSING['df'][feature] = dd.from_array(x=DATA_PROCESSING['df'][feature].replace(to_replace={feature: {None: 'None'}}).values)
+                            DATA_PROCESSING['encoder']['label'].update({feature: EasyExploreUtils().label_encoder(values=np.reshape(DATA_PROCESSING['df'][feature].values, (-1, 1)))})
                             DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].astype(dtype=feature_type[feature])
                             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature "{}" from string to integer via label encoding'.format(feature))
                     elif feature_type[feature].find('date') >= 0:
                         _conversion: str = 'date'
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Use method "date_conversion" for format configuration')
-                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values.compute(), errors='coerce'))
+                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce'))
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature "{}" from string to date'.format(feature))
                 elif str(DATA_PROCESSING['df'][feature].dtype).find('date') >= 0:
                     if feature_type[feature].find('int') >= 0:
@@ -6073,7 +6038,7 @@ class FeatureEngineer:
                     elif feature_type[feature].find('date') >= 0:
                         _conversion: str = 'date'
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Use method "date_conversion" for format configuration')
-                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values.compute(), errors='coerce'))
+                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce'))
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature {} from float to date'.format(feature))
                     elif feature_type[feature].find('str') >= 0:
                         _conversion: str = 'id_text'
@@ -6083,7 +6048,7 @@ class FeatureEngineer:
                     if feature_type[feature].find('date') >= 0:
                         _conversion: str = 'date'
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Use method "date_conversion" for format configuration')
-                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values.compute(), errors='coerce'))
+                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce'))
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature {} from float to date'.format(feature))
                     else:
                         _conversion: str = feature_type[feature].replace('float', 'continuous').replace('int', 'categorical')
