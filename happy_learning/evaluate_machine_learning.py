@@ -11,12 +11,12 @@ import pandas as pd
 
 from easyexplore.data_visualizer import DataVisualizer
 from sklearn.metrics import accuracy_score, auc, classification_report, cohen_kappa_score, confusion_matrix, f1_score, matthews_corrcoef, precision_score, recall_score, roc_auc_score, roc_curve
-from sklearn.metrics import mean_absolute_error, mean_gamma_deviance, mean_poisson_deviance, mean_squared_error, mean_squared_log_error, mean_tweedie_deviance
+from sklearn.metrics import mean_absolute_error, mean_gamma_deviance, mean_poisson_deviance, mean_squared_error, mean_squared_log_error, mean_tweedie_deviance, r2_score
 from sklearn.metrics import adjusted_mutual_info_score, normalized_mutual_info_score
 from typing import Dict, List
 
 
-ML_METRIC: Dict[str, List[str]] = dict(reg=['mae', 'mgd', 'mpd', 'mse', 'msle', 'mtd', 'rmse', 'rmse_norm'],
+ML_METRIC: Dict[str, List[str]] = dict(reg=['mae', 'mgd', 'mpd', 'mse', 'msle', 'mtd', 'r2', 'rmse', 'rmse_norm'],
                                        clf_binary=['accuracy', 'classification_report', 'confusion', 'f1', 'mcc', 'precision', 'recall', 'roc_auc'],
                                        clf_multi=['accuracy', 'classification_report', 'cohen_kappa', 'confusion', 'f1', 'mcc', 'precision', 'recall']
                                        )
@@ -743,6 +743,19 @@ class EvalReg:
             Mean-Tweedie-Deviance-Error Score
         """
         return mean_tweedie_deviance(y_true=self.obs, y_pred=self.pred, sample_weight=None)
+
+    def r2(self) -> float:
+        """
+        R2 coefficient of determination
+
+        :return float
+            R2 Score
+        """
+        return r2_score(y_true=self.obs,
+                        y_pred=self.pred,
+                        sample_weight=None,
+                        multioutput=self.multi_output
+                        )
 
     def rmse(self) -> float:
         """
