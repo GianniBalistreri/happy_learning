@@ -1211,7 +1211,7 @@ class FeatureEngineer:
                     raise FeatureEngineerException('Neither data object nor file path to data file found')
                 if len(file_path) == 0:
                     raise FeatureEngineerException('Neither data object nor file path to data file found')
-                self.data_import(file_path=file_path, sep=sep, **kwargs)
+                self._data_import(file_path=file_path, sep=sep, **kwargs)
                 for feature in DATA_PROCESSING['df'].columns:
                     _save_temp_files(feature=feature, new_name=_force_rename_feature(feature=feature, max_length=100))
                 DATA_PROCESSING['df'] = None
@@ -1396,6 +1396,38 @@ class FeatureEngineer:
                 _critic['recommender'].update(self._recommender(actor=actor, actor_meta_data=_actor_meta_data))
         del _actor_meta_data
         return _critic
+
+    @staticmethod
+    def _data_import(file_path: str, sep: str, **kwargs):
+        """
+        Import data set from file
+        """
+        if CLOUD is None:
+            _bucket_name: str = None
+        else:
+            _bucket_name: str = file_path.split("//")[1].split("/")[0]
+        DATA_PROCESSING['df'] = DataImporter(file_path=file_path,
+                                             as_data_frame=True,
+                                             use_dask=True,
+                                             create_dir=False,
+                                             sep=sep,
+                                             cloud=CLOUD,
+                                             bucket_name=_bucket_name,
+                                             **kwargs
+                                             )
+        DATA_PROCESSING['processing']['features']['raw'].update({_force_rename_feature(feature=feature, max_length=100): [] for feature in DATA_PROCESSING.get('df').columns})
+        Log(write=not DATA_PROCESSING.get('show_msg')).log(
+            msg='Data set loaded from file\nCases: {}\nFeatures: {}'.format(len(DATA_PROCESSING['df']),
+                                                                            len(DATA_PROCESSING['df'].columns)
+                                                                            )
+            )
+        DATA_PROCESSING['n_cases'] = len(DATA_PROCESSING['df'])
+        global TEMP_INDEXER
+        TEMP_INDEXER['__index__'] = [i for i in range(0, DATA_PROCESSING['n_cases'], 1)]
+        for ignore in IGNORE_FEATURES:
+            if ignore in list(DATA_PROCESSING['df'].columns):
+                del DATA_PROCESSING['df'][ignore]
+        DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns})
 
     @staticmethod
     def _one_hot_merger(features: List[str]):
