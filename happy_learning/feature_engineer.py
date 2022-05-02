@@ -5997,14 +5997,14 @@ class FeatureEngineer:
                         else:
                             _conversion: str = 'categorical'
                             if any(DATA_PROCESSING['df'][feature].isnull()):
-                                DATA_PROCESSING['df'][feature] = dd.from_array(x=DATA_PROCESSING['df'][feature].replace(to_replace={feature: {None: 'None'}}).values)
+                                DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].replace(to_replace={feature: {None: 'None'}}).values
                             DATA_PROCESSING['encoder']['label'].update({feature: EasyExploreUtils().label_encoder(values=np.reshape(DATA_PROCESSING['df'][feature].values, (-1, 1)))})
                             DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].astype(dtype=feature_type[feature])
                             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature "{}" from string to integer via label encoding'.format(feature))
                     elif feature_type[feature].find('date') >= 0:
                         _conversion: str = 'date'
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Use method "date_conversion" for format configuration')
-                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce'))
+                        DATA_PROCESSING['df'][feature] = pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce')
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature "{}" from string to date'.format(feature))
                 elif str(DATA_PROCESSING['df'][feature].dtype).find('date') >= 0:
                     if feature_type[feature].find('int') >= 0:
@@ -6035,7 +6035,7 @@ class FeatureEngineer:
                     elif feature_type[feature].find('date') >= 0:
                         _conversion: str = 'date'
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Use method "date_conversion" for format configuration')
-                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce'))
+                        DATA_PROCESSING['df'][feature] = pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce')
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature {} from float to date'.format(feature))
                     elif feature_type[feature].find('str') >= 0:
                         _conversion: str = 'id_text'
@@ -6045,7 +6045,7 @@ class FeatureEngineer:
                     if feature_type[feature].find('date') >= 0:
                         _conversion: str = 'date'
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Use method "date_conversion" for format configuration')
-                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce'))
+                        DATA_PROCESSING['df'][feature] = pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce')
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature {} from float to date'.format(feature))
                     else:
                         _conversion: str = feature_type[feature].replace('float', 'continuous').replace('int', 'categorical')
