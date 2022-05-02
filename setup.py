@@ -2,7 +2,7 @@ import setuptools
 import subprocess
 import sys
 
-from happy_learning.text_miner import LANG_MODELS
+#from happy_learning.text_miner import LANG_MODELS
 
 # Install complete dask library for handling big data sets using parallel computing:
 subprocess.run(['python{} -m pip install "dask[distributed]"'.format('3' if sys.platform.find('win') != 0 else '')], shell=True)
