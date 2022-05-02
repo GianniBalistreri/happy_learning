@@ -9,6 +9,7 @@ import numpy as np
 import mlflow
 import pandas as pd
 import random
+import warnings
 
 from .evaluate_machine_learning import sml_fitness_score
 from .genetic_algorithm import GeneticAlgorithm
@@ -19,6 +20,11 @@ from .utils import HappyLearningUtils
 from easyexplore.utils import Log
 from multiprocessing.pool import ThreadPool
 from typing import List, Union
+
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 
 class FeatureTournamentException(Exception):
@@ -44,6 +50,7 @@ class FeatureTournament:
                  games: int = 3,
                  penalty_factor: float = 0.1,
                  max_iter: int = 50,
+                 max_players: int = -1,
                  evolutionary_algorithm: str = 'ga',
                  mlflow_log: bool = True,
                  multi_threading: bool = False,
@@ -76,6 +83,9 @@ class FeatureTournament:
 
         :param max_iter: int
             Maximum number of steps of the tournament
+
+        :param max_players: int
+            Maximum number of features used for training machine learning model
 
         :param evolutionary_algorithm: str
             Name of the reinforced evolutionary algorithm
@@ -136,6 +146,7 @@ class FeatureTournament:
         self.games: int = games
         self.penalty_factor: float = penalty_factor
         self.max_iter: int = max_iter
+        self.max_players: int = max_players if max_players > 1 else len(self.features)
         self.pairs: List[np.array] = []
         self.threads: dict = {}
         self.multi_threading: bool = multi_threading
@@ -151,15 +162,28 @@ class FeatureTournament:
         else:
             self.mlflow_client = None
         self.kwargs: dict = kwargs
-        if self.kwargs.get('model_param') is None:
-            self.feature_tournament_ai: dict = {}
-            self._evolve_feature_tournament_ai()
-            if self.target in self.features:
-                del self.features[self.features.index(self.target)]
+        if self.kwargs.get('use_standard_param') is None:
+            if self.kwargs.get('model_param') is None:
+                self.feature_tournament_ai: dict = {}
+                self._evolve_feature_tournament_ai()
+                if self.target in self.features:
+                    del self.features[self.features.index(self.target)]
+            else:
+                _model_name: str = list(self.kwargs.get('model_param').keys())[0]
+                self.feature_tournament_ai: dict = dict(model_name=_model_name,
+                                                        param=self.kwargs.get('model_param')[_model_name]
+                                                        )
         else:
-            _model_name: str = list(self.kwargs.get('model_param').keys())[0]
+            if self.ml_type == 'reg':
+                _model_param: dict = ModelGeneratorReg(models=self.models).get_model_parameter()
+            else:
+                _model_param: dict = ModelGeneratorClf(models=self.models).get_model_parameter()
+            if len(self.models) > 1:
+                _model_name: str = random.choice(seq=self.models)
+            else:
+                _model_name: str = self.models[0]
             self.feature_tournament_ai: dict = dict(model_name=_model_name,
-                                                    param=self.kwargs.get('model_param')[_model_name]
+                                                    param=_model_param
                                                     )
 
     def _evolve_feature_tournament_ai(self):
@@ -257,7 +281,8 @@ class FeatureTournament:
                 _game.eval(obs=self.train_test.get('y_test').values, pred=_pred, train_error=False)
                 _game_score: float = sml_fitness_score(ml_metric=tuple([0, _game.fitness['test'].get(self.ml_metric)]),
                                                        train_test_metric=tuple([_game.fitness['train'].get(self.ml_metric), _game.fitness['test'].get(self.ml_metric)]),
-                                                       train_time_in_seconds=_game.train_time
+                                                       train_time_in_seconds=_game.train_time,
+                                                       capping_to_zero=True
                                                        )
             else:
                 _game: ModelGeneratorClf = ModelGeneratorClf(model_name=self.feature_tournament_ai.get('model_name'),
@@ -274,7 +299,8 @@ class FeatureTournament:
                 _game.eval(obs=self.train_test.get('y_test').values, pred=_pred, train_error=False)
                 _game_score: float = sml_fitness_score(ml_metric=tuple([1, _game.fitness['test'].get(self.ml_metric)]),
                                                        train_test_metric=tuple([_game.fitness['train'].get(self.ml_metric), _game.fitness['test'].get(self.ml_metric)]),
-                                                       train_time_in_seconds=_game.train_time
+                                                       train_time_in_seconds=_game.train_time,
+                                                       capping_to_zero=True
                                                        )
             for j, imp in enumerate(_game.model.feature_importances_):
                 _shapley_value: float = imp * _game_score
@@ -356,6 +382,8 @@ class FeatureTournament:
             else:
                 if i == 0:
                     _permutation_space = self.init_pairs
+            if _permutation_space > self.max_players:
+                _permutation_space = self.max_players
             self._permutation(n=_permutation_space)
             _pool: ThreadPool = ThreadPool(processes=len(self.pairs)) if self.multi_threading else None
             for g in range(0, self.games, 1):

@@ -4,14 +4,6 @@ Feature engineer for structured (tabular) data
 
 """
 
-#TODO:
-# Check pre-defined feature types & save temp files
-# processing: process -> graph for re-engineer data for prediction in "production" environment
-# clean internals if FeatureEngineer is re_initializing
-# sampler: feature, train_test - normal
-# disparity: processing of date features only (effect of SPECIAL_JOBS)
-# post-processing data for prediction from trained ml model
-
 import boto3
 import copy
 import dask.dataframe as dd
@@ -50,6 +42,7 @@ DASK_INDEXER: str = '___dask_index___'
 TEMP_INDEXER: dict = {'__index__': []}
 IGNORE_FEATURES: List[str] = ['Unnamed: 0']
 TEMP_DIR: str = ''
+CLOUD: str = None
 NOTEPAD: dict = {}
 PREDICTORS: List[str] = []
 MERGES: Dict[str, List[str]] = {}
@@ -348,12 +341,16 @@ def _load_temp_files(features: List[str]):
     for feature in features:
         if feature in IGNORE_FEATURES:
             continue
+        if CLOUD is None:
+            _bucket_name: str = None
+        else:
+            _bucket_name: str = os.path.join(TEMP_DIR, '{}.json'.format(feature)).split("//")[1].split("/")[0]
         DATA_PROCESSING['df'][feature] = DataImporter(file_path=os.path.join(TEMP_DIR, '{}.json'.format(feature)),
                                                       as_data_frame=True,
                                                       use_dask=False,
                                                       create_dir=False,
-                                                      cloud=None,
-                                                      bucket_name=None
+                                                      cloud=CLOUD,
+                                                      bucket_name=_bucket_name
                                                       ).file()
 
 
@@ -684,6 +681,12 @@ def _process_handler(action: str,
 def _save_temp_files(feature: str, new_name: str = None):
     """
     Save temporary feature files
+
+    :param feature: str
+        Name of the feature to save
+
+    :param new_name: str
+        New name of the feature to save
     """
     if feature not in IGNORE_FEATURES:
         global ALL_FEATURES
@@ -698,12 +701,16 @@ def _save_temp_files(feature: str, new_name: str = None):
                 _feature: str = feature
             else:
                 _feature: str = new_name
+        if CLOUD is None:
+            _bucket_name: str = None
+        else:
+            _bucket_name: str = os.path.join(TEMP_DIR, '{}.json'.format(_feature)).split("//")[1].split("/")[0]
         DataExporter(obj={_feature: _data},
                      file_path=os.path.join(TEMP_DIR, '{}.json'.format(_feature)),
                      create_dir=False,
                      overwrite=True,
-                     cloud=None,
-                     bucket_name=None
+                     cloud=CLOUD,
+                     bucket_name=_bucket_name
                      ).file()
         if _feature not in ALL_FEATURES:
             ALL_FEATURES.append(_feature)
@@ -1122,6 +1129,11 @@ class FeatureEngineer:
         _init_global_variables()
         global TEMP_DIR
         TEMP_DIR = temp_dir
+        if cloud is not None:
+            if cloud not in CLOUD_PROVIDER:
+                raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
+        global CLOUD
+        CLOUD = cloud
         global DATA_PROCESSING
         if n_cpu_cores == -1:
             DATA_PROCESSING['cpu_cores'] = os.cpu_count() - 1
@@ -1199,7 +1211,7 @@ class FeatureEngineer:
                     raise FeatureEngineerException('Neither data object nor file path to data file found')
                 if len(file_path) == 0:
                     raise FeatureEngineerException('Neither data object nor file path to data file found')
-                self.data_import(file_path=file_path, sep=sep, **kwargs)
+                self._data_import(file_path=file_path, sep=sep, **kwargs)
                 for feature in DATA_PROCESSING['df'].columns:
                     _save_temp_files(feature=feature, new_name=_force_rename_feature(feature=feature, max_length=100))
                 DATA_PROCESSING['df'] = None
@@ -1224,7 +1236,7 @@ class FeatureEngineer:
                 Log(write=not print_msg, level='info', env='dev').log(msg='Feature files saved in {}'.format(TEMP_DIR))
         else:
             _init: bool = False
-            self.load(file_path=feature_engineer_file_path, cloud=cloud)
+            self.load(file_path=feature_engineer_file_path)
         if _init:
             DATA_PROCESSING['pre_defined_feature_types'] = {}
             _id_features: List[str] = []
@@ -1384,6 +1396,38 @@ class FeatureEngineer:
                 _critic['recommender'].update(self._recommender(actor=actor, actor_meta_data=_actor_meta_data))
         del _actor_meta_data
         return _critic
+
+    @staticmethod
+    def _data_import(file_path: str, sep: str, **kwargs):
+        """
+        Import data set from file
+        """
+        if CLOUD is None:
+            _bucket_name: str = None
+        else:
+            _bucket_name: str = file_path.split("//")[1].split("/")[0]
+        DATA_PROCESSING['df'] = DataImporter(file_path=file_path,
+                                             as_data_frame=True,
+                                             use_dask=True,
+                                             create_dir=False,
+                                             sep=sep,
+                                             cloud=CLOUD,
+                                             bucket_name=_bucket_name,
+                                             **kwargs
+                                             )
+        DATA_PROCESSING['processing']['features']['raw'].update({_force_rename_feature(feature=feature, max_length=100): [] for feature in DATA_PROCESSING.get('df').columns})
+        Log(write=not DATA_PROCESSING.get('show_msg')).log(
+            msg='Data set loaded from file\nCases: {}\nFeatures: {}'.format(len(DATA_PROCESSING['df']),
+                                                                            len(DATA_PROCESSING['df'].columns)
+                                                                            )
+            )
+        DATA_PROCESSING['n_cases'] = len(DATA_PROCESSING['df'])
+        global TEMP_INDEXER
+        TEMP_INDEXER['__index__'] = [i for i in range(0, DATA_PROCESSING['n_cases'], 1)]
+        for ignore in IGNORE_FEATURES:
+            if ignore in list(DATA_PROCESSING['df'].columns):
+                del DATA_PROCESSING['df'][ignore]
+        DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns})
 
     @staticmethod
     def _one_hot_merger(features: List[str]):
@@ -1825,8 +1869,8 @@ class FeatureEngineer:
                       missing_data: bool = False,
                       missing_data_threshold: float = 0.999,
                       invariant: bool = True,
-                      duplicated_cases: bool = True,
-                      duplicated_features: bool = True,
+                      duplicated_cases: bool = False,
+                      duplicated_features: bool = False,
                       unstable: bool = True
                       ):
         """
@@ -1853,6 +1897,8 @@ class FeatureEngineer:
         :param unstable: bool
             Clean unstable features containing values that are too big or small
         """
+        if missing_data or invariant or duplicated_cases or duplicated_features or unstable:
+            _load_temp_files(features=ALL_FEATURES)
         _markers: dict = dict(cases=[], features=[])
         if invariant:
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Check invariant features ...')
@@ -1860,15 +1906,15 @@ class FeatureEngineer:
             if len(_invariant_features):
                 _markers['features'].extend(_invariant_features)
                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Detected invariant features: {}'.format(_invariant_features))
-        #if duplicated_cases or duplicated_features:
-        #    Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Check duplicated cases / features ...')
-        #    _duplicates: dict = EasyExploreUtils().get_duplicates(df=DATA_PROCESSING.get('df'), cases=duplicated_cases, features=duplicated_features)
-        #    if len(_duplicates.get('cases')) > 0:
-        #        _markers['cases'].extend(_duplicates.get('cases'))
-        #        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Detected duplicated cases: {}'.format(_duplicates.get('cases')))
-        #    if len(_duplicates.get('features')) > 0:
-        #        _markers['cases'].extend(_duplicates.get('features'))
-        #        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Detected duplicated features: {}'.format(_duplicates.get('features')))
+        if duplicated_cases or duplicated_features:
+            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Check duplicated cases / features ...')
+            _duplicates: dict = EasyExploreUtils().get_duplicates(df=DATA_PROCESSING.get('df'), cases=duplicated_cases, features=duplicated_features)
+            if len(_duplicates.get('cases')) > 0:
+                _markers['cases'].extend(_duplicates.get('cases'))
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Detected duplicated cases: {}'.format(_duplicates.get('cases')))
+            if len(_duplicates.get('features')) > 0:
+                _markers['cases'].extend(_duplicates.get('features'))
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Detected duplicated features: {}'.format(_duplicates.get('features')))
         if missing_data:
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Check invalid values ...')
             _mis_threshold: float = missing_data_threshold if missing_data_threshold > 0 else 0.999
@@ -1895,6 +1941,8 @@ class FeatureEngineer:
             _markers['cases'] = list(set(_markers['cases']))
             _markers['features'] = list(set(_markers['features']))
             self.clean(markers=_markers)
+        if DATA_PROCESSING.get('df') is not None:
+            DATA_PROCESSING['df'] = None
 
     def auto_engineering(self,
                          label_enc: bool = True,
@@ -2185,8 +2233,6 @@ class FeatureEngineer:
                                 del _predictors[_predictors.index(feature)]
                         else:
                             _predictors: List[str] = predictors
-                        #print(DATA_PROCESSING['df'][_predictors].values.compute())
-                        #print(DATA_PROCESSING['df'][feature].values.compute())
                         _chaid.train(x=DATA_PROCESSING['df'][_predictors].values, y=np.reshape(DATA_PROCESSING['df'][feature].values, (-1, 1)))
                         _chaid_pred: np.array = _chaid.predict()
                         _process_handler(action='add',
@@ -2221,16 +2267,16 @@ class FeatureEngineer:
                     #                                          encode=encode_meth,
                     #                                          strategy=strategy
                     #                                          )
-                    #    _kbins_discretizer.fit(X=np.reshape(DATA_PROCESSING['df'][feature].values.compute(), (-1, 1)))
+                    #    _kbins_discretizer.fit(X=np.reshape(DATA_PROCESSING['df'][feature].values), (-1, 1)))
                     #    #print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values, (-1, 1))))
-                    #    print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))))
+                    #    print(_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values, (-1, 1))))
                     #    _process_handler(action='add',
                     #                     feature=feature,
                     #                     new_feature='{}_kbins'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
                     #                     process='categorizer|continuous',
                     #                     meth='binning',
                     #                     param=_param,
-                    #                     data=_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values.compute(), (-1, 1))),
+                    #                     data=_kbins_discretizer.transform(X=np.reshape(DATA_PROCESSING.get('df')[feature].values, (-1, 1))),
                     #                     force_type='categorical',
                     #                     obj=_kbins_discretizer
                     #                     )
@@ -2249,7 +2295,7 @@ class FeatureEngineer:
                                      process='categorizer|continuous',
                                      meth='binning',
                                      param=_param,
-                                     data=pd.cut(x=DATA_PROCESSING['df'][feature].compute(), bins=edges, labels=_labels, retbins=False),
+                                     data=pd.cut(x=DATA_PROCESSING['df'][feature], bins=edges, labels=_labels, retbins=False),
                                      force_type='categorical',
                                      obj=_edges
                                      )
@@ -2266,7 +2312,7 @@ class FeatureEngineer:
                                      process='categorizer|continuous',
                                      meth='binning',
                                      param=_param,
-                                     data=pd.cut(x=DATA_PROCESSING['df'][feature].compute(), bins=bins, labels=_labels, retbins=False),
+                                     data=pd.cut(x=DATA_PROCESSING['df'][feature], bins=bins, labels=_labels, retbins=False),
                                      force_type='categorical',
                                      obj=_edges
                                      )
@@ -2492,9 +2538,9 @@ class FeatureEngineer:
                                  )
 
     @staticmethod
-    def data_export(file_path: str, create_dir: bool = True, overwrite: bool = False):
+    def data_export(file_path: str, create_dir: bool = False, overwrite: bool = True):
         """
-        Export data set to local file
+        Export data set
 
         :param file_path: str
             Complete file path of data set
@@ -2505,52 +2551,19 @@ class FeatureEngineer:
         :param overwrite: bool
             Overwrite file with same name or not
         """
-        if file_path.find('.parquet') >= 0:
-            DataExporter(obj=DATA_PROCESSING.get('df'), file_path=file_path, create_dir=create_dir, overwrite=overwrite).file()
+        _load_temp_files(features=ALL_FEATURES)
+        if CLOUD is None:
+            _bucket_name: str = None
         else:
-            DataExporter(obj=DATA_PROCESSING.get('df').compute(), file_path=file_path, create_dir=create_dir, overwrite=overwrite).file()
-        Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log('Data set saved as local file ({})'.format(file_path))
-
-    @staticmethod
-    def data_import(file_path: str, sep: str = ',', **kwargs):
-        """
-        Import data set from local file
-
-        :param file_path: str
-            Complete file path of data set
-
-        :param sep: str
-            Delimiter of data file
-
-        :param kwargs: dict
-            Key-word arguments for class DataImporter
-        """
-        global ALL_FEATURES
-        global MERGES
-        global PREDICTORS
-        global FEATURE_TYPES
-        global TEXT_MINER
-        ALL_FEATURES = []
-        MERGES = {}
-        PREDICTORS = []
-        FEATURE_TYPES = {ft: [] for ft in FEATURE_TYPES.keys()}
-        TEXT_MINER = dict(obj=None, segments={}, data=None, generated_features=[], linguistic={})
-        kwargs.update({'partitions': DATA_PROCESSING['partitions']})
-        DATA_PROCESSING['df'] = DataImporter(file_path=file_path, as_data_frame=True, use_dask=True, sep=sep, **kwargs).file(table_name=kwargs.get('table_name'))
-        DATA_PROCESSING['df'][DASK_INDEXER] = DATA_PROCESSING['df'].index.values
-        DATA_PROCESSING['df'] = DATA_PROCESSING['df'].set_index(DASK_INDEXER)
-        DATA_PROCESSING['n_cases'] = len(DATA_PROCESSING['df'])
-        global TEMP_INDEXER
-        TEMP_INDEXER = {'__index__': [i for i in range(0, DATA_PROCESSING['n_cases'], 1)]}
-        if 'Unnamed: 0' in list(DATA_PROCESSING['df'].columns):
-            del DATA_PROCESSING['df']['Unnamed: 0']
-        DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns})
-        DATA_PROCESSING['processing']['features']['raw'].update({feature: [] for feature in list(DATA_PROCESSING.get('df').columns)})
-        Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Data set loaded from local file ({})\nCases: {}\nFeatures: {}'.format(file_path,
-                                                                                                                                      len(DATA_PROCESSING['df']),
-                                                                                                                                      len(DATA_PROCESSING['df'].columns)
-                                                                                                                                      )
-                                                           )
+            _bucket_name: str = file_path.split("//")[1].split("/")[0]
+        DataExporter(obj=DATA_PROCESSING.get('df'),
+                     file_path=file_path,
+                     create_dir=create_dir,
+                     overwrite=overwrite,
+                     cloud=CLOUD,
+                     bucket=_bucket_name
+                     ).file()
+        Log(write=not DATA_PROCESSING.get('show_msg'), level='error').log(f'Data set saved: ({file_path})')
 
     @staticmethod
     @FeatureOrchestra(meth='date_categorizer', feature_types=['date'])
@@ -3465,7 +3478,7 @@ class FeatureEngineer:
         :return list:
             Index values
         """
-        return list(DATA_PROCESSING['df'].index.values.compute())
+        return list(DATA_PROCESSING['df'].index.values)
 
     @staticmethod
     def get_imp_features(feature_type: str = None) -> List[str]:
@@ -4287,26 +4300,16 @@ class FeatureEngineer:
                                          )
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Generated numeric linguistic feature "{}" based on text feature "{}"'.format(lf, feature))
 
-    def load(self, file_path: str = None, cloud: str = None, **kwargs):
+    def load(self, file_path: str = None):
         """
         Load data engineering information (FeatureEngineer object)
 
         :param file_path: str
             Complete file path of the external stored engineering information
-
-        :param cloud: str
-            Name of the cloud provider
-                -> google: Google Cloud Storage
-                -> aws: AWS Cloud
-
-        :param kwargs: dict
-            Key-word arguments
         """
-        if cloud is None:
+        if CLOUD is None:
             _bucket_name: str = None
         else:
-            if cloud not in CLOUD_PROVIDER:
-                raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
             _bucket_name: str = file_path.split("//")[1].split("/")[0]
         global DATA_PROCESSING
         global FEATURE_TYPES
@@ -4321,7 +4324,7 @@ class FeatureEngineer:
                 self.data_processing = DataImporter(file_path=file_path,
                                                     as_data_frame=False,
                                                     create_dir=False,
-                                                    cloud=cloud,
+                                                    cloud=CLOUD,
                                                     bucket_name=_bucket_name
                                                     ).file()
                 self.kwargs = self.data_processing.data_processing.get('kwargs')
@@ -4822,15 +4825,8 @@ class FeatureEngineer:
                         continue
                     if str(DATA_PROCESSING['df'][feature].dtype).find('object') < 0:
                         DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].astype(dtype='object')
-                    #_dummies = pd.get_dummies(data=DATA_PROCESSING['df'][feature],
-                    #                          prefix=feature,
-                    #                          prefix_sep='_',
-                    #                          dummy_na=True,
-                    #                          sparse=False,
-                    #                          drop_first=False
-                    #                          )
                     _dummies: pd.DataFrame = pd.get_dummies(data=DATA_PROCESSING['df'][[feature]],
-                                                            prefix=None,
+                                                            prefix=feature,
                                                             prefix_sep='_',
                                                             dummy_na=True,
                                                             columns=None,
@@ -4840,13 +4836,13 @@ class FeatureEngineer:
                                                             )
                     _dummies = _dummies.loc[:, ~_dummies.columns.duplicated()]
                     _new_names: dict = {}
-                    for dummie in _dummies.columns:
-                        _new_feature: str = _avoid_overwriting(feature=dummie)
-                        if dummie != _new_feature:
-                            _new_names.update({dummie: _new_feature})
+                    for dummy in _dummies.columns:
+                        _new_feature: str = _avoid_overwriting(feature=dummy)
+                        if dummy != _new_feature:
+                            _new_names.update({dummy: _new_feature})
                     if len(_new_names) > 0:
                         _dummies = _dummies.rename(columns=_new_names)
-                    DATA_PROCESSING['df'] = dd.concat(dfs=[DATA_PROCESSING.get('df'), _dummies], axis=1)
+                    DATA_PROCESSING['df'] = pd.concat(objs=[DATA_PROCESSING.get('df'), _dummies], axis=1)
                     _process_handler(action='add',
                                      feature=feature,
                                      new_feature='',
@@ -5088,7 +5084,6 @@ class FeatureEngineer:
              cls_obj: bool = True,
              overwrite: bool = True,
              create_dir: bool = False,
-             cloud: str = None
              ):
         """
         Save data engineering information
@@ -5104,16 +5099,10 @@ class FeatureEngineer:
 
         :param create_dir: bool
             Whether to create directory if they are not existed or not
-
-        :param cloud: str
-            Name of the cloud provider
-                -> google: Google Cloud Storage
         """
-        if cloud is None:
+        if CLOUD is None:
             _bucket_name: str = None
         else:
-            if cloud not in CLOUD_PROVIDER:
-                raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
             _bucket_name: str = file_path.split("//")[1].split("/")[0]
         global TEXT_MINER
         global DATA_PROCESSING
@@ -5140,7 +5129,7 @@ class FeatureEngineer:
                              file_path=_file_path,
                              create_dir=create_dir,
                              overwrite=overwrite,
-                             cloud=cloud,
+                             cloud=CLOUD,
                              bucket_name=_bucket_name
                              ).file()
             else:
@@ -5148,7 +5137,7 @@ class FeatureEngineer:
                              file_path=_file_path,
                              create_dir=create_dir,
                              overwrite=overwrite,
-                             cloud=cloud,
+                             cloud=CLOUD,
                              bucket_name=_bucket_name
                              ).file()
             self.data_processing = None
@@ -5973,7 +5962,7 @@ class FeatureEngineer:
                                          process='text|occurances',
                                          meth='text_occurances',
                                          param=dict(search_text=search_text),
-                                         data=_data[of].values.compute(),
+                                         data=_data[of].values,
                                          obj={feature: search_text}
                                          )
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Count occurances "{}" in feature "{}"'.format(search_text, feature))
@@ -6029,7 +6018,7 @@ class FeatureEngineer:
                         DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].astype(float)
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature "{}" from string to float'.format(feature))
                     elif feature_type[feature].find('int') >= 0:
-                        if any(DATA_PROCESSING['df'][feature].str.findall(pat='[a-z,A-Z]').isnull().compute()):
+                        if any(DATA_PROCESSING['df'][feature].str.findall(pat='[a-z,A-Z]').isnull()):
                             if MissingDataAnalysis(df=DATA_PROCESSING.get('df'), features=[feature]).has_nan():
                                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Cannot convert type of feature "{}" from string to integer because it contains missing values'.format(feature))
                                 continue
@@ -6039,15 +6028,15 @@ class FeatureEngineer:
                                 Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature "{}" from string to integer'.format(feature))
                         else:
                             _conversion: str = 'categorical'
-                            if any(DATA_PROCESSING['df'][feature].isnull().compute()):
-                                DATA_PROCESSING['df'][feature] = dd.from_array(x=DATA_PROCESSING['df'][feature].replace(to_replace={feature: {None: 'None'}}).values.compute())
-                            DATA_PROCESSING['encoder']['label'].update({feature: EasyExploreUtils().label_encoder(values=np.reshape(DATA_PROCESSING['df'][feature].values.compute(), (-1, 1)))})
+                            if any(DATA_PROCESSING['df'][feature].isnull()):
+                                DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].replace(to_replace={feature: {None: 'None'}}).values
+                            DATA_PROCESSING['encoder']['label'].update({feature: EasyExploreUtils().label_encoder(values=np.reshape(DATA_PROCESSING['df'][feature].values, (-1, 1)))})
                             DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].astype(dtype=feature_type[feature])
                             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature "{}" from string to integer via label encoding'.format(feature))
                     elif feature_type[feature].find('date') >= 0:
                         _conversion: str = 'date'
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Use method "date_conversion" for format configuration')
-                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values.compute(), errors='coerce'))
+                        DATA_PROCESSING['df'][feature] = pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce')
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature "{}" from string to date'.format(feature))
                 elif str(DATA_PROCESSING['df'][feature].dtype).find('date') >= 0:
                     if feature_type[feature].find('int') >= 0:
@@ -6078,7 +6067,7 @@ class FeatureEngineer:
                     elif feature_type[feature].find('date') >= 0:
                         _conversion: str = 'date'
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Use method "date_conversion" for format configuration')
-                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values.compute(), errors='coerce'))
+                        DATA_PROCESSING['df'][feature] = pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce')
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature {} from float to date'.format(feature))
                     elif feature_type[feature].find('str') >= 0:
                         _conversion: str = 'id_text'
@@ -6088,7 +6077,7 @@ class FeatureEngineer:
                     if feature_type[feature].find('date') >= 0:
                         _conversion: str = 'date'
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Use method "date_conversion" for format configuration')
-                        DATA_PROCESSING['df'][feature] = dd.from_array(x=pd.to_datetime(DATA_PROCESSING['df'][feature].values.compute(), errors='coerce'))
+                        DATA_PROCESSING['df'][feature] = pd.to_datetime(DATA_PROCESSING['df'][feature].values, errors='coerce')
                         Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Convert type of feature {} from float to date'.format(feature))
                     else:
                         _conversion: str = feature_type[feature].replace('float', 'continuous').replace('int', 'categorical')

@@ -8,6 +8,7 @@ import dask.dataframe as dd
 import mlflow
 import os
 import pandas as pd
+import warnings
 
 from .feature_tournament import FeatureTournament
 from .sampler import MLSampler
@@ -16,6 +17,11 @@ from .utils import HappyLearningUtils
 from easyexplore.data_visualizer import DataVisualizer
 from sklearn.feature_selection import SelectFromModel
 from typing import Dict, List, Union
+
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
+warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 
 class FeatureSelectorException(Exception):
@@ -120,12 +126,14 @@ class FeatureSelector:
         self.penalty_factor: float = self.kwargs.get('penalty_factor')
         self.evolutionary_algorithm: str = self.kwargs.get('evolutionary_algorithm')
         self.max_iter = self.kwargs.get('max_iter')
+        self.max_players: int = self.kwargs.get('max_players')
         self.kwargs.pop('init_pairs', None)
         self.kwargs.pop('init_games', None)
         self.kwargs.pop('increasing_pair_size_factor', None)
         self.kwargs.pop('games', None)
         self.kwargs.pop('evolutionary_algorithm', None)
         self.kwargs.pop('max_iter', None)
+        self.kwargs.pop('max_players', None)
 
     @staticmethod
     def _mlflow_tracking(stats: Dict[str, pd.DataFrame], file_paths: List[str]):
@@ -150,6 +158,7 @@ class FeatureSelector:
                          meth: str = 'shapley',
                          model: str = 'cat',
                          imp_threshold: float = 0.01,
+                         visualize_game_stats: bool = True,
                          plot_type: str = 'bar'
                          ) -> dict:
         """
@@ -168,6 +177,9 @@ class FeatureSelector:
 
         :param imp_threshold: float
             Threshold of importance score
+
+        :param visualize_game_stats: bool
+            Whether to visualize game statistics or not
 
         :param plot_type: str
             Name of the plot type
@@ -195,6 +207,7 @@ class FeatureSelector:
                                                   penalty_factor=0.1 if self.penalty_factor is None else self.penalty_factor,
                                                   evolutionary_algorithm='si' if self.evolutionary_algorithm is None else self.evolutionary_algorithm,
                                                   max_iter=50 if self.max_iter is None else self.max_iter,
+                                                  max_players=-1 if self.max_players is None else self.max_players,
                                                   mlflow_log=False if self.kwargs.get('mlflow_log_shapley') is None else self.kwargs.get('mlflow_log_shapley'),
                                                   **self.kwargs
                                                   ).play()
@@ -221,27 +234,32 @@ class FeatureSelector:
             #_tournament_df['game'] = _tournament_df.index.values
             _file_paths: List[str] = []
             if self.visualize_all_scores:
-                _file_paths.append(os.path.join(str(self.path), 'feature_tournament_game_stats.html'))
-                _file_paths.append(os.path.join(str(self.path), 'feature_tournament_game_size.html'))
+                if visualize_game_stats:
+                    _file_paths.append(os.path.join(str(self.path), 'feature_tournament_game_stats.html'))
+                    _file_paths.append(os.path.join(str(self.path), 'feature_tournament_game_size.html'))
+                    _game_plot: dict = {'Feature Tournament Game Stats (Shapley Scores)': dict(data=_game_df,
+                                                                                               features=list(_game_df.columns),
+                                                                                               plot_type='violin',
+                                                                                               melt=True,
+                                                                                               render=True,
+                                                                                               file_path=_file_paths[0] if self.path is not None else None
+                                                                                               ),
+                                        'Feature Tournament Stats (Game Size)': dict(data=_tournament_df,
+                                                                                     features=list(_tournament_df.columns),
+                                                                                     plot_type='heat',
+                                                                                     render=True,
+                                                                                     file_path=_file_paths[1] if self.path is not None else None
+                                                                                     )
+                                        }
+                    DataVisualizer(subplots=_game_plot,
+                                   height=500,
+                                   width=500
+                                   ).run()
                 _file_paths.append(os.path.join(str(self.path), 'feature_importance_shapley.html'))
-                _imp_plot: dict = {'Feature Tournament Game Stats (Shapley Scores)': dict(data=_game_df,
-                                                                                          features=list(_game_df.columns),
-                                                                                          plot_type='violin',
-                                                                                          melt=True,
-                                                                                          render=True,
-                                                                                          file_path=_file_paths[0] if self.path is not None else None
-                                                                                          ),
-                                   'Feature Tournament Stats (Game Size)': dict(data=_tournament_df,
-                                                                                features=list(_tournament_df.columns),
-                                                                                #color_feature='game',
-                                                                                plot_type='heat',
-                                                                                render=True,
-                                                                                file_path=_file_paths[1] if self.path is not None else None
-                                                                                ),
-                                   'Feature Importance (Shapley Scores)': dict(df=_df,
+                _imp_plot: dict = {'Feature Importance (Shapley Scores)': dict(df=_df,
                                                                                plot_type=plot_type,
                                                                                render=True if self.path is None else False,
-                                                                               file_path=_file_paths[2] if self.path is not None else None,
+                                                                               file_path=_file_paths[-1] if self.path is not None else None,
                                                                                kwargs=dict(layout={},
                                                                                            y=_df['score'].values,
                                                                                            x=_df.index.values.tolist(),
