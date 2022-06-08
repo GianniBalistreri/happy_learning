@@ -352,6 +352,8 @@ def _load_temp_files(features: List[str]):
                                                       cloud=CLOUD,
                                                       bucket_name=_bucket_name
                                                       ).file()
+        if feature in FEATURE_TYPES.get('date'):
+            DATA_PROCESSING['df'][feature] = pd.to_datetime(DATA_PROCESSING['df'][feature])
 
 
 def _process_handler(action: str,
@@ -690,6 +692,8 @@ def _save_temp_files(feature: str, new_name: str = None):
     """
     if feature not in IGNORE_FEATURES:
         global ALL_FEATURES
+        if feature in FEATURE_TYPES.get('date'):
+            DATA_PROCESSING['df'][feature] = DATA_PROCESSING['df'][feature].astype(str)
         if isinstance(DATA_PROCESSING['df'], dd.DataFrame):
             _data: list = DATA_PROCESSING['df'][feature].values.compute().tolist()
         else:
