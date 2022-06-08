@@ -30,6 +30,7 @@ from easyexplore.anomaly_detector import AnomalyDetector
 from easyexplore.data_explorer import DataExplorer
 from easyexplore.data_import_export import CLOUD_PROVIDER, DataExporter, DataImporter, FileUtilsException
 from easyexplore.utils import EasyExploreUtils, INVALID_VALUES, Log, StatsUtils
+from google.cloud import storage
 from scipy.stats import boxcox
 from sklearn.preprocessing import Binarizer, MinMaxScaler, Normalizer, KBinsDiscretizer, RobustScaler, PolynomialFeatures, StandardScaler
 from typing import Dict, List, Tuple, Union
@@ -2765,19 +2766,23 @@ class FeatureEngineer:
         :param cloud: str
             Name of the cloud provider:
                 -> aws: Amazon Web Service (AWS)
-                -> gcp: Google Cloud Platform (GCP)
+                -> google: Google Cloud Platform (GCP)
                 -> None: Local
         """
         if cloud is None:
             os.rmdir(path=TEMP_DIR)
-        elif cloud == 'aws':
+        else:
             _prefix: str = TEMP_DIR.split('/')[-1]
-            _s3_bucket_name: str = TEMP_DIR.replace('{}/'.format(_prefix), '')
-            _s3 = boto3.resource('s3')
-            _s3_bucket = _s3.Bucket(_s3_bucket_name)
-            _s3_bucket.objects.filter(Prefix='{}/'.format(_prefix)).delete()
-        elif cloud == 'gcp':
-            pass
+            _bucket_name: str = TEMP_DIR.replace('{}/'.format(_prefix), '')
+            if cloud == 'aws':
+                _s3 = boto3.resource('s3')
+                _s3_bucket = _s3.Bucket(_bucket_name)
+                _s3_bucket.objects.filter(Prefix=f'{_prefix}/').delete()
+            elif cloud == 'google':
+                _storage_client = storage.Client()
+                _gc_bucket = _storage_client.get_bucket(_bucket_name)
+                _blob = _gc_bucket.blob(blob_name=f'{_prefix}/')
+                _blob.delete()
 
     @staticmethod
     @FeatureOrchestra(meth='disparity', feature_types=['date'])
