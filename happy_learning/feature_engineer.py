@@ -1136,7 +1136,7 @@ class FeatureEngineer:
         TEMP_DIR = temp_dir
         if cloud is not None:
             if cloud not in CLOUD_PROVIDER:
-                raise FeatureEngineerException('Cloud provider ({}) not supported'.format(cloud))
+                raise FeatureEngineerException(f'Cloud provider ({cloud}) not supported')
         global CLOUD
         CLOUD = cloud
         global DATA_PROCESSING
@@ -1234,7 +1234,7 @@ class FeatureEngineer:
                 for ignore in IGNORE_FEATURES:
                     if ignore in list(DATA_PROCESSING['df'].columns):
                         del DATA_PROCESSING['df'][ignore]
-                DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns})
+                DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns.tolist()})
                 for feature in DATA_PROCESSING.get('df').columns:
                     _save_temp_files(feature=feature, new_name=_force_rename_feature(feature=feature, max_length=100))
                 DATA_PROCESSING['df'] = None
@@ -1432,7 +1432,7 @@ class FeatureEngineer:
         for ignore in IGNORE_FEATURES:
             if ignore in list(DATA_PROCESSING['df'].columns):
                 del DATA_PROCESSING['df'][ignore]
-        DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns})
+        DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns.tolist()})
 
     @staticmethod
     def _one_hot_merger(features: List[str]):
@@ -3639,6 +3639,13 @@ class FeatureEngineer:
             Complete file path
         """
         return DATA_PROCESSING.get('source')
+
+    @staticmethod
+    def get_original_features() -> List[str]:
+        """
+        Get names of the original features
+        """
+        return DATA_PROCESSING.get('original_features')
 
     @staticmethod
     def get_pages() -> List[str]:
