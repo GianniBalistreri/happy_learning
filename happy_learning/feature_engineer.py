@@ -2773,7 +2773,7 @@ class FeatureEngineer:
             os.rmdir(path=TEMP_DIR)
         else:
             _prefix: str = TEMP_DIR.split('/')[-1]
-            _bucket_name: str = TEMP_DIR.replace('{}/'.format(_prefix), '')
+            _bucket_name: str = TEMP_DIR.replace(f'{_prefix}/', '')
             if cloud == 'aws':
                 _s3 = boto3.resource('s3')
                 _s3_bucket = _s3.Bucket(_bucket_name)
@@ -2783,6 +2783,8 @@ class FeatureEngineer:
                 _gc_bucket = _storage_client.get_bucket(_bucket_name)
                 _blob = _gc_bucket.blob(blob_name=f'{_prefix}/')
                 _blob.delete()
+            else:
+                raise FeatureEngineerException(f'Cloud provider {cloud} not supported')
 
     @staticmethod
     @FeatureOrchestra(meth='disparity', feature_types=['date'])
