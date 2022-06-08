@@ -93,44 +93,32 @@ class GibbsSamplingDirichletMultinomialModeling:
         :param document: List[str]:
             Tokenized document
 
-        :return: list[float]:
+        :return: List[float]:
             Probability vector where each component represents the probability of the document appearing in a particular cluster
         """
-        if self.fast:
-            # Use C++ implementation:
-            return self.model.document_scoring(document,
-                                               self.alpha,
-                                               self.beta,
-                                               self.n_clusters,
-                                               self.vocab_size,
-                                               self.cluster_word_count,
-                                               self.cluster_document_count,
-                                               self.cluster_word_distribution
-                                               )
-        else:
-            # Use Python implementation:
-            _p = [0 for _ in range(0, self.n_clusters, 1)]
-            #  We break the formula into the following pieces
-            #  p = n1 * n2 / (d1 * d2) = np.exp(ln1 - ld1 + ln2 - ld2)
-            #  lN1 = np.log(m_z[z] + alpha)
-            #  lN2 = np.log(D - 1 + K*alpha)
-            #  lN2 = np.log(product(n_z_w[w] + beta)) = sum(np.log(n_z_w[w] + beta))
-            #  lD2 = np.log(product(n_z[d] + V*beta + i -1)) = sum(np.log(n_z[d] + V*beta + i -1))
-            _ld1 = np.log(self.n_documents - 1 + self.n_clusters * self.alpha)
-            _document_size = len(document)
-            for label in range(0, self.n_clusters, 1):
-                _ln1 = np.log(self.cluster_word_count[label] + self.alpha)
-                _ln2 = 0
-                _ld2 = 0
-                for word in document:
-                    _ln2 += np.log(self.cluster_word_distribution[label].get(word, 0) + self.beta)
-                for j in range(1, _document_size + 1, 1):
-                    _ld2 += np.log(self.cluster_word_count[label] + self.vocab_size * self.beta + j - 1)
-                _p[label] = np.exp(_ln1 - _ld1 + _ln2 - _ld2)
-            # normalize the probability vector
-            _normalized_probability_vector = sum(_p)
-            _normalized_probability_vector = _normalized_probability_vector if _normalized_probability_vector > 0 else 1
-            return [probability / _normalized_probability_vector for probability in _p]
+        # Use Python implementation:
+        _p = [0 for _ in range(0, self.n_clusters, 1)]
+        #  We break the formula into the following pieces
+        #  p = n1 * n2 / (d1 * d2) = np.exp(ln1 - ld1 + ln2 - ld2)
+        #  lN1 = np.log(m_z[z] + alpha)
+        #  lN2 = np.log(D - 1 + K*alpha)
+        #  lN2 = np.log(product(n_z_w[w] + beta)) = sum(np.log(n_z_w[w] + beta))
+        #  lD2 = np.log(product(n_z[d] + V*beta + i -1)) = sum(np.log(n_z[d] + V*beta + i -1))
+        _ld1 = np.log(self.n_documents - 1 + self.n_clusters * self.alpha)
+        _document_size = len(document)
+        for label in range(0, self.n_clusters, 1):
+            _ln1 = np.log(self.cluster_word_count[label] + self.alpha)
+            _ln2 = 0
+            _ld2 = 0
+            for word in document:
+                _ln2 += np.log(self.cluster_word_distribution[label].get(word, 0) + self.beta)
+            for j in range(1, _document_size + 1, 1):
+                _ld2 += np.log(self.cluster_word_count[label] + self.vocab_size * self.beta + j - 1)
+            _p[label] = np.exp(_ln1 - _ld1 + _ln2 - _ld2)
+        # normalize the probability vector
+        _normalized_probability_vector = sum(_p)
+        _normalized_probability_vector = _normalized_probability_vector if _normalized_probability_vector > 0 else 1
+        return [probability / _normalized_probability_vector for probability in _p]
 
     def _sampling(self) -> int:
         """

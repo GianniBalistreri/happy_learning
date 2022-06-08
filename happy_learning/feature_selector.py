@@ -4,6 +4,7 @@ Feature selection of structured (tabular) features
 
 """
 
+import copy
 import dask.dataframe as dd
 import mlflow
 import os
@@ -15,6 +16,7 @@ from .sampler import MLSampler
 from .supervised_machine_learning import ModelGeneratorClf, ModelGeneratorReg
 from .utils import HappyLearningUtils
 from easyexplore.data_visualizer import DataVisualizer
+from easyexplore.utils import Log
 from sklearn.feature_selection import SelectFromModel
 from typing import Dict, List, Union
 
@@ -100,6 +102,15 @@ class FeatureSelector:
             self.ml_type: str = HappyLearningUtils().get_ml_type(values=self.df[self.target].values) if kwargs.get('ml_type') is None else kwargs.get('ml_type')
         else:
             self.ml_type: str = self.force_target_type
+        _stratify: bool = False
+        if self.ml_type == 'reg':
+            self.ml_metric: str = 'rmse_norm'
+        elif self.ml_type == 'clf_binary':
+            self.ml_metric: str = 'roc_auc'
+            _stratify = True if kwargs.get('stratification') is None else kwargs.get('stratification')
+        elif self.ml_type == 'clf_multi':
+            self.ml_metric: str = 'cohen_kappa'
+            _stratify = False if kwargs.get('stratification') is None else kwargs.get('stratification')
         self.visualize_all_scores: bool = visualize_all_scores
         self.visualize_variant_scores: bool = visualize_variant_scores
         self.visualize_core_features_scores: bool = visualize_core_feature_scores
@@ -153,6 +164,67 @@ class FeatureSelector:
                     mlflow.log_artifact(local_path=file_paths[i], artifact_path=_file_name)
                 except (FileNotFoundError, IndexError):
                     pass
+
+    def eval_redundancy(self,
+                        sorted_features: List[str],
+                        model: str = 'cat',
+                        redundant_threshold: float = 0.01
+                        ) -> dict:
+        """
+        Evaluate redundancy of features
+
+        :param sorted_features: List[str]
+            Features sorted by relative importance score
+
+        :param model: str
+            Name of the model
+
+        :param redundant_threshold: float
+            Threshold for defining redundant features in percent
+
+        :return dict
+            Redundant features, important features and reduction scores
+        """
+        if self.ml_type == 'reg':
+            _top_score: int = 0
+            _params: dict = ModelGeneratorReg(model_name=model).get_model_parameter()
+            _model_generator: ModelGeneratorReg = ModelGeneratorReg(model_name=model, reg_params=_params)
+        else:
+            _top_score: int = 1
+            _params: dict = ModelGeneratorClf(model_name=model).get_model_parameter()
+            _model_generator: ModelGeneratorClf = ModelGeneratorClf(model_name=model, clf_params=_params)
+        _model_generator.generate_model()
+        _train_test_split: dict = MLSampler(df=self.df,
+                                            target=self.target,
+                                            features=sorted_features
+                                            ).train_test_sampling(validation_split=0.1)
+        _model_generator.train(x=_train_test_split.get('x_train').values, y=_train_test_split.get('y_train').values)
+        _pred = _model_generator.predict(x=_train_test_split.get('x_test').values)
+        _model_generator.eval(obs=_train_test_split.get('y_test').values, pred=_pred)
+        _model_test_score: float = _model_generator.fitness['test'].get(self.ml_metric)
+        _threshold = _model_test_score * (1 - redundant_threshold)
+        _features: List[str] = copy.deepcopy(sorted_features)
+        _result: dict = dict(redundant=[], important=[], reduction={})
+        for i in range(len(sorted_features) - 1, 0, -1):
+            if len(_features) == 1:
+                _result['important'] = _features
+                break
+            del _features[i]
+            _model_generator.train(x=_train_test_split.get('x_train')[_features].values, y=_train_test_split.get('y_train').values)
+            _pred = _model_generator.predict(x=_train_test_split.get('x_test')[_features].values)
+            _model_generator.eval(obs=_train_test_split.get('y_test').values, pred=_pred)
+            _new_model_test_score: float = _model_generator.fitness['test'].get(self.ml_metric)
+            if _threshold >= _new_model_test_score:
+                _features.append(sorted_features[i])
+                _result['important'] = _features
+                break
+            else:
+                _result['redundant'].append(sorted_features[i])
+                _result['reduction'].update({sorted_features[i]: _model_test_score - _new_model_test_score})
+        Log(write=False,
+            level='info'
+            ).log(msg=f'Number of redundant features: {len(_result["redundant"])}\nNumber of important features: {len(_result["important"])}')
+        return _result
 
     def get_imp_features(self,
                          meth: str = 'shapley',
