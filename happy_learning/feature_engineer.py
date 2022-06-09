@@ -2629,7 +2629,7 @@ class FeatureEngineer:
                                  new_feature='{}_year'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=True, month=False, week=False, week_day=False, day=False, hour=False, minute=False, second=False),
                                  data=_date_feature.dt.year.values,
                                  force_type='categorical'
                                  )
@@ -2641,7 +2641,7 @@ class FeatureEngineer:
                                  new_feature='{}_month'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=False, month=True, week=False, week_day=False, day=False, hour=False, minute=False, second=False),
                                  data=_date_feature.dt.month.values,
                                  force_type='categorical'
                                  )
@@ -2653,7 +2653,7 @@ class FeatureEngineer:
                                  new_feature='{}_week'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=False, month=False, week=True, week_day=False, day=False, hour=False, minute=False, second=False),
                                  data=_date_feature.dt.week.values,
                                  force_type='categorical'
                                  )
@@ -2665,7 +2665,7 @@ class FeatureEngineer:
                                  new_feature='{}_week_day'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=False, month=False, week=False, week_day=True, day=False, hour=False, minute=False, second=False),
                                  data=_date_feature.dt.day_name().values,
                                  force_type='categorical'
                                  )
@@ -2677,7 +2677,7 @@ class FeatureEngineer:
                                  new_feature='{}_day'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=False, month=False, week=False, week_day=False, day=True, hour=False, minute=False, second=False),
                                  data=_date_feature.dt.day.values,
                                  force_type='categorical'
                                  )
@@ -2689,7 +2689,7 @@ class FeatureEngineer:
                                  new_feature='{}_hour'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=False, month=False, week=False, week_day=False, day=False, hour=True, minute=False, second=False),
                                  data=_date_feature.dt.hour.values,
                                  force_type='categorical'
                                  )
@@ -2701,7 +2701,7 @@ class FeatureEngineer:
                                  new_feature='{}_minute'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=False, month=False, week=False, week_day=False, day=False, hour=False, minute=True, second=False),
                                  data=_date_feature.dt.minute.values,
                                  force_type='categorical'
                                  )
@@ -2713,7 +2713,7 @@ class FeatureEngineer:
                                  new_feature='{}_second'.format(feature),
                                  process='categorizer|date',
                                  meth='date_categorizer',
-                                 param=dict(year=year, month=month, week=week, week_day=week_day, day=day, hour=hour, minute=minute, second=second),
+                                 param=dict(year=False, month=False, week=False, week_day=False, day=False, hour=False, minute=False, second=True),
                                  data=_date_feature.dt.second.values,
                                  force_type='categorical'
                                  )
@@ -3905,7 +3905,7 @@ class FeatureEngineer:
                                  new_feature='',
                                  process='interaction|simple',
                                  meth='interaction',
-                                 param=dict(addition=addition, subtraction=subtraction, multiplication=multiplication, division=division),
+                                 param=dict(addition=True, subtraction=False, multiplication=False, division=False),
                                  data=_add,
                                  force_type='continuous',
                                  imp_value=sys.float_info.max,
@@ -3924,7 +3924,7 @@ class FeatureEngineer:
                                  new_feature='',
                                  process='interaction|simple',
                                  meth='interaction',
-                                 param=dict(addition=addition, subtraction=subtraction, multiplication=multiplication, division=division),
+                                 param=dict(addition=False, subtraction=True, multiplication=False, division=False),
                                  data=_sub,
                                  force_type='continuous',
                                  imp_value=sys.float_info.max,
@@ -3943,7 +3943,7 @@ class FeatureEngineer:
                                  new_feature='',
                                  process='interaction|simple',
                                  meth='interaction',
-                                 param=dict(addition=addition, subtraction=subtraction, multiplication=multiplication, division=division),
+                                 param=dict(addition=False, subtraction=False, multiplication=True, division=False),
                                  data=_multi,
                                  force_type='continuous',
                                  imp_value=sys.float_info.max,
@@ -3962,7 +3962,7 @@ class FeatureEngineer:
                                  new_feature='',
                                  process='interaction|simple',
                                  meth='interaction',
-                                 param=dict(addition=addition, subtraction=subtraction, multiplication=multiplication, division=division),
+                                 param=dict(addition=False, subtraction=False, multiplication=False, division=True),
                                  data=_div,
                                  force_type='continuous',
                                  imp_value=sys.float_info.min,
@@ -4919,66 +4919,6 @@ class FeatureEngineer:
                                                                    outlier_threshold=threshold
                                                                    ).univariate()[feature].get('pred')
 
-    def re_engineer(self, data_set: dict, features: List[str]) -> np.ndarray:
-        """
-        Re-engineer features used in training to generate prediction from trained model
-
-        :param data_set: dict
-            Data set
-
-        :param features: List[str]
-            Name of the features to re_engineer for prediction
-
-        :return np.ndarray:
-            Engineered data set by taking the same processing steps as before (in training)
-        """
-        DATA_PROCESSING['re_generate'] = True
-        _data_set: pd.DataFrame = pd.DataFrame(data=data_set)
-        _processes: dict = self.get_processing()['process']
-        _processing_relations: dict = {}
-        _original_features: List[str] = []
-        for proc_feature in features:
-            _processing_relations.update({proc_feature: self.get_processing_relation(feature=proc_feature)})
-            for f in _processing_relations[proc_feature]['parents']['raw']:
-                _original_features.append(f)
-        _original_features = list(set(_original_features))
-        _processed_features: dict = {}
-        for feature in _original_features:
-            if feature not in _data_set.keys():
-                raise FeatureEngineerException('Feature ({}) not found in data set'.format(feature))
-        _transformations: dict = self.get_transformations()
-        _renaming: dict = _transformations.get('naming')
-        if len(_renaming.keys()) > 0:
-            _data_set.rename(_renaming)
-        _mapper: dict = _transformations.get('mapper')
-        if len(_mapper.keys()) > 0:
-            _data_set.replace(_mapper)
-        _label: dict = _transformations.get('label')
-        if len(_label.keys()) > 0:
-            _data_set.replace(_label)
-        _one_hot: dict = _transformations.get('one_hot')
-        if len(_one_hot.keys()) > 0:
-            _data_set.replace(_one_hot)
-        _max_level: int = len(self.get_processing()['features'].keys()) - 1
-        for level in range(0, _max_level, 1):
-            if level > 0:
-                for ft in _processing_relations.keys():
-                    for level_feature in _processing_relations[ft]['parents']['level_{}'.format(level)]:
-                        for process in _processes:
-                            if level_feature in _processes[process]['features'].keys():
-                                _param: dict = dict(features=_processes[process]['features'][level_feature])
-                                for param, value in _processes[process]['param'].items():
-                                    _param.update({param: value})
-                                getattr(self, _processes[process]['meth'])(_param)
-                                if len(DATA_PROCESSING.get('re_gen_data').shape) == 1:
-                                    _data_set[level_feature] = DATA_PROCESSING.get('re_gen_data')
-                                else:
-                                    _data_set = pd.concat([_data_set, DATA_PROCESSING.get('re_gen_data')], axis=1)
-                                # Adjust _process_handler to receive engineering
-        DATA_PROCESSING['re_gen_data'] = None
-        DATA_PROCESSING['re_generate'] = False
-        return _data_set.values
-
     @staticmethod
     def replacer(replacement: Dict[str, dict]):
         """
@@ -5166,6 +5106,40 @@ class FeatureEngineer:
             DATA_PROCESSING['source'] = file_path
             Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Save and export feature engineering: "{}"'.format(file_path))
 
+    def save_preprocessing(self, file_path: str, **kwargs):
+        """
+        Save preprocessing steps
+
+        :param file_path: str
+            Complete file path of the preprocessing file
+                -> supported file extensions:
+                    -> json
+                    -> pickle
+
+        :param kwargs: dict
+            Key-word arguments for DataExporter
+        """
+        if CLOUD is None:
+            _bucket_name: str = None
+        else:
+            _bucket_name: str = file_path.split("//")[1].split("/")[0]
+        _preprocessing: dict = self.get_processing()
+        _feature_types: dict = {}
+        _original_features: List[str] = DATA_PROCESSING.get('original_features')
+        for feature_type in FEATURE_TYPES.keys():
+            _feature_types.update({feature_type: []})
+            for feature in FEATURE_TYPES.get(feature_type):
+                if feature in _original_features:
+                    _feature_types[feature_type].append(feature)
+        _preprocessing.update({'feature_types': _feature_types})
+        DataExporter(obj=_preprocessing,
+                     file_path=file_path,
+                     cloud=CLOUD,
+                     bucket_name=_bucket_name,
+                     region=None,
+                     **kwargs
+                     ).file()
+
     @staticmethod
     def sampler(n: int, meth: str = 'random', quota: dict = None) -> pd.DataFrame:
         """
@@ -5299,7 +5273,7 @@ class FeatureEngineer:
                                  new_feature='{}__add__{}'.format(feature, feature),
                                  process='self_interaction|addition',
                                  meth='self_interaction',
-                                 param=dict(addition=addition, multiplication=multiplication),
+                                 param=dict(addition=True, multiplication=False),
                                  data=(DATA_PROCESSING['df'][feature] + DATA_PROCESSING['df'][feature]),
                                  force_type='continuous',
                                  imp_value=sys.float_info.max,
@@ -5312,7 +5286,7 @@ class FeatureEngineer:
                                  new_feature='{}__multi__{}'.format(feature, feature),
                                  process='self_interaction|multiplication',
                                  meth='self_interaction',
-                                 param=dict(addition=addition, multiplication=multiplication),
+                                 param=dict(addition=False, multiplication=True),
                                  data=(DATA_PROCESSING['df'][feature] * DATA_PROCESSING['df'][feature]),
                                  force_type='continuous',
                                  imp_value=sys.float_info.max,
