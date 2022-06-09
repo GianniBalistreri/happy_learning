@@ -2085,6 +2085,7 @@ class SwarmIntelligence:
             _charts.update({'Fitness Evolution:': dict(data=_evolution_gradient_data,
                                                        features=['min', 'median', 'mean', 'max'],
                                                        time_features=['adjustment'],
+                                                       melt=True,
                                                        plot_type='line',
                                                        file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_evolution_fitness_score.html'),
                                                        kwargs=dict(layout={})
