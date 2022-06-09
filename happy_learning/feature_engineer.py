@@ -4919,6 +4919,58 @@ class FeatureEngineer:
                                                                    outlier_threshold=threshold
                                                                    ).univariate()[feature].get('pred')
 
+    def re_engineer(self, preprocessing_template: dict = None, file_path: str = None, **kwargs):
+        """
+        Re-engineer features used in training to generate prediction from trained model
+
+        :param preprocessing_template: dict
+            Pre-processing template
+
+        :param file_path: str
+            Complete file path of the preprocessing template
+        """
+        if CLOUD is None:
+            _bucket_name: str = None
+        else:
+            _bucket_name: str = file_path.split("//")[1].split("/")[0]
+        if preprocessing_template is None:
+            if file_path is None:
+                raise FeatureEngineerException('Neither template nor file path found')
+            else:
+                _preprocessing_template: dict = DataImporter(file_path=file_path,
+                                                             as_data_frame=False,
+                                                             use_dask=False,
+                                                             cloud=CLOUD,
+                                                             bucket_name=_bucket_name,
+                                                             region=None,
+                                                             **kwargs
+                                                             ).file()
+        else:
+            _preprocessing_template: dict = preprocessing_template
+        DATA_PROCESSING['re_generate'] = True
+        _feature_types: dict = _preprocessing_template.get('features_types')
+        for feature in ALL_FEATURES:
+            for ft in FEATURE_TYPES.keys():
+                if _feature_types.get(ft) is None:
+                    if feature in FEATURE_TYPES.get(ft):
+                        _features: List[str] = copy.deepcopy(FEATURE_TYPES.get(ft))
+                        del _features[_features.index(feature)]
+                        FEATURE_TYPES[ft] = _features
+                else:
+                    if feature not in FEATURE_TYPES.get(ft):
+                        FEATURE_TYPES[ft].append(feature)
+        for process in _preprocessing_template.get('process'):
+            _features: List[str] = []
+            _new_feature: str = list(_preprocessing_template['process'][process]['features'].keys())[0]
+            if isinstance(_preprocessing_template['process'][process]['features'][_new_feature], str):
+                _features.append(_preprocessing_template['process'][process]['features'][_new_feature])
+            else:
+                _features.extend(_preprocessing_template['process'][process]['features'][_new_feature])
+            _meth: str = _preprocessing_template['process'][process]['meth']
+            _param: dict = _preprocessing_template['process'][process]['param']
+            _param.update({'features': _features})
+            getattr(self, _meth)(**_param)
+
     @staticmethod
     def replacer(replacement: Dict[str, dict]):
         """
