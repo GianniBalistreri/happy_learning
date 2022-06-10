@@ -440,6 +440,7 @@ def _process_handler(action: str,
             for n, f in _processed_features.items():
                 DATA_PROCESSING['processing']['process'].update({str(_tracked_processes + _p + 1): dict(meth=meth,
                                                                                                         param=param,
+                                                                                                        process=process,
                                                                                                         features={n: f}
                                                                                                         )
                                                                  })
@@ -1435,6 +1436,22 @@ class FeatureEngineer:
         DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns.tolist()})
 
     @staticmethod
+    def _generate_invariant_features(invariant_features: List[str] = None, constant_value: float = 0):
+        """
+        Generate invariant (dummy) features (mainly used for re-engineer one-hot-encoded features)
+
+        :param invariant_features: List[str]
+            Names of invariant features to include (used by re-engineer method)
+
+        :param constant_value: float
+            Constant value
+        """
+        DATA_PROCESSING['df'] = pd.DataFrame()
+        for inv_feature in invariant_features:
+            DATA_PROCESSING['df'][inv_feature] = [constant_value] * DATA_PROCESSING['n_cases']
+            _save_temp_files(feature=inv_feature)
+
+    @staticmethod
     def _one_hot_merger(features: List[str]):
         """
         Merge one-hot encoded features (used only in method "act" for reinforcement feature learning)
@@ -1451,7 +1468,7 @@ class FeatureEngineer:
                          feature=features[0],
                          new_feature='{}__m__{}'.format(features[0], features[1]),
                          process='interaction|one_hot',
-                         meth='one_hot_merger',
+                         meth='_one_hot_merger',
                          param=dict(),
                          data=_data,
                          force_type='categorical',
@@ -2128,7 +2145,7 @@ class FeatureEngineer:
 
     @staticmethod
     @FeatureOrchestra(meth='binarizer', feature_types=['ordinal'])
-    def binarizer(threshold: float = 0.9, features: List[str] = None):
+    def binarizer(threshold: float = 0.9, features: List[str] = None, encoder: Binarizer = None):
         """
         Binarize counting features
 
@@ -2141,8 +2158,11 @@ class FeatureEngineer:
         for feature in features:
             _load_temp_files(features=[feature])
             _data: str = DATA_PROCESSING.get('df')[feature].values
-            _binarizer = Binarizer(threshold=threshold)
-            _binarizer.fit(X=np.reshape(_data, (-1, 1)))
+            if encoder is None:
+                _binarizer = Binarizer(threshold=threshold)
+                _binarizer.fit(X=np.reshape(_data, (-1, 1)))
+            else:
+                _binarizer = encoder
             _process_handler(action='add',
                              feature=feature,
                              new_feature='{}_{}'.format(feature, DATA_PROCESSING['suffixes'].get('bin')) if DATA_PROCESSING.get('generate_new_feature') else feature,
@@ -3321,7 +3341,7 @@ class FeatureEngineer:
         for ft in FEATURE_TYPES.keys():
             for feature in FEATURE_TYPES.get(ft):
                 _features.append(feature)
-        if DATA_PROCESSING['target'] is not None:
+        if DATA_PROCESSING.get('target') is not None:
             _features.append(DATA_PROCESSING.get('target'))
         _load_temp_files(features=_features)
         del DATA_PROCESSING['df'][list(TEMP_INDEXER.keys())[0]]
@@ -4033,6 +4053,9 @@ class FeatureEngineer:
                             _name_mapper['interaction'].update({name: [_name_mapper['original'].get(n)]})
                             _new_feature_names.update({name: name.replace(n, _name_mapper['original'].get(n))})
                             break
+        for feature, poly_feature in zip(features, _name_mapper['original']):
+            for interaction in _name_mapper['interaction'].keys():
+                _name_mapper['interaction'][interaction.replace(poly_feature, feature)] = _name_mapper['interaction'].pop(interaction)
         _df: pd.DataFrame = pd.DataFrame(data=_polynomial_features, columns=_poly.get_feature_names())
         _df = _df.drop(columns=list(_name_mapper['original'].keys()), axis=1)
         _df = _df.rename(columns=_new_feature_names)
@@ -4041,7 +4064,7 @@ class FeatureEngineer:
                          new_feature='',
                          process='interaction|polynomial',
                          meth='interaction_poly',
-                         param=dict(degree=degree, interaction_only=interaction_only, include_bias=include_bias),
+                         param=dict(features=features, degree=degree, interaction_only=interaction_only, include_bias=include_bias),
                          data=_df,
                          special_replacement=False,
                          imp_value=sys.float_info.max,
@@ -4235,7 +4258,7 @@ class FeatureEngineer:
 
     @staticmethod
     @FeatureOrchestra(meth='label_encoder', feature_types=['categorical'])
-    def label_encoder(encode: bool, features: List[str] = None):
+    def label_encoder(encode: bool, features: List[str] = None, encoder: dict = None):
         """
         Encode labels (written categories) into integer values
 
@@ -4245,6 +4268,9 @@ class FeatureEngineer:
         :param features: List[str]
             Features for label encoding / decoding
                 -> None: All categorical features are used
+
+        :param encoder: dict
+            Mapping template for decoding integer to labels
         """
         for feature in features:
             _load_temp_files(features=[feature])
@@ -4256,7 +4282,10 @@ class FeatureEngineer:
                         _has_labels = True
                         break
                 if _has_labels:
-                    _values = {label: i for i, label in enumerate(_unique_values)}
+                    if encoder is None:
+                        _values: dict = {label: i for i, label in enumerate(_unique_values)}
+                    else:
+                        _values: dict = encoder['encoder']['label'][feature]['val']
                     _data: pd.DataFrame = DATA_PROCESSING['df'][feature].replace(_values)
                     _process_handler(action='add',
                                      feature=feature,
@@ -4270,7 +4299,10 @@ class FeatureEngineer:
                                      )
                     Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Transformed feature "{}" using label encoding (label to number)'.format(feature))
             else:
-                _data: pd.DataFrame = DATA_PROCESSING['df'][feature].replace({val: label for label, val in DATA_PROCESSING['encoder']['label'][feature].values})
+                if encoder is None:
+                    _data: pd.DataFrame = DATA_PROCESSING['df'][feature].replace({val: label for label, val in DATA_PROCESSING['encoder']['label'][feature]['val'].values})
+                else:
+                    _data: pd.DataFrame = DATA_PROCESSING['df'][feature].replace({val: label for label, val in encoder['encoder']['label'][feature]['val'].values})
                 _process_handler(action='add',
                                  feature=feature,
                                  new_feature=feature,
@@ -4394,7 +4426,7 @@ class FeatureEngineer:
 
     @staticmethod
     @FeatureOrchestra(meth='normalizer', feature_types=['continuous'])
-    def normalizer(features: List[str] = None, norm_meth: str = 'l2'):
+    def normalizer(features: List[str] = None, norm_meth: str = 'l2', scaler: Normalizer = None):
         """
         Normalize features
 
@@ -4409,8 +4441,11 @@ class FeatureEngineer:
         for feature in features:
             _load_temp_files(features=[feature])
             _data: np.arry = DATA_PROCESSING['df'][feature].fillna(sys.float_info.min).values
-            _normalizer = Normalizer(norm=norm_meth)
-            _normalizer.fit(X=np.reshape(_data, (-1, 1)))
+            if scaler is None:
+                _normalizer = Normalizer(norm=norm_meth)
+                _normalizer.fit(X=np.reshape(_data, (-1, 1)))
+            else:
+                _normalizer = scaler
             _process_handler(action='add',
                              feature=feature,
                              new_feature='{}_normal'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
@@ -4919,7 +4954,7 @@ class FeatureEngineer:
                                                                    outlier_threshold=threshold
                                                                    ).univariate()[feature].get('pred')
 
-    def re_engineer(self, preprocessing_template: dict = None, file_path: str = None, **kwargs):
+    def re_engineer(self, preprocessing_template: dict = None, file_path: str = None, **kwargs) -> pd.DataFrame:
         """
         Re-engineer features used in training to generate prediction from trained model
 
@@ -4928,6 +4963,9 @@ class FeatureEngineer:
 
         :param file_path: str
             Complete file path of the preprocessing template
+
+        :return pd.DataFrame
+            Pre-processed data set
         """
         if CLOUD is None:
             _bucket_name: str = None
@@ -4948,28 +4986,49 @@ class FeatureEngineer:
         else:
             _preprocessing_template: dict = preprocessing_template
         DATA_PROCESSING['re_generate'] = True
-        _feature_types: dict = _preprocessing_template.get('features_types')
-        for feature in ALL_FEATURES:
-            for ft in FEATURE_TYPES.keys():
-                if _feature_types.get(ft) is None:
-                    if feature in FEATURE_TYPES.get(ft):
-                        _features: List[str] = copy.deepcopy(FEATURE_TYPES.get(ft))
-                        del _features[_features.index(feature)]
-                        FEATURE_TYPES[ft] = _features
-                else:
-                    if feature not in FEATURE_TYPES.get(ft):
-                        FEATURE_TYPES[ft].append(feature)
-        for process in _preprocessing_template.get('process'):
+        _feature_types: dict = _preprocessing_template.get('feature_types')
+        for feature_type in _feature_types.keys():
+            for feature in _feature_types.get(feature_type):
+                if feature not in FEATURE_TYPES[feature_type]:
+                    for ft in FEATURE_TYPES.keys():
+                        if feature in FEATURE_TYPES[ft]:
+                            del FEATURE_TYPES[ft][FEATURE_TYPES[ft].index(feature)]
+                            break
+                    FEATURE_TYPES[feature_type].append(feature)
+        _processed_features: List[str] = []
+        _one_hot_encoded_features: List[str] = []
+        for process in _preprocessing_template['processing']['process']:
             _features: List[str] = []
-            _new_feature: str = list(_preprocessing_template['process'][process]['features'].keys())[0]
-            if isinstance(_preprocessing_template['process'][process]['features'][_new_feature], str):
-                _features.append(_preprocessing_template['process'][process]['features'][_new_feature])
+            _new_feature: str = list(_preprocessing_template['processing']['process'][process]['features'].keys())[0]
+            if _new_feature in ALL_FEATURES:
+                continue
+            if isinstance(_preprocessing_template['processing']['process'][process]['features'][_new_feature], str):
+                _features.append(_preprocessing_template['processing']['process'][process]['features'][_new_feature])
             else:
-                _features.extend(_preprocessing_template['process'][process]['features'][_new_feature])
-            _meth: str = _preprocessing_template['process'][process]['meth']
-            _param: dict = _preprocessing_template['process'][process]['param']
-            _param.update({'features': _features})
+                _features.extend(_preprocessing_template['processing']['process'][process]['features'][_new_feature])
+            _processed_features.append(_new_feature)
+            _meth: str = _preprocessing_template['processing']['process'][process]['meth']
+            _process: tuple = _preprocessing_template['processing']['process'][process]['process'].split('|')
+            _param: dict = _preprocessing_template['processing']['process'][process]['param']
+            if not _process[1] == 'polynomial':
+                _param.update({'features': _features})
+            if _process[0] == 'scaler':
+                _param.update({'scaler': _preprocessing_template[_process[0]][_process[1]][_features[0]]})
+            elif _process[0] == 'encoder':
+                if _process[1] == 'bin':
+                    _param.update({'encoder': _preprocessing_template[_process[0]][_process[1]][_features[0]]})
+                elif _process[1] == 'label':
+                    _param.update({'encoder': _preprocessing_template})
+                elif _process[1] == 'one_hot':
+                    if _new_feature not in ALL_FEATURES and _features[0] in _one_hot_encoded_features:
+                        getattr(self, '_generate_invariant_features')(**dict(invariant_features=_features, constant_value=0))
+                        continue
             getattr(self, _meth)(**_param)
+            if _process[0] == 'encoder' and _process[1] == 'one_hot' and _features[0] not in _one_hot_encoded_features:
+                _one_hot_encoded_features.append(_features[0])
+        _load_temp_files(features=_processed_features)
+        _processed_features.sort(reverse=False)
+        return DATA_PROCESSING.get('df')[_processed_features]
 
     @staticmethod
     def replacer(replacement: Dict[str, dict]):
@@ -5165,7 +5224,6 @@ class FeatureEngineer:
         :param file_path: str
             Complete file path of the preprocessing file
                 -> supported file extensions:
-                    -> json
                     -> pickle
 
         :param kwargs: dict
@@ -5175,7 +5233,7 @@ class FeatureEngineer:
             _bucket_name: str = None
         else:
             _bucket_name: str = file_path.split("//")[1].split("/")[0]
-        _preprocessing: dict = self.get_processing()
+        _preprocessing: dict = self.get_data_processing()
         _feature_types: dict = {}
         _original_features: List[str] = DATA_PROCESSING.get('original_features')
         for feature_type in FEATURE_TYPES.keys():
@@ -5225,6 +5283,7 @@ class FeatureEngineer:
                        quantile_range: Tuple[float, float] = (0.25, 0.75),
                        with_centering: bool = True,
                        with_scaling: bool = True,
+                       scaler: RobustScaler = None
                        ):
         """
         Scaling continuous features using robust scaler
@@ -5243,15 +5302,19 @@ class FeatureEngineer:
         """
         _lower_thres = 100 * quantile_range[0] if quantile_range[0] < 1 else quantile_range[0]
         _upper_thres = 100 * quantile_range[1] if quantile_range[1] < 1 else quantile_range[1]
-        _robust = RobustScaler(with_centering=with_centering,
-                               with_scaling=with_scaling,
-                               quantile_range=(float(_lower_thres), float(_upper_thres)),
-                               copy=False
-                               )
+        if scaler is None:
+            _robust = RobustScaler(with_centering=with_centering,
+                                   with_scaling=with_scaling,
+                                   quantile_range=(float(_lower_thres), float(_upper_thres)),
+                                   copy=False
+                                   )
+        else:
+            _robust = scaler
         for feature in features:
             _load_temp_files(features=[feature])
             _data: np.array = DATA_PROCESSING['df'][feature].fillna(sys.float_info.min).values
-            _robust.fit(np.reshape(_data, (-1, 1)), y=None)
+            if scaler is None:
+                _robust.fit(np.reshape(_data, (-1, 1)), y=None)
             _process_handler(action='add',
                              feature=feature,
                              new_feature='{}_{}'.format(feature, DATA_PROCESSING['suffixes'].get('robust')) if DATA_PROCESSING.get('generate_new_feature') else feature,
@@ -5269,7 +5332,10 @@ class FeatureEngineer:
 
     @staticmethod
     @FeatureOrchestra(meth='scaling_minmax', feature_types=['continuous'])
-    def scaling_minmax(features: List[str] = None, minmax_range: Tuple[int, int] = (0, 1)):
+    def scaling_minmax(features: List[str] = None,
+                       minmax_range: Tuple[int, int] = (0, 1),
+                       scaler: MinMaxScaler = None
+                       ):
         """
         Scaling continuous features using min-max scaler
 
@@ -5279,11 +5345,15 @@ class FeatureEngineer:
         :param minmax_range: Tuple[int, int]
             Min-Max ranges of the min-max scaler
         """
-        _minmax = MinMaxScaler(feature_range=minmax_range)
+        if scaler is None:
+            _minmax = MinMaxScaler(feature_range=minmax_range)
+        else:
+            _minmax = scaler
         for feature in features:
             _load_temp_files(features=[feature])
             _data: np.array = DATA_PROCESSING.get('df')[feature].fillna(sys.float_info.min).values
-            _minmax.fit(np.reshape(_data, (-1, 1)), y=None)
+            if scaler is None:
+                _minmax.fit(np.reshape(_data, (-1, 1)), y=None)
             _process_handler(action='add',
                              feature=feature,
                              new_feature='{}_{}'.format(feature, DATA_PROCESSING['suffixes'].get('minmax')) if DATA_PROCESSING.get('generate_new_feature') else feature,
@@ -5767,7 +5837,11 @@ class FeatureEngineer:
 
     @staticmethod
     @FeatureOrchestra(meth='standardizer', feature_types=['continuous'])
-    def standardizer(features: List[str] = None, with_mean: bool = True, with_std: bool = True):
+    def standardizer(features: List[str] = None,
+                     with_mean: bool = True,
+                     with_std: bool = True,
+                     scaler: StandardScaler = None
+                     ):
         """
         Standardize continuous features
 
@@ -5780,11 +5854,15 @@ class FeatureEngineer:
         :param with_std: bool
             Using standard deviation to standardize features
         """
-        _scaler = StandardScaler(with_mean=with_mean, with_std=with_std)
+        if scaler is None:
+            _scaler = StandardScaler(with_mean=with_mean, with_std=with_std)
+        else:
+            _scaler = scaler
         for feature in features:
             _load_temp_files(features=[feature])
             _data: np.array = DATA_PROCESSING.get('df')[feature].fillna(sys.float_info.min).values
-            _scaler.fit(X=np.reshape(_data, (-1, 1)))
+            if scaler is None:
+                _scaler.fit(X=np.reshape(_data, (-1, 1)))
             _process_handler(action='add',
                              feature=feature,
                              new_feature='{}_standard'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
@@ -5823,6 +5901,7 @@ class FeatureEngineer:
             # TODO: by_partial_values -> case_name, feature_name, value based
             raise NotImplementedError('Drawing subset by partial values not implemented')
         else:
+            _load_temp_files(features=ALL_FEATURES)
             _n_cases: int = len(DATA_PROCESSING['df'])
             if safer_subset:
                 _df: dd.DataFrame = copy.deepcopy(DATA_PROCESSING.get('df'))
@@ -5841,6 +5920,10 @@ class FeatureEngineer:
                                                                                                                                                                 len(DATA_PROCESSING['df'])
                                                                                                                                                                 )
                                                                    )
+            DATA_PROCESSING['n_cases'] = DATA_PROCESSING['df'].shape[0]
+            for feature in DATA_PROCESSING['df'].columns:
+                _save_temp_files(feature=feature)
+            DATA_PROCESSING['df'] = None
 
     @staticmethod
     def subset_features_for_modeling() -> pd.DataFrame:
