@@ -2790,7 +2790,12 @@ class FeatureEngineer:
                 -> None: Local
         """
         if cloud is None:
-            os.rmdir(path=TEMP_DIR)
+            try:
+                os.rmdir(path=TEMP_DIR)
+            except OSError:
+                for file_path in os.listdir(TEMP_DIR):
+                    os.remove(os.path.join(TEMP_DIR, file_path))
+                os.rmdir(path=TEMP_DIR)
         else:
             _prefix: str = TEMP_DIR.split('/')[-1]
             _bucket_name: str = TEMP_DIR.replace(f'{_prefix}/', '')
