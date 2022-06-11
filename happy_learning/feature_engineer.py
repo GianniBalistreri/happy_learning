@@ -1210,6 +1210,9 @@ class FeatureEngineer:
                                     kwargs=kwargs
                                     )
                                )
+        if CLOUD is None:
+            if not os.path.isdir(TEMP_DIR):
+                os.mkdir(TEMP_DIR)
         if feature_engineer_file_path is None:
             _init: bool = True
             if df is None:
