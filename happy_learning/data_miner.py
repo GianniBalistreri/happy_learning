@@ -22,12 +22,6 @@ from easyexplore.data_visualizer import DataVisualizer
 from easyexplore.utils import EasyExploreUtils, Log
 from typing import List, Union
 
-# TODO:
-#   Visualization:
-#       -> visualize parameter importance analysis for developing / evaluating genetic algorithm critic
-#   Sampling:
-#       -> kfold cross-validation for using manual model development
-
 
 class DataMinerException(Exception):
     """
