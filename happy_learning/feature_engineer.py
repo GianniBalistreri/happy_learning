@@ -711,6 +711,9 @@ def _save_temp_files(feature: str, new_name: str = None):
             _bucket_name: str = None
         else:
             _bucket_name: str = os.path.join(TEMP_DIR, '{}.json'.format(_feature)).split("//")[1].split("/")[0]
+        global TEMP_INDEXER
+        if len(_data) != len(TEMP_INDEXER['__index__']):
+            TEMP_INDEXER['__index__'] = [i for i in range(0, len(_data), 1)]
         DataExporter(obj={_feature: _data},
                      file_path=os.path.join(TEMP_DIR, '{}.json'.format(_feature)),
                      create_dir=False,
@@ -2157,6 +2160,9 @@ class FeatureEngineer:
 
         :param features: List[str]
             Features to binarize
+
+        :param encoder: Binarizer
+            Already fitted encoder object
         """
         for feature in features:
             _load_temp_files(features=[feature])
@@ -4445,6 +4451,9 @@ class FeatureEngineer:
             Name of the used regulizer
                 -> l1
                 -> l2
+
+        :param scaler: Normalizer
+            Already fitted scaler object
         """
         for feature in features:
             _load_temp_files(features=[feature])
@@ -5286,6 +5295,60 @@ class FeatureEngineer:
         return pd.DataFrame()
 
     @staticmethod
+    def sampler_target_feature(feature_name: str,
+                               class_value: Union[str, int],
+                               target_proportion: float = 0.1,
+                               meth: str = 'up'
+                               ):
+        """
+        Up- or down-sampling data set based on class distribution of a given categorical target feature
+
+        :param feature_name: str
+            Name of the (categorical) target feature
+
+        :param class_value: Union[str, int]
+            Class value of the categorical target feature to adjust proportion
+
+        :param target_proportion: float
+            Target class value proportion
+
+        :param meth: str
+            Sampling method:
+                -> down: Down-sampling of majority class value
+                -> up: Up-sampling of minority class value
+        """
+        if feature_name not in ALL_FEATURES:
+            raise FeatureEngineerException(f'Feature {feature_name} not found')
+        if feature_name not in FEATURE_TYPES.get('categorical'):
+            if feature_name not in FEATURE_TYPES.get('ordinal'):
+                raise FeatureEngineerException(f'Feature {feature_name} is not categorical')
+        if meth == 'down':
+            raise NotImplementedError('Down-sampling method not supported')
+        _load_temp_files(features=ALL_FEATURES)
+        _target_feature_class_value_idx: List[int] = DATA_PROCESSING['df'].loc[DATA_PROCESSING['df'][feature_name] == class_value, :].index.tolist()
+        _target_feature_counts: dict = DATA_PROCESSING['df'][feature_name].value_counts().to_dict()
+        _target_feature_distribution: dict = (DATA_PROCESSING['df'][feature_name].value_counts() / DATA_PROCESSING['df'][feature_name].value_counts().sum()).to_dict()
+        _current_target_value_count: int = _target_feature_counts.get(class_value)
+        _current_target_value_proportion: float = _target_feature_distribution.get(class_value)
+        if meth == 'up':
+            if target_proportion <= _current_target_value_proportion:
+                raise FeatureEngineerException('Proportion of the class value must be higher than current proportion')
+            _proportion_diff: float = target_proportion / _current_target_value_proportion
+            _count_diff: int = int(((_current_target_value_count * _proportion_diff) - _current_target_value_count) * 2) + 3
+            _new_target_value_count: int = _count_diff + _current_target_value_count
+            _idx: List[int] = np.random.choice(a=_target_feature_class_value_idx, size=_count_diff, replace=True)
+            DATA_PROCESSING['df'] = pd.concat(objs=[DATA_PROCESSING['df'], DATA_PROCESSING['df'].loc[_idx, :]], axis=0)
+            Log(write=not DATA_PROCESSING.get('show_msg')).log(
+                msg=f'Class value "{class_value}" of categorical feature "{feature_name}" successfully up-sampled')
+        elif meth == 'down':
+            raise NotImplementedError('Down-sampling method not supported')
+        for feature in DATA_PROCESSING['df'].columns:
+            _save_temp_files(feature=feature)
+        DATA_PROCESSING['n_cases'] = DATA_PROCESSING['df'].shape[0]
+        DATA_PROCESSING['df'] = None
+
+
+    @staticmethod
     @FeatureOrchestra(meth='scaling_robust', feature_types=['continuous'])
     def scaling_robust(features: List[str] = None,
                        quantile_range: Tuple[float, float] = (0.25, 0.75),
@@ -5307,6 +5370,9 @@ class FeatureEngineer:
 
         :param with_scaling: bool
             Use scaling using robust scaler
+
+        :param scaler: RobustScaler
+            Already fitted scaler object
         """
         _lower_thres = 100 * quantile_range[0] if quantile_range[0] < 1 else quantile_range[0]
         _upper_thres = 100 * quantile_range[1] if quantile_range[1] < 1 else quantile_range[1]
@@ -5352,6 +5418,9 @@ class FeatureEngineer:
 
         :param minmax_range: Tuple[int, int]
             Min-Max ranges of the min-max scaler
+
+        :param scaler: MinMaxScaler
+            Already fitted scaler object
         """
         if scaler is None:
             _minmax = MinMaxScaler(feature_range=minmax_range)
@@ -5861,6 +5930,9 @@ class FeatureEngineer:
 
         :param with_std: bool
             Using standard deviation to standardize features
+
+        :param scaler: StandardScaler
+            Already fitted scaler object
         """
         if scaler is None:
             _scaler = StandardScaler(with_mean=with_mean, with_std=with_std)
