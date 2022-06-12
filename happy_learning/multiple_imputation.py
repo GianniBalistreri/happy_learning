@@ -13,10 +13,6 @@ from easyexplore.utils import EasyExploreUtils, Log, StatsUtils
 from sklearn.preprocessing import LabelEncoder
 from typing import List, Union
 
-# TODO:
-#  1) Parallelize
-#  2) Multi model support
-
 
 class MultipleImputationException(Exception):
     """

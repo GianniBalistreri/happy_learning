@@ -30,13 +30,6 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 
-# TODO:
-#  1) Visualize:
-#   -> Breeding Map & Graph
-#   -> Parameter Configuration
-#  2) Mode:
-#   -> model_sampler
-
 
 class SwarmIntelligenceException(Exception):
     """
@@ -637,7 +630,7 @@ class SwarmIntelligence:
                 self.adjustment_history['population']['adjustment_{}'.format(self.current_adjustment_meta_data['adjustment'])]['id'].append(copy.deepcopy(self.population[idx].id))
                 self.adjustment_history['population']['adjustment_{}'.format(self.current_adjustment_meta_data['adjustment'])]['model'].append(copy.deepcopy(self.population[idx].model_name))
 
-    def _fitness(self, individual: object, ml_metric: str):
+    def _fitness(self, individual: object, ml_metric: str, track_metric: bool = True):
         """
         Calculate fitness metric for evaluate individual ability to survive
 
@@ -655,6 +648,9 @@ class SwarmIntelligence:
                                           auc_multi: Area-Under-Curve (AUC) multi classes separately
                                           cohen_kappa: Cohen's Kappa
                 -> Clustering - nmi: Normalized Mutual Information
+
+        :param track_metric: bool
+            Whether to track metric or not
         """
         _best_score: float = 0.0 if ml_metric == 'rmse_norm' else 1.0
         _ml_metric: str = 'roc_auc' if ml_metric == 'auc' else ml_metric
@@ -676,8 +672,9 @@ class SwarmIntelligence:
                                                          train_time_in_seconds=individual.train_time,
                                                          )
                                                   )
-        for score in _scores.keys():
-            self.evolution_history.get(score).append(copy.deepcopy(_scores.get(score)))
+        if track_metric:
+            for score in _scores.keys():
+                self.evolution_history.get(score).append(copy.deepcopy(_scores.get(score)))
 
     def _gather_final_adjustment(self):
         """
@@ -764,7 +761,7 @@ class SwarmIntelligence:
                 self.model = _model_generator.model
         if self.mlflow_log:
             if self.text_clustering:
-                self._fitness(individual=_generator, ml_metric='nmi')
+                self._fitness(individual=_generator, ml_metric='nmi', track_metric=False)
             else:
                 if self.deep_learning:
                     _generator.predict()
@@ -781,11 +778,11 @@ class SwarmIntelligence:
                                     eval_metric=None
                                     )
                 if self.target_type == 'reg':
-                    self._fitness(individual=_generator, ml_metric='rmse_norm')
+                    self._fitness(individual=_generator, ml_metric='rmse_norm', track_metric=False)
                 elif self.target_type == 'clf_multi':
-                    self._fitness(individual=_generator, ml_metric='cohen_kappa')
+                    self._fitness(individual=_generator, ml_metric='cohen_kappa', track_metric=False)
                 else:
-                    self._fitness(individual=_generator, ml_metric='auc')
+                    self._fitness(individual=_generator, ml_metric='auc', track_metric=False)
             try:
                 mlflow.set_experiment(experiment_name='SI: Evolved model',
                                       experiment_id=None
@@ -1523,15 +1520,16 @@ class SwarmIntelligence:
                                                                                                      'rel_diff', 'pred'],
                                                                                            color_feature='pred',
                                                                                            plot_type='parcoords',
-                                                                                           file_path=_file_paths[0]
+                                                                                           file_path=_file_paths[0],
+                                                                                           kwargs=dict(layout={})
                                                                                            ),
                                 'Prediction vs. Observation of final inherited ML Model:': dict(data=_best_model_results,
                                                                                                 features=['obs', 'pred'],
                                                                                                 plot_type='joint',
-                                                                                                file_path=_file_paths[1]
+                                                                                                file_path=_file_paths[1],
+                                                                                                kwargs=dict(layout={})
                                                                                                 )
                                 })
-                _file_paths[-1] = _file_paths[-1].replace('.', '_obs_pred.')
             else:
                 _file_paths.append(os.path.join(self.output_file_path, 'confusion_table.html'))
                 _file_paths.append(os.path.join(self.output_file_path, 'confusion_heatmap.html'))
@@ -1554,13 +1552,15 @@ class SwarmIntelligence:
                 _confusion_matrix = pd.concat([_confusion_matrix, _cf_col_sum], axis=1)
                 _charts.update({'Confusion Matrix': dict(data=_confusion_matrix,
                                                          plot_type='table',
-                                                         file_path=_file_paths[0]
+                                                         file_path=_file_paths[0],
+                                                         kwargs=dict(layout={})
                                                          )
                                 })
                 _charts.update({'Confusion Matrix Heatmap': dict(data=_best_model_results,
                                                                  features=['obs', 'pred'],
                                                                  plot_type='heat',
-                                                                 file_path=_file_paths[1]
+                                                                 file_path=_file_paths[1],
+                                                                 kwargs=dict(layout={})
                                                                  )
                                 })
                 _confusion_matrix_normalized: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
@@ -1572,12 +1572,14 @@ class SwarmIntelligence:
                 _charts.update({'Confusion Matrix Normalized Heatmap:': dict(data=_confusion_matrix_normalized,
                                                                              features=self.target_labels,
                                                                              plot_type='heat',
-                                                                             file_path=_file_paths[2]
+                                                                             file_path=_file_paths[2],
+                                                                             kwargs=dict(layout={})
                                                                              )
                                 })
                 _charts.update({'Classification Report:': dict(data=_best_model_results,
                                                                plot_type='table',
-                                                               file_path=_file_paths[3]
+                                                               file_path=_file_paths[3],
+                                                               kwargs=dict(layout={})
                                                                )
                                 })
                 _classification_report: dict = _eval_clf.classification_report()
@@ -1591,7 +1593,8 @@ class SwarmIntelligence:
                                                                                  columns=list(_confusion_metrics.keys())
                                                                                  ),
                                                                plot_type='table',
-                                                               file_path=_file_paths[4]
+                                                               file_path=_file_paths[4],
+                                                               kwargs=dict(layout={})
                                                                )
                                 })
                 if self.target_type == 'clf_multi':
@@ -1601,8 +1604,8 @@ class SwarmIntelligence:
                                                                                                          'pred'],
                                                                                                color_feature='pred',
                                                                                                plot_type='parcoords',
-                                                                                               brushing=True,
-                                                                                               file_path=_file_paths[-1]
+                                                                                               file_path=_file_paths[-1],
+                                                                                               kwargs=dict(layout={})
                                                                                                )
                                     })
                 else:
@@ -1618,8 +1621,11 @@ class SwarmIntelligence:
                                                           time_features=['baseline'],
                                                           # xaxis_label=['False Positive Rate'],
                                                           # yaxis_label=['True Positive Rate'],
+                                                          melt=True,
                                                           plot_type='line',
-                                                          file_path=_file_paths[-1]
+                                                          use_auto_extensions=False,
+                                                          file_path=_file_paths[-1],
+                                                          kwargs=dict(layout={})
                                                           )
                                     })
             DataVisualizer(subplots=_charts,
@@ -1979,7 +1985,8 @@ class SwarmIntelligence:
         if results_table:
             _charts.update({'Results of Genetic Algorithm:': dict(data=_evolution_history_data,
                                                                   plot_type='table',
-                                                                  file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_metadata_table.html')
+                                                                  file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_metadata_table.html'),
+                                                                  kwargs=dict(layout={})
                                                                   )
                             })
         if model_evolution:
@@ -1988,7 +1995,8 @@ class SwarmIntelligence:
                                                                  color_feature='model',
                                                                  plot_type='scatter',
                                                                  melt=True,
-                                                                 file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_model_evolution.html')
+                                                                 file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_model_evolution.html'),
+                                                                 kwargs=dict(layout={})
                                                                  )
                             })
         if model_distribution:
@@ -1997,7 +2005,8 @@ class SwarmIntelligence:
                                                                         features=['model'],
                                                                         group_by=['adjustment'] if per_adjustment else None,
                                                                         plot_type='pie',
-                                                                        file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_model_distribution.html')
+                                                                        file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_model_distribution.html'),
+                                                                        kwargs=dict(layout={})
                                                                         )
                                 })
         #if param_distribution:
@@ -2014,7 +2023,8 @@ class SwarmIntelligence:
                                                                            group_by=['model'],
                                                                            plot_type='violin',
                                                                            melt=False,
-                                                                           file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_training_time_distribution.html')
+                                                                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_training_time_distribution.html'),
+                                                                           kwargs=dict(layout={})
                                                                            )
                             })
         if breeding_map:
@@ -2024,7 +2034,8 @@ class SwarmIntelligence:
                     _breeding_map[g] = self.adjustment_history['population'][g].get('fitness')
             _charts.update({'Breeding Heat Map:': dict(data=_breeding_map,
                                                        plot_type='heat',
-                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_breeding_heatmap.html')
+                                                       file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_breeding_heatmap.html'),
+                                                       kwargs=dict(layout={})
                                                        )
                             })
         if breeding_graph:
@@ -2033,7 +2044,8 @@ class SwarmIntelligence:
                                                             graph_features=dict(node='id', edge='best'),
                                                             color_feature='model',
                                                             plot_type='network',
-                                                            file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_breeding_graph.html')
+                                                            file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_breeding_graph.html'),
+                                                            kwargs=dict(layout={})
                                                             )
                             })
         if fitness_distribution:
@@ -2041,7 +2053,8 @@ class SwarmIntelligence:
                                                                     features=['fitness_score'],
                                                                     time_features=['adjustment'],
                                                                     plot_type='ridgeline',
-                                                                    file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_fitness_score_distribution_per_adjustment.html')
+                                                                    file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_fitness_score_distribution_per_adjustment.html'),
+                                                                    kwargs=dict(layout={})
                                                                     )
                             })
         if fitness_dimensions:
@@ -2057,15 +2070,18 @@ class SwarmIntelligence:
                                                                    ],
                                                          color_feature='model',
                                                          plot_type='parcoords',
-                                                         file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_metadata_evolution_coords_actor_only.html')
+                                                         file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_metadata_evolution_coords.html'),
+                                                         kwargs=dict(layout={})
                                                          )
                             })
         if fitness_evolution:
             _charts.update({'Fitness Evolution:': dict(data=_evolution_gradient_data,
                                                        features=['min', 'median', 'mean', 'max'],
                                                        time_features=['adjustment'],
+                                                       melt=True,
                                                        plot_type='line',
-                                                       file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_evolution_fitness_score.html')
+                                                       file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_evolution_fitness_score.html'),
+                                                       kwargs=dict(layout={})
                                                        )
                             })
         if epoch_stats:
@@ -2077,7 +2093,8 @@ class SwarmIntelligence:
                                                                                    features=['train', 'val'],
                                                                                    time_features=['epoch'],
                                                                                    plot_type='line',
-                                                                                   file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_epoch_metric_score.html')
+                                                                                   file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_epoch_metric_score.html'),
+                                                                                   kwargs=dict(layout={})
                                                                                    )
                                 })
         if prediction_of_best_model:
@@ -2086,12 +2103,14 @@ class SwarmIntelligence:
                                                                                           features=['obs', 'abs_diff', 'rel_diff', 'pred'],
                                                                                           color_feature='pred',
                                                                                           plot_type='parcoords',
-                                                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_evaluation_coords.html')
+                                                                                          file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_prediction_evaluation_coords.html'),
+                                                                                          kwargs=dict(layout={})
                                                                                           ),
                                 'Prediction vs. Observation of final adjusted ML Model:': dict(data=_best_model_results,
                                                                                                features=['obs', 'pred'],
                                                                                                plot_type='joint',
-                                                                                               file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_scatter_contour.html')
+                                                                                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_prediction_scatter_contour.html'),
+                                                                                               kwargs=dict(layout={})
                                                                                                )
                                 })
             else:
@@ -2109,13 +2128,15 @@ class SwarmIntelligence:
                 _confusion_matrix = pd.concat([_confusion_matrix, _cf_col_sum], axis=1)
                 _charts.update({'Confusion Matrix': dict(data=_confusion_matrix,
                                                          plot_type='table',
-                                                         file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_confusion_table.html')
+                                                         file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_prediction_confusion_table.html'),
+                                                         kwargs=dict(layout={})
                                                          )
                                 })
                 _charts.update({'Confusion Matrix Heatmap': dict(data=_best_model_results,
                                                                  features=['obs', 'pred'],
                                                                  plot_type='heat',
-                                                                 file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_confusion_heatmap.html')
+                                                                 file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_prediction_confusion_heatmap.html'),
+                                                                 kwargs=dict(layout={})
                                                                  )
                                 })
                 _confusion_matrix_normalized: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
@@ -2127,12 +2148,14 @@ class SwarmIntelligence:
                 _charts.update({'Confusion Matrix Normalized Heatmap:': dict(data=_confusion_matrix_normalized,
                                                                              features=self.target_labels,
                                                                              plot_type='heat',
-                                                                             file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_confusion_normal_heatmap.html')
+                                                                             file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_prediction_confusion_normal_heatmap.html'),
+                                                                             kwargs=dict(layout={})
                                                                              )
                                 })
                 _charts.update({'Classification Report:': dict(data=_best_model_results,
                                                                plot_type='table',
-                                                               file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_clf_report_table.html')
+                                                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_prediction_clf_report_table.html'),
+                                                               kwargs=dict(layout={})
                                                                )
                                 })
                 if self.target_type == 'clf_multi':
@@ -2141,7 +2164,8 @@ class SwarmIntelligence:
                                                                                                color_feature='pred',
                                                                                                plot_type='parcoords',
                                                                                                brushing=True,
-                                                                                               file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_evaluation_category.html')
+                                                                                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_prediction_evaluation_category.html'),
+                                                                                               kwargs=dict(layout={})
                                                                                                )
                                     })
                 else:
@@ -2156,8 +2180,11 @@ class SwarmIntelligence:
                                                           time_features=['baseline'],
                                                           #xaxis_label=['False Positive Rate'],
                                                           #yaxis_label=['True Positive Rate'],
+                                                          melt=True,
                                                           plot_type='line',
-                                                          file_path=self.output_file_path if self.output_file_path is None else '{}{}'.format(self.output_file_path, 'si_prediction_roc_auc_curve.html')
+                                                          use_auto_extensions=False,
+                                                          file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'si_prediction_roc_auc_curve.html'),
+                                                          kwargs=dict(layout={})
                                                           )
                                     })
         if len(_charts.keys()) > 0:
