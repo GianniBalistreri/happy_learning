@@ -30,7 +30,7 @@ requires = [r.strip() for r in requires.split('\n') if ((r.strip()[0] != "#") an
 
 setuptools.setup(
     name='happy_learning',
-    version='0.4.5',
+    version='0.4.6',
     author='Gianni Francesco Balistreri',
     author_email='gbalistreri@gmx.de',
     description='Toolbox for reinforced developing of machine learning models (as proof-of-concept)',
