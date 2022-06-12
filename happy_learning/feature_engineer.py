@@ -737,7 +737,6 @@ def _set_feature_relations(feature: str, new_feature: str):
     """
     if feature != new_feature:
         #if new_feature not in DATA_PROCESSING['processing']['features']['raw'].keys():
-            # TODO: implement manual setting -> add "new" feature and related features to higher level
         #    pass
         if new_feature not in DATA_PROCESSING['processing']['features']['raw'].keys():
             if feature in DATA_PROCESSING['processing']['features']['raw'].keys():
@@ -1503,7 +1502,6 @@ class FeatureEngineer:
         _supported_actions: List[str] = []
         _actor_type: str = DATA_PROCESSING['actor_memory']['action_config']['actor_type']
         if _actor_type == 'categorical':
-            # TODO: Evaluate inheritance by checking processing relations
             pass
         else:
             for action in PROCESSING_ACTION_SPACE[_actor_type].keys():
@@ -3038,21 +3036,33 @@ class FeatureEngineer:
 
     @staticmethod
     @FeatureOrchestra(meth='exp_transform', feature_types=['continuous'])
-    def exp_transform(features: List[str] = None, skewness_test: bool = False):
+    def exp_transform(features: List[str] = None,
+                      skewed_only: bool = False,
+                      thresholds: Tuple[float, float] = (-0.05, 0.05)
+                      ):
         """
         Transform continuous features exponentially
 
         :param features: List[str]
             Name of the features
 
-        :param skewness_test: bool
-            Transform features that are skewed only
+        :param skewed_only: bool
+            Whether to test the skewness statistically or not
+
+        :param thresholds: Tuple[float, float]
+            Skewness thresholds
         """
-        #if skewness_test:
-        #    # TODO: subset features based on test results
-        #    _features = StatsUtils(data=DATA_PROCESSING.get('df'), features=features).skewness_test()
-        #else:
-        #    _features = features
+        if skewed_only:
+            _skewness: dict = StatsUtils(data=DATA_PROCESSING.get('df')).skewness(features=features)
+            _features: List[str] = []
+            for feature in _skewness.keys():
+                if _skewness[feature] < thresholds[0]:
+                    _features.append(feature)
+                elif _skewness[feature] > thresholds[1]:
+                    _features.append(feature)
+            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg=f'Found {len(_features)} skewed features')
+        else:
+            _features: List[str] = features
         for feature in features:
             _load_temp_files(features=[feature])
             _process_handler(action='add',
@@ -3060,7 +3070,7 @@ class FeatureEngineer:
                              new_feature='{}_exp'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
                              process='scaler|exp',
                              meth='exp_transform',
-                             param=dict(skewness_test=skewness_test),
+                             param=dict(skewed_only=skewed_only, thresholds=thresholds),
                              data=np.exp(DATA_PROCESSING['df'][feature].values),
                              force_type='continuous',
                              special_replacement=True,
@@ -5994,13 +6004,12 @@ class FeatureEngineer:
         """
         _valid_subset: bool = True
         if by_partial_values:
-            # TODO: by_partial_values -> case_name, feature_name, value based
             raise NotImplementedError('Drawing subset by partial values not implemented')
         else:
             _load_temp_files(features=ALL_FEATURES)
-            _n_cases: int = len(DATA_PROCESSING['df'])
+            _n_cases: int = DATA_PROCESSING['df'].shape[0]
             if safer_subset:
-                _df: dd.DataFrame = copy.deepcopy(DATA_PROCESSING.get('df'))
+                _df: pd.DataFrame = DATA_PROCESSING.get('df')
                 _df = _df.query(expr=cond)
                 if len(_df) == 0:
                     _valid_subset = False
@@ -6011,11 +6020,9 @@ class FeatureEngineer:
             else:
                 DATA_PROCESSING['df'] = DATA_PROCESSING['df'].query(expr=cond)
             if _valid_subset:
-                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Exclude {} cases by applying following condition: {}\nData set has now {} cases'.format(_n_cases - len(DATA_PROCESSING['df']),
-                                                                                                                                                                cond,
-                                                                                                                                                                len(DATA_PROCESSING['df'])
-                                                                                                                                                                )
-                                                                   )
+                for feature in DATA_PROCESSING['df'].columns:
+                    _save_temp_files(feature=feature)
+                Log(write=not DATA_PROCESSING.get('show_msg')).log(msg=f'Exclude {_n_cases - DATA_PROCESSING["df"].shape[0]} cases by applying following condition: {cond}\nData set has now {DATA_PROCESSING["df"].shape[0]} cases')
             DATA_PROCESSING['n_cases'] = DATA_PROCESSING['df'].shape[0]
             for feature in DATA_PROCESSING['df'].columns:
                 _save_temp_files(feature=feature)
