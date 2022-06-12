@@ -30,13 +30,6 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 
-# TODO:
-#  1) Visualize:
-#   -> Breeding Map & Graph
-#   -> Parameter Configuration
-#  2) Mode:
-#   -> model_sampler
-
 
 class GeneticAlgorithmException(Exception):
     """
