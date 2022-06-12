@@ -150,6 +150,7 @@ class DataMiner:
                    models: List[str] = None,
                    feature_selector: str = 'shapley',
                    top_features: float = 0.5,
+                   eval_redundancy: bool = True,
                    optimizer: str = 'ga',
                    force_target_type: str = None,
                    train: bool = True,
@@ -174,6 +175,9 @@ class DataMiner:
 
         :param top_features: float
             Amount of top features to select
+
+        :param eval_redundancy: bool
+            Whether to evaluate redundancy of features and remove redundant features or not
 
         :param optimizer: str
             Model optimizer method:
@@ -232,23 +236,36 @@ class DataMiner:
             else:
                 self.feature_engineer.set_predictors(exclude_original_data=False)
             if feature_selector is not None:
-                _imp_features: dict = FeatureSelector(df=self.feature_engineer.get_training_data(output='df_dask'),
-                                                      target=self.feature_engineer.get_target(),
-                                                      features=self.feature_engineer.get_predictors(),
-                                                      force_target_type=force_target_type,
-                                                      aggregate_feature_imp=self.feature_engineer.get_processing()['features']['raw'],
-                                                      visualize_all_scores=self.plot if kwargs.get('visualize_all_scores') is None else kwargs.get('visualize_all_scores'),
-                                                      visualize_variant_scores=self.plot if kwargs.get('visualize_variant_scores') is None else kwargs.get('visualize_variant_scores'),
-                                                      visualize_core_feature_scores=self.plot if kwargs.get('visualize_core_feature_scores') is None else kwargs.get('visualize_core_feature_scores'),
-                                                      path=self.output_path
-                                                      ).get_imp_features(meth=feature_selector,
-                                                                         imp_threshold=0.001 if kwargs.get('imp_threshold') is None else kwargs.get('imp_threshold')
+                _feature_selector: FeatureSelector = FeatureSelector(df=self.feature_engineer.get_training_data(output='df_dask'),
+                                                                     target=self.feature_engineer.get_target(),
+                                                                     features=self.feature_engineer.get_predictors(),
+                                                                     force_target_type=force_target_type,
+                                                                     aggregate_feature_imp=self.feature_engineer.get_processing()['features']['raw'],
+                                                                     visualize_all_scores=self.plot if kwargs.get('visualize_all_scores') is None else kwargs.get('visualize_all_scores'),
+                                                                     visualize_variant_scores=self.plot if kwargs.get('visualize_variant_scores') is None else kwargs.get('visualize_variant_scores'),
+                                                                     visualize_core_feature_scores=self.plot if kwargs.get('visualize_core_feature_scores') is None else kwargs.get('visualize_core_feature_scores'),
+                                                                     path=self.output_path
+                                                                     )
+                _imp_features: dict = _feature_selector.get_imp_features(meth=feature_selector,
+                                                                         model='cat' if kwargs.get('imp_ml_model') is None else kwargs.get('imp_ml_model'),
+                                                                         imp_threshold=0.001 if kwargs.get('imp_threshold') is None else kwargs.get('imp_threshold'),
+                                                                         visualize_game_stats=self.plot if kwargs.get('visualize_game_stats') is None else kwargs.get('visualize_game_stats'),
+                                                                         plot_type='bar' if kwargs.get('imp_plot_type') is None else kwargs.get('imp_plot_type')
                                                                          )
-                _ratio: float = top_features if (top_features > 0) and (top_features <= 1) else 0.5
-                _top_n_features: int = round(self.feature_engineer.get_n_predictors() * _ratio)
-                self.feature_engineer.set_predictors(features=_imp_features.get('imp_features')[0:_top_n_features],
-                                                     exclude_original_data=False
-                                                     )
+                if eval_redundancy:
+                    _useful_features: List[str] = _feature_selector.eval_redundancy(sorted_features=_imp_features.get('imp_features'),
+                                                                                    model='cat' if kwargs.get('redundant_ml_model') is None else kwargs.get('redundant_ml_model'),
+                                                                                    redundant_threshold=0.01 if kwargs.get('redundant_threshold') is None else kwargs.get('redundant_threshold')
+                                                                                    ).get('important')
+                    self.feature_engineer.set_predictors(features=_useful_features,
+                                                         exclude_original_data=False
+                                                         )
+                else:
+                    _ratio: float = top_features if (top_features > 0) and (top_features <= 1) else 0.5
+                    _top_n_features: int = round(self.feature_engineer.get_n_predictors() * _ratio)
+                    self.feature_engineer.set_predictors(features=_imp_features.get('imp_features')[0:_top_n_features],
+                                                         exclude_original_data=False
+                                                         )
                 if self.output_path is not None or kwargs.get('file_path') is not None:
                     DataExporter(obj=_imp_features,
                                  file_path='{}feature_importance.pkl'.format(self.output_path) if kwargs.get('file_path') is None else kwargs.get('file_path'),
@@ -383,7 +400,6 @@ class DataMiner:
                         _model_eval_df: pd.DataFrame(data={'obs': _data_set.get('y_test').values, 'preds': _pred})
                         _model_eval_df['abs_diff'] = _model_eval_df['obs'] - _model_eval_df['preds']
                         _model_eval_df['rel_diff'] = _model_eval_df['obs'] / _model_eval_df['preds']
-                        # TODO: Add train & test error to plot
                         _model_eval_plot.update({'Prediction vs. Observation (Value Based)': dict(data=_model_eval_df,
                                                                                                   features=['obs', 'preds'],
                                                                                                   plot_type='joint',
