@@ -4180,11 +4180,9 @@ class FeatureEngineer:
                                     _data[idx] = _imp_value[-1]
                                 _std_theta.append(copy.deepcopy(abs(_std - np.std(_data))))
                                 if (_std_theta[-1] >= _threshold_range[0]) and (_std_theta[-1] <= _threshold_range[1]):
-                                    # TODO: create temp df for preventing overwriting original data in case of IndexError
                                     #DATA_PROCESSING['df'][feature] = dd.from_array(x=_data)
                                     break
                                 _m.append(_imp_value)
-                            # TODO: Prevent IndexError -> std_theta list and imputation set
                             _best_imputation: list = _m[_std_theta.index(min(_std_theta))]
                             _imp_data: pd.DataFrame = pd.DataFrame()
                             _imp_data[feature] = DATA_PROCESSING['df'][feature].values
