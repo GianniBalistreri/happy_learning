@@ -5812,7 +5812,7 @@ class FeatureEngineer:
         Sort data
 
         :param sorting_features: List[str]
-            Names of ordered features to sort by
+            Names of ordered features to sort values by
 
         :param sort_by_index: bool
             Whether to sort data set by index value
@@ -5823,9 +5823,13 @@ class FeatureEngineer:
         :param sort_features_alphabetically: bool
             Sort feature names alphabetically (A-Z)
         """
+        # Sort cases:
         if sorting_features is None:
-            # TODO: sorting features is None
-            pass
+            if sort_by_index:
+                _load_temp_files(features=ALL_FEATURES)
+                DATA_PROCESSING['df'] = DATA_PROCESSING['df'].sort_index(axis=0, ascending=ascending, inplace=False)
+                for feature in DATA_PROCESSING['df'].columns:
+                    _save_temp_files(feature=feature)
         else:
             _features: List[str] = []
             for ft in FEATURE_TYPES.keys():
@@ -5844,6 +5848,7 @@ class FeatureEngineer:
                     Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Data set sorted by values of features {}'.format(_features))
             for feature in _features:
                 _save_temp_files(feature=feature)
+        # Sort features:
         if sort_features_alphabetically:
             _features: List[str] = []
             for ft in FEATURE_TYPES.keys():
