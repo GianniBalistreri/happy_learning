@@ -4408,35 +4408,47 @@ class FeatureEngineer:
 
     @staticmethod
     @FeatureOrchestra(meth='log_transform', feature_types=['continuous'])
-    def log_transform(features: List[str] = None, skewness_test: bool = False):
+    def log_transform(features: List[str] = None,
+                      skewed_only: bool = False,
+                      thresholds: Tuple[float, float] = (-0.05, 0.05)
+                      ):
         """
         Transform features by calculating the natural logarithm
 
         :param features: List[str]
             Name of the features
 
-        :param skewness_test: bool
+        :param skewed_only: bool
             Whether to test the skewness statistically or not
+
+        :param thresholds: Tuple[float, float]
+            Skewness thresholds
         """
-        #if skewness_test:
-        #    # TODO: subset features based on test results
-        #    _features = StatsUtils(data=DATA_PROCESSING.get('df'), features=features).skewness_test()
-        #else:
-        #    _features = features
-        for feature in features:
+        if skewed_only:
+            _skewness: dict = StatsUtils(data=DATA_PROCESSING.get('df')).skewness(features=features)
+            _features: List[str] = []
+            for feature in _skewness.keys():
+                if _skewness[feature] < thresholds[0]:
+                    _features.append(feature)
+                elif _skewness[feature] > thresholds[1]:
+                    _features.append(feature)
+            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg=f'Found {len(_features)} skewed features')
+        else:
+            _features: List[str] = features
+        for feature in _features:
             _load_temp_files(features=[feature])
             _process_handler(action='add',
                              feature=feature,
                              new_feature='{}_log'.format(feature) if DATA_PROCESSING.get('generate_new_feature') else feature,
                              process='scaler|log',
                              meth='log_transform',
-                             param=dict(skewness_test=skewness_test),
+                             param=dict(skewed_only=skewed_only, thresholds=thresholds),
                              data=np.log(DATA_PROCESSING['df'][feature].values),
                              force_type='continuous',
                              special_replacement=True,
                              imp_value=sys.float_info.min
                              )
-            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg='Transformed feature "{}" using logarithmic transformation'.format(feature))
+            Log(write=not DATA_PROCESSING.get('show_msg')).log(msg=f'Transformed feature "{feature}" using logarithmic transformation')
 
     @staticmethod
     @FeatureOrchestra(meth='normalizer', feature_types=['continuous'])
@@ -5560,7 +5572,6 @@ class FeatureEngineer:
         MERGES = {}
         PREDICTORS = []
         FEATURE_TYPES = {}
-        # TODO: add complete parameter set
         return cls(df=df,
                    generate_new_feature=kwargs.get('generate_new_feature'),
                    id_text_features=kwargs.get('id_text_features'),
