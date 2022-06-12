@@ -157,15 +157,6 @@ WEB_ELEMENTS: Dict[str, List[str]] = dict(protocols=['http://', 'https://', 'ftp
                                           domain_ext=['org', 'com', 'onion']
                                           )
 
-# TODO:
-#  Linguistic features:
-#  - derive tense from comparison between words and lemmatized version of it
-#  - aspect: grammatical category which reflects the action given by the verb happened in respect to time
-#  - mood: indicating whether a verb expresses a fact (indicative) or conditionality (subjunctive)
-#           -> semantic notation: modality (opinion) / illocation (sentence type)
-#           -> modality
-#  - emojis: fix bug in dask representation
-
 
 def len_of_str(text_input: str) -> int:
     """
@@ -667,7 +658,6 @@ class TextMiner:
         Check whether feature can be interpreted as geo feature
         """
         if self._is_entity():
-            # TODO: check whether text can be converted into lat / lon values using proper geocoder or not
             return False
         return False
 
