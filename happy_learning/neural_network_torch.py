@@ -8,7 +8,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from simpletransformers.model import ClassificationModel
 from torch.autograd import Variable
 from torch.nn import functional
 from typing import List
@@ -645,98 +644,3 @@ class SelfAttention(nn.Module):
         _hidden_matrix = torch.bmm(_attention_weight_matrix, _output)
         _fully_connected_output = self.fc_layer(_hidden_matrix.view(-1, _hidden_matrix.size()[1] * _hidden_matrix.size()[2]))
         return self.output_layer(_fully_connected_output)
-
-
-class Transformers:
-    """
-    Class for building encoder decoder transformer networks using simpletransformers based on hugging face
-    """
-    def __init__(self, parameters: dict, output_size: int, cache_dir: str = None):
-        """
-        :param parameters: dict
-			Parameter settings
-
-        :param output_size: int
-            Output size:
-                -> 1: Float value (Regression)
-                -> 2: Classes (Binary Classification)
-                -> >2: Classes (Multi-Class Classification)
-
-        :param cache_dir: str
-            Cache directory for loading pre-trained language (embedding) models from disk
-        """
-        self.args: dict = dict(model_type=parameters.get('model_type'),
-                               model_name=parameters.get('model_name'),
-                               regression=False if output_size > 1 else True,
-                               num_train_epochs=parameters.get('epoch'),
-                               learning_rate=parameters.get('learning_rate'),
-                               train_batch_size=parameters.get('batch_size'),
-                               eval_batch_size=parameters.get('batch_size'),
-                               max_seq_length=512,
-                               adafactor_beta1=parameters.get('adafactor_beta1'),
-                               adafactor_clip_threshold=parameters.get('adafactor_clip_threshold'),
-                               adafactor_decay_rate=parameters.get('adafactor_decay_rate'),
-                               adafactor_eps=parameters.get('adafactor_eps'),
-                               adafactor_relative_step=parameters.get('adafactor_relative_step'),
-                               adafactor_scale_parameter=parameters.get('adafactor_scale_parameter'),
-                               adafactor_warmup_init=parameters.get('adafactor_warmup_init'),
-                               adam_epsilon=parameters.get('adam_epsilon'),
-                               cosine_schedule_num_cycles=parameters.get('cosine_schedule_num_cycles'),
-                               dynamic_quantize=parameters.get('dynamic_quantize'),
-                               early_stopping_consider_epochs=parameters.get('early_stopping_consider_epochs'),
-                               use_early_stopping=parameters.get('use_early_stopping'),
-                               early_stopping_delta=parameters.get('early_stopping_delta'),
-                               early_stopping_patience=parameters.get('early_stopping_patience'),
-                               attention_probs_dropout_prob=parameters.get('attention_probs_dropout_prob'),
-                               hidden_size=parameters.get('hidden_size'),
-                               hidden_dropout_prob=parameters.get('hidden_dropout_prob'),
-                               initializer_range=parameters.get('initializer_range'),
-                               layer_norm_eps=parameters.get('layer_norm_eps'),
-                               num_attention_heads=parameters.get('num_attention_heads'),
-                               num_hidden_layers=parameters.get('num_hidden_layers'),
-                               optimizer=parameters.get('optimizer'),
-                               scheduler=parameters.get('scheduler'),
-                               polynomial_decay_schedule_lr_end=parameters.get('polynomial_decay_schedule_lr_end'),
-                               polynomial_decay_schedule_power=parameters.get('polynomial_decay_schedule_power'),
-                               weight_decay=parameters.get('weight_decay'),
-                               gradient_accumulation_steps=parameters.get('gradient_accumulation_steps'),
-                               max_grad_norm=parameters.get('max_grad_norm'),
-                               early_stopping_metric='eval_loss',
-                               early_stopping_metric_minimize=True,
-                               sliding_window=False,
-                               manual_seed=1234,
-                               warmup_ratio=parameters.get('warmup_ratio'),
-                               warmup_step=parameters.get('warmup_step'),
-                               save_steps=2000,
-                               logging_steps=100,
-                               evaluate_during_training=True,
-                               eval_all_checkpoints=False,
-                               use_tensorboard=True,
-                               overwrite_output_dir=True,
-                               reprocess_input_data=True,
-                               do_lower_case=True,
-                               no_save=True,
-                               no_cache=False,
-                               silent=True,
-                               best_model_dir=BEST_MODEL_DIR,
-                               output_dir=OUTPUT_DIR,
-                               cache_dir=CACHE_DIR,
-                               fp16=parameters.get('fp16'),
-                               fp16_opt_level=parameters.get('fp16_opt_level')
-                               )
-        _kwargs: dict = dict(cache_dir=cache_dir, local_files_only=False if cache_dir is None else True)
-        self.model = ClassificationModel(model_type=parameters.get('model_type'),
-                                         model_name=parameters.get('model_name'),
-                                         tokenizer_type=None,
-                                         tokenizer_name=None,
-                                         num_labels=output_size,
-                                         weight=None,
-                                         args=self.args,
-                                         use_cuda=torch.cuda.is_available(),
-                                         cuda_device=0 if torch.cuda.is_available() else -1,
-                                         onnx_execution_provider=None,
-                                         **_kwargs
-                                         )
-
-    def forward(self) -> ClassificationModel:
-        return self.model
