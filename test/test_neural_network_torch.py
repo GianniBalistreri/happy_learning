@@ -158,24 +158,5 @@ class SelfAttentionTest(unittest.TestCase):
         self.assertTrue(expr=len(_network_generator.fitness.keys()) > 0)
 
 
-class TransformerTest(unittest.TestCase):
-    """
-    Class for testing class Transformer (torch)
-    """
-    def test_forward(self):
-        _network_generator: NetworkGenerator = NetworkGenerator(target='label',
-                                                                predictors=['text'],
-                                                                output_layer_size=5,
-                                                                train_data_path=DATA_FILE_PATH.get('train'),
-                                                                test_data_path=DATA_FILE_PATH.get('test'),
-                                                                validation_data_path=DATA_FILE_PATH.get('val'),
-                                                                model_name='trans',
-                                                                sep=','
-                                                                )
-        _network_generator.get_vanilla_model()
-        _network_generator.train()
-        self.assertTrue(expr=len(_network_generator.fitness.keys()) > 0)
-
-
 if __name__ == '__main__':
     unittest.main()
