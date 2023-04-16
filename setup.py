@@ -5,11 +5,11 @@ import sys
 #from happy_learning.text_miner import LANG_MODELS
 
 # Install complete dask library for handling big data sets using parallel computing:
-subprocess.run(['python{} -m pip install "dask[distributed]"'.format('3' if sys.platform.find('win') != 0 else '')], shell=True)
-subprocess.run(['python{} -m pip install "dask[complete]"'.format('3' if sys.platform.find('win') != 0 else '')], shell=True)
+#subprocess.run(['python{} -m pip install "dask[distributed]"'.format('3' if sys.platform.find('win') != 0 else '')], shell=True)
+#subprocess.run(['python{} -m pip install "dask[complete]"'.format('3' if sys.platform.find('win') != 0 else '')], shell=True)
 
-# Install jupyter notebook extensions for using EasyExplore_examples.ipynb more conveniently:
-subprocess.run(['python{} -m pip install jupyter_contrib_nbextensions && jupyter contrib nbextension install'.format('3' if sys.platform.find('win') != 0 else '')], shell=True)
+# Install jupyter notebook extensions:
+#subprocess.run(['python{} -m pip install jupyter_contrib_nbextensions && jupyter contrib nbextension install'.format('3' if sys.platform.find('win') != 0 else '')], shell=True)
 
 # Install spacy language models:
 #subprocess.run('python{} -m pip install spacy'.format('3' if sys.platform.find('win') != 0 else ''), shell=True)
@@ -30,7 +30,7 @@ requires = [r.strip() for r in requires.split('\n') if ((r.strip()[0] != "#") an
 
 setuptools.setup(
     name='happy_learning',
-    version='0.4.6',
+    version='0.4.7',
     author='Gianni Francesco Balistreri',
     author_email='gbalistreri@gmx.de',
     description='Toolbox for reinforced developing of machine learning models (as proof-of-concept)',
