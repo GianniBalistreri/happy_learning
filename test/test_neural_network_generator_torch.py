@@ -2,7 +2,7 @@ import copy
 import pandas as pd
 import unittest
 
-from happy_learning.neural_network_torch import Attention, GRU, LSTM, MLP, RCNN, RNN, SelfAttention, Transformers
+from happy_learning.neural_network_torch import Attention, GRU, LSTM, MLP, RCNN, RNN, SelfAttention
 from happy_learning.neural_network_generator_torch import NETWORK_TYPE, NetworkGenerator
 from happy_learning.sampler import MLSampler
 from typing import List
@@ -136,18 +136,6 @@ class NetworkGeneratorTest(unittest.TestCase):
                                             ).generate_model()
         self.assertTrue(expr=isinstance(_net_gen.model, SelfAttention))
 
-    def test_generate_transformer_model(self):
-        _net_gen: object = NetworkGenerator(target=TARGET_TEXT,
-                                            predictors=PREDICTORS_TEXT,
-                                            output_layer_size=5,
-                                            train_data_path=TRAIN_DATA_PATH_TEXT,
-                                            test_data_path=TEST_DATA_PATH_TEXT,
-                                            validation_data_path=VALIDATION_DATA_PATH_TEXT,
-                                            models=['trans'],
-                                            sep=','
-                                            ).generate_model()
-        self.assertTrue(expr=isinstance(_net_gen.model, Transformers))
-
     def test_generate_params(self):
         _net_gen: object = NetworkGenerator(target=TARGET_TEXT,
                                             predictors=PREDICTORS_TEXT,
@@ -161,19 +149,6 @@ class NetworkGeneratorTest(unittest.TestCase):
         _mutated_param: dict = copy.deepcopy(_model.model_param_mutated)
         _net_gen.generate_params(param_rate=0.1, force_param=None)
         self.assertTrue(expr=len(_mutated_param.keys()) < len(_net_gen.model_param_mutated.keys()))
-
-    def test_get_vanilla_transformer(self):
-        _net_gen: object = NetworkGenerator(target=TARGET_TEXT,
-                                            predictors=PREDICTORS_TEXT,
-                                            output_layer_size=5,
-                                            train_data_path=TRAIN_DATA_PATH_TEXT,
-                                            test_data_path=TEST_DATA_PATH_TEXT,
-                                            validation_data_path=VALIDATION_DATA_PATH_TEXT,
-                                            models=['trans'],
-                                            model_name='trans',
-                                            sep=','
-                                            )
-        _model = _net_gen.get_vanilla_model()
 
     def test_eval(self):
         _net_gen: object = NetworkGenerator(target=TARGET_TEXT,
@@ -216,7 +191,7 @@ class NetworkGeneratorTest(unittest.TestCase):
                                             train_data_path=TRAIN_DATA_PATH_TEXT,
                                             test_data_path=TEST_DATA_PATH_TEXT,
                                             validation_data_path=VALIDATION_DATA_PATH_TEXT,
-                                            models=['trans'],#list(NETWORK_TYPE.keys()),
+                                            models=['rcnn'],#list(NETWORK_TYPE.keys()),
                                             sep=','
                                             )
         _model = _net_gen.generate_model()
