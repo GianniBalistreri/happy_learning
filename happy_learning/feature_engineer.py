@@ -1425,7 +1425,7 @@ class FeatureEngineer:
                                              cloud=CLOUD,
                                              bucket_name=_bucket_name,
                                              **kwargs
-                                             )
+                                             ).file()
         DATA_PROCESSING['processing']['features']['raw'].update({_force_rename_feature(feature=feature, max_length=100): [] for feature in DATA_PROCESSING.get('df').columns})
         Log(write=not DATA_PROCESSING.get('show_msg')).log(
             msg='Data set loaded from file\nCases: {}\nFeatures: {}'.format(len(DATA_PROCESSING['df']),
@@ -3635,7 +3635,7 @@ class FeatureEngineer:
         :return: int
             Total number of features
         """
-        return DATA_PROCESSING['n_features']
+        return len(ALL_FEATURES)
 
     @staticmethod
     def get_n_predictors() -> int:
