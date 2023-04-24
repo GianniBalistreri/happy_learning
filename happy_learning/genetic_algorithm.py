@@ -2254,12 +2254,3 @@ class GeneticAlgorithm:
                                    # yaxis_label=['True Positive Rate'],
                                    file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_roc_auc_curve.html'),
                                    ).run()
-        #if len(_charts.keys()) > 0:
-        #    DataVisualizer(subplots=_charts,
-        #                   interactive=True,
-        #                   file_path=self.output_file_path,
-        #                   render=True if self.output_file_path is None else False,
-        #                   height=750,
-        #                   width=750,
-        #                   unit='px'
-        #                   ).run()
