@@ -1228,6 +1228,7 @@ class FeatureEngineer:
                 self._data_import(file_path=file_path, sep=sep, **kwargs)
                 for feature in DATA_PROCESSING['df'].columns:
                     _save_temp_files(feature=feature, new_name=_force_rename_feature(feature=feature, max_length=100))
+                DATA_PROCESSING['n_cases'] = DATA_PROCESSING['df'].shape[0].compute()
                 DATA_PROCESSING['df'] = None
             else:
                 if isinstance(df, pd.DataFrame):
@@ -1237,7 +1238,7 @@ class FeatureEngineer:
                                                                                                                                            len(DATA_PROCESSING['df'].columns)
                                                                                                                                            )
                                                                    )
-                DATA_PROCESSING['n_cases'] = len(DATA_PROCESSING['df'])
+                DATA_PROCESSING['n_cases'] = DATA_PROCESSING['df'].shape[0].compute()
                 global TEMP_INDEXER
                 TEMP_INDEXER['__index__'] = [i for i in range(0, DATA_PROCESSING['n_cases'], 1)]
                 for ignore in IGNORE_FEATURES:
@@ -3509,11 +3510,8 @@ class FeatureEngineer:
         :return np.ndarray:
             Feature values
         """
-        _features: List[str] = []
-        for ft in FEATURE_TYPES.keys():
-            for feature in FEATURE_TYPES.get(ft):
-                _features.append(feature)
-        if feature in _features:
+        if feature in ALL_FEATURES:
+            _load_temp_files(features=[feature])
             if unique:
                 return DATA_PROCESSING['df'][feature].unique()
             else:
