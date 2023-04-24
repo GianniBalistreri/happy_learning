@@ -2591,6 +2591,8 @@ class FeatureEngineer:
             _bucket_name: str = None
         else:
             _bucket_name: str = file_path.split("//")[1].split("/")[0]
+        if file_path.find('.parquet') >= 0:
+            DATA_PROCESSING['df'] = dd.from_pandas(data=DATA_PROCESSING.get('df'), npartitions=4)
         DataExporter(obj=DATA_PROCESSING.get('df'),
                      file_path=file_path,
                      create_dir=create_dir,
