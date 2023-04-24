@@ -1051,6 +1051,7 @@ class FeatureEngineer:
                  auto_typing: bool = True,
                  auto_engineering: bool = False,
                  auto_text_mining: bool = True,
+                 name_convention: bool = True,
                  file_path: str = None,
                  sep: str = ',',
                  print_msg: bool = True,
@@ -1120,6 +1121,9 @@ class FeatureEngineer:
 
         :param auto_text_mining: bool
             Classify and interpret text data analytically for generating numerical features from text
+
+        :param name_convention: bool
+            Apply naming convention for features
 
         :param file_path: str
             Path of local file to import as data set
@@ -1238,7 +1242,12 @@ class FeatureEngineer:
                     raise FeatureEngineerException('Neither data object nor file path to data file found')
                 self._data_import(file_path=file_path, sep=sep, **kwargs)
                 for feature in DATA_PROCESSING['df'].columns:
-                    _save_temp_files(feature=feature, new_name=_force_rename_feature(feature=feature, max_length=100))
+                    if name_convention:
+                        _feature: str = _name_convention(feature=feature)
+                        DATA_PROCESSING['df'].rename(columns={feature: _feature})
+                    else:
+                        _feature: str = feature
+                    _save_temp_files(feature=_feature, new_name=_force_rename_feature(feature=_feature, max_length=100))
                 DATA_PROCESSING['n_cases'] = DATA_PROCESSING['df'].shape[0].compute()
                 DATA_PROCESSING['df'] = None
             else:
@@ -1257,7 +1266,12 @@ class FeatureEngineer:
                         del DATA_PROCESSING['df'][ignore]
                 DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns.tolist()})
                 for feature in DATA_PROCESSING.get('df').columns:
-                    _save_temp_files(feature=feature, new_name=_force_rename_feature(feature=feature, max_length=100))
+                    if name_convention:
+                        _feature: str = _name_convention(feature=feature)
+                        DATA_PROCESSING['df'].rename(columns={feature: _feature})
+                    else:
+                        _feature: str = feature
+                    _save_temp_files(feature=_feature, new_name=_force_rename_feature(feature=_feature, max_length=100))
                 DATA_PROCESSING['df'] = None
                 Log(write=not print_msg, level='info', env='dev').log(msg='Feature files saved in {}'.format(TEMP_DIR))
         else:
@@ -4945,8 +4959,7 @@ class FeatureEngineer:
                     _dummies = _dummies.loc[:, ~_dummies.columns.duplicated()]
                     _new_names: dict = {}
                     for dummy in _dummies.columns:
-                        print(dummy)
-                        _new_feature: str = _avoid_overwriting(feature=dummy)
+                        _new_feature: str = _avoid_overwriting(feature=_name_convention(feature=dummy))
                         if dummy != _new_feature:
                             _new_names.update({dummy: _new_feature})
                     if len(_new_names) > 0:
