@@ -2083,9 +2083,9 @@ class FeatureEngineer:
                               with_std=True if kwargs.get('with_std') is None else kwargs.get('with_std')
                               )
         if log_transform:
-            self.log_transform(skewness_test=False)
+            self.log_transform(skewed_only=False)
         if exp_transform:
-            self.exp_transform(skewness_test=False)
+            self.exp_transform(skewed_only=False)
         if disparity:
             self.interaction(addition=True if kwargs.get('addition') is None else kwargs.get('addition'),
                              subtraction=True if kwargs.get('subtraction') is None else kwargs.get('subtraction'),
@@ -4051,6 +4051,7 @@ class FeatureEngineer:
         _poly.fit(X=_data)
         _polynomial_features = _poly.transform(X=_data)
         _name_mapper: dict = dict(original={}, interaction={})
+        _interaction_name_mapper: dict = {}
         _new_feature_names: Dict[str, str] = {}
         for i, name in enumerate(_poly.get_feature_names()):
             if i < len(features):
@@ -4067,19 +4068,22 @@ class FeatureEngineer:
                             _interaction.append(_name_mapper['original'].get(n))
                         if _feature_match == _degree:
                             _feature_name = _feature_name.replace(' ', '__')
-                            _name_mapper['interaction'].update({_feature_name: _interaction})
+                            _interaction_name_mapper.update({_feature_name: _interaction})
                             _interaction = []
                             break
                     _new_feature_names.update({name: _feature_name})
                 else:
                     for n in _name_mapper['original'].keys():
                         if name.find(n) >= 0:
-                            _name_mapper['interaction'].update({name: [_name_mapper['original'].get(n)]})
+                            _interaction_name_mapper.update({name: [_name_mapper['original'].get(n)]})
                             _new_feature_names.update({name: name.replace(n, _name_mapper['original'].get(n))})
                             break
-        for feature, poly_feature in zip(features, _name_mapper['original']):
-            for interaction in _name_mapper['interaction'].keys():
-                _name_mapper['interaction'][interaction.replace(poly_feature, feature)] = _name_mapper['interaction'].pop(interaction)
+        for interaction in _interaction_name_mapper.keys():
+            if interaction.find('x') >= 0 and interaction.find('^') > 0:
+                _poly_name: str = interaction.split('^')[0]
+                _name_mapper['interaction'].update({interaction.replace(_poly_name, _name_mapper['original'][_poly_name]): _interaction_name_mapper[interaction]})
+            else:
+                _name_mapper['interaction'].update({interaction: _interaction_name_mapper[interaction]})
         _df: pd.DataFrame = pd.DataFrame(data=_polynomial_features, columns=_poly.get_feature_names())
         _df = _df.drop(columns=list(_name_mapper['original'].keys()), axis=1)
         _df = _df.rename(columns=_new_feature_names)
