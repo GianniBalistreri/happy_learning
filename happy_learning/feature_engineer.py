@@ -193,8 +193,11 @@ def _float_adjustments(features: List[str], imp_value: float, convert_to_float32
     :param convert_to_float32: bool
         Convert continuous features types as float64 to float32 for compatibility reasons
     """
+    DATA_PROCESSING['df'][features] = DATA_PROCESSING['df'][features].replace(to_replace=INVALID_VALUES,
+                                                                              value=np.nan,
+                                                                              regex=False
+                                                                              )
     if MissingDataAnalysis(df=DATA_PROCESSING['df']).has_nan():
-        DATA_PROCESSING['df'][features] = DATA_PROCESSING['df'][features].replace(to_replace=INVALID_VALUES, value=np.nan, regex=False)
         DATA_PROCESSING['df'][features] = DATA_PROCESSING['df'][features].fillna(value=imp_value, axis=0)
     if convert_to_float32:
         if len(features) == 1:
@@ -2578,7 +2581,7 @@ class FeatureEngineer:
             Complete file path of data set
 
         :param create_dir: bool
-            Create directories if they do not exists
+            Create directories if they do not exist
 
         :param overwrite: bool
             Overwrite file with same name or not
