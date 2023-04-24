@@ -3452,7 +3452,7 @@ class FeatureEngineer:
                 for feature in _df.columns:
                     if str(_df[feature].dtype).find('float') < 0:
                         _df[feature] = _df[feature].astype(float)
-                DATA_PROCESSING['correlation']['matrix'] = _df.corr(method=meth, min_periods=None, split_every=False)
+                DATA_PROCESSING['correlation']['matrix'] = _df.corr(method=meth, min_periods=None)
                 #for score in DATA_PROCESSING['correlation']['matrix']:
                 #    pass
         del _df
