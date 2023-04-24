@@ -360,6 +360,17 @@ def _load_temp_files(features: List[str]):
             DATA_PROCESSING['df'][feature] = pd.to_datetime(DATA_PROCESSING['df'][feature])
 
 
+def _name_convention(feature: str):
+    """
+    Rename feature based on naming convention
+
+    :param feature: str
+        Name of the feature
+    """
+    if feature.find('.') >= 0:
+        return feature.split('.')[0]
+    return feature
+
 def _process_handler(action: str,
                      feature: str,
                      new_feature: str,
@@ -4934,6 +4945,7 @@ class FeatureEngineer:
                     _dummies = _dummies.loc[:, ~_dummies.columns.duplicated()]
                     _new_names: dict = {}
                     for dummy in _dummies.columns:
+                        print(dummy)
                         _new_feature: str = _avoid_overwriting(feature=dummy)
                         if dummy != _new_feature:
                             _new_names.update({dummy: _new_feature})
