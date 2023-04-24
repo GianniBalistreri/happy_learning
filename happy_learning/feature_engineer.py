@@ -4318,7 +4318,7 @@ class FeatureEngineer:
                     _data: pd.DataFrame = DATA_PROCESSING['df'][feature].replace(_values)
                     _process_handler(action='add',
                                      feature=feature,
-                                     new_feature=feature,
+                                     new_feature=f'{feature}_label_enc',
                                      process='encoder|label',
                                      meth='label_encoder',
                                      param=dict(encode=encode),
