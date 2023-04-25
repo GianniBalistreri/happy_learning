@@ -1514,28 +1514,23 @@ class SwarmIntelligence:
             _best_model_results = _best_model_results.round(decimals=4)
             if self.target_type == 'reg':
                 _file_paths.append(os.path.join(self.output_file_path, 'evaluation_coords.html'))
+                DataVisualizer(df=_best_model_results,
+                               title='Prediction Evaluation of final inherited ML Model:',
+                               features=['obs', 'abs_diff', 'rel_diff', 'pred'],
+                               color_feature='pred',
+                               plot_type='parcoords',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'evaluation_coords.html'),
+                               ).run()
                 _file_paths.append(os.path.join(self.output_file_path, 'scatter_contour.html'))
-                _charts.update({'Prediction Evaluation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                           features=['obs', 'abs_diff',
-                                                                                                     'rel_diff', 'pred'],
-                                                                                           color_feature='pred',
-                                                                                           plot_type='parcoords',
-                                                                                           file_path=_file_paths[0],
-                                                                                           kwargs=dict(layout={})
-                                                                                           ),
-                                'Prediction vs. Observation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                                features=['obs', 'pred'],
-                                                                                                plot_type='joint',
-                                                                                                file_path=_file_paths[1],
-                                                                                                kwargs=dict(layout={})
-                                                                                                )
-                                })
+                DataVisualizer(df=_best_model_results,
+                               title='Prediction vs. Observation of final inherited ML Model:',
+                               features=['obs', 'pred'],
+                               plot_type='joint',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'scatter_contour.html'),
+                               ).run()
             else:
-                _file_paths.append(os.path.join(self.output_file_path, 'confusion_table.html'))
-                _file_paths.append(os.path.join(self.output_file_path, 'confusion_heatmap.html'))
-                _file_paths.append(os.path.join(self.output_file_path, 'confusion_normal_heatmap.html'))
-                _file_paths.append(os.path.join(self.output_file_path, 'clf_report_table.html'))
-                _file_paths.append(os.path.join(self.output_file_path, 'clf_metrics_table.html'))
                 _eval_clf: EvalClf = EvalClf(obs=self.data_set.get('y_test'),
                                              pred=self.data_set.get('pred'),
                                              labels=self.target_labels
@@ -1550,92 +1545,91 @@ class SwarmIntelligence:
                 _cf_col_sum = pd.DataFrame()
                 _cf_col_sum[' '] = _confusion_matrix.transpose().sum()
                 _confusion_matrix = pd.concat([_confusion_matrix, _cf_col_sum], axis=1)
-                _charts.update({'Confusion Matrix': dict(data=_confusion_matrix,
-                                                         plot_type='table',
-                                                         file_path=_file_paths[0],
-                                                         kwargs=dict(layout={})
-                                                         )
-                                })
-                _charts.update({'Confusion Matrix Heatmap': dict(data=_best_model_results,
-                                                                 features=['obs', 'pred'],
-                                                                 plot_type='heat',
-                                                                 file_path=_file_paths[1],
-                                                                 kwargs=dict(layout={})
-                                                                 )
-                                })
+                _file_paths.append(os.path.join(self.output_file_path, 'confusion_table.html'))
+                DataVisualizer(df=_confusion_matrix,
+                               title='Confusion Matrix:',
+                               features=_confusion_matrix.columns.to_list(),
+                               plot_type='table',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'confusion_table.html'),
+                               ).run()
+                _file_paths.append(os.path.join(self.output_file_path, 'confusion_heatmap.html'))
+                DataVisualizer(df=_confusion_matrix,
+                               title='Confusion Matrix Heatmap:',
+                               features=_confusion_matrix.columns.to_list(),
+                               plot_type='heat',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'confusion_heatmap.html'),
+                               ).run()
                 _confusion_matrix_normalized: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
                                                                                        pred=self.data_set.get('pred')
                                                                                        ).confusion(normalize='pred'),
                                                                           # index=['obs', 'pred'],
                                                                           # columns=['obs', 'pred']
                                                                           )
-                _charts.update({'Confusion Matrix Normalized Heatmap:': dict(data=_confusion_matrix_normalized,
-                                                                             features=self.target_labels,
-                                                                             plot_type='heat',
-                                                                             file_path=_file_paths[2],
-                                                                             kwargs=dict(layout={})
-                                                                             )
-                                })
-                _charts.update({'Classification Report:': dict(data=_best_model_results,
-                                                               plot_type='table',
-                                                               file_path=_file_paths[3],
-                                                               kwargs=dict(layout={})
-                                                               )
-                                })
+                _file_paths.append(os.path.join(self.output_file_path, 'confusion_normal_heatmap.html'))
+                DataVisualizer(df=_confusion_matrix_normalized,
+                               title='Confusion Matrix Normalized Heatmap:',
+                               features=_confusion_matrix_normalized.columns.to_list(),
+                               plot_type='heat',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'confusion_normal_heatmap.html'),
+                               ).run()
+                _file_paths.append(os.path.join(self.output_file_path, 'clf_report_table.html'))
+                DataVisualizer(df=_best_model_results,
+                               title='Classification Report:',
+                               features=_best_model_results.columns.to_list(),
+                               plot_type='table',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'clf_report_table.html'),
+                               ).run()
                 _classification_report: dict = _eval_clf.classification_report()
                 _confusion_metrics: dict = dict(precision=[], recall=[], f1=[])
                 for label in self.target_labels:
                     _confusion_metrics['precision'].append(_classification_report.get(label)['precision'])
                     _confusion_metrics['recall'].append(_classification_report.get(label)['recall'])
                     _confusion_metrics['f1'].append(_classification_report.get(label)['f1-score'])
-                _charts.update({'Classification Metrics': dict(data=pd.DataFrame(data=_confusion_metrics,
-                                                                                 index=self.target_labels,
-                                                                                 columns=list(_confusion_metrics.keys())
-                                                                                 ),
-                                                               plot_type='table',
-                                                               file_path=_file_paths[4],
-                                                               kwargs=dict(layout={})
-                                                               )
-                                })
+                _file_paths.append(os.path.join(self.output_file_path, 'clf_metrics_table.html'))
+                _clf_metrics: pd.DataFrame = pd.DataFrame(data=_confusion_metrics,
+                                                          index=self.target_labels,
+                                                          columns=list(_confusion_metrics.keys())
+                                                          )
+                DataVisualizer(df=_clf_metrics,
+                               title='Classification Metrics:',
+                               features=_clf_metrics.columns.to_list(),
+                               plot_type='table',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'clf_metrics_table.html'),
+                               ).run()
                 if self.target_type == 'clf_multi':
                     _file_paths.append(os.path.join(self.output_file_path, 'evaluation_category.html'))
-                    _charts.update({'Prediction Evaluation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                               features=['obs', 'abs_diff',
-                                                                                                         'pred'],
-                                                                                               color_feature='pred',
-                                                                                               plot_type='parcoords',
-                                                                                               file_path=_file_paths[-1],
-                                                                                               kwargs=dict(layout={})
-                                                                                               )
-                                    })
+                    DataVisualizer(df=_best_model_results,
+                                   title='Prediction Evaluation of final inherited ML Model:',
+                                   features=['obs', 'abs_diff', 'pred'],
+                                   color_feature='pred',
+                                   plot_type='parcoords',
+                                   file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                       self.output_file_path, 'evaluation_category.html'),
+                                   ).run()
                 else:
-                    _file_paths.append(os.path.join(self.output_file_path, 'roc_auc_curve_baseline_baseline_baseline_baseline.html'))
                     _roc_curve = pd.DataFrame()
                     _roc_curve_values: dict = EvalClf(obs=_best_model_results['obs'],
                                                       pred=_best_model_results['pred']
                                                       ).roc_curve()
                     _roc_curve['roc_curve'] = _roc_curve_values['true_positive_rate'][1]
                     _roc_curve['baseline'] = _roc_curve_values['false_positive_rate'][1]
-                    _charts.update({'ROC-AUC Curve': dict(data=_roc_curve,
-                                                          features=['roc_curve', 'baseline'],
-                                                          time_features=['baseline'],
-                                                          # xaxis_label=['False Positive Rate'],
-                                                          # yaxis_label=['True Positive Rate'],
-                                                          melt=True,
-                                                          plot_type='line',
-                                                          use_auto_extensions=False,
-                                                          file_path=_file_paths[-1],
-                                                          kwargs=dict(layout={})
-                                                          )
-                                    })
-            DataVisualizer(subplots=_charts,
-                           interactive=True,
-                           file_path=self.output_file_path,
-                           render=True if self.output_file_path is None else False,
-                           height=750,
-                           width=750,
-                           unit='px'
-                           ).run()
+                    _file_paths.append(os.path.join(self.output_file_path, 'roc_auc_curve.html'))
+                    DataVisualizer(df=_roc_curve,
+                                   title='ROC-AUC Curve:',
+                                   features=['roc_curve', 'baseline'],
+                                   time_features=['baseline'],
+                                   plot_type='line',
+                                   # xaxis_label=['False Positive Rate'],
+                                   # yaxis_label=['True Positive Rate'],
+                                   use_auto_extensions=False,
+                                   file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                       self.output_file_path, 'roc_auc_curve.html'),
+                                   ).run()
             for path in _file_paths:
                 _file_name: str = path.split('/')[-1].replace('.html', '')
                 try:
