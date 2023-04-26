@@ -91,9 +91,12 @@ class SMLScoreTest(unittest.TestCase):
     def test_sml_fitness_score(self):
         _sml_fitness_score: float = sml_fitness_score(ml_metric=(0.56, 1),
                                                       train_test_metric=(0.56, 0.66),
-                                                      train_time_in_seconds=400
+                                                      train_time_in_seconds=400,
+                                                      ml_metric_weights=0.3,
+                                                      train_test_weights=0.77,
+                                                      train_time_in_seconds_weights=0.0000005,
                                                       )
-        self.assertEqual(first=94.42444444444445, second=_sml_fitness_score)
+        self.assertEqual(first=91.42444444444445, second=_sml_fitness_score)
 
     def test_sml_score_test(self):
         pass
