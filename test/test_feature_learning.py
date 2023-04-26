@@ -6,6 +6,7 @@ from happy_learning.feature_learning import FeatureLearning
 from happy_learning.genetic_algorithm import GeneticAlgorithm
 
 DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/avocado.csv')
+TEMP_DIR: str = 'data'
 
 
 class FeatureLearningTest(unittest.TestCase):
@@ -13,7 +14,10 @@ class FeatureLearningTest(unittest.TestCase):
     Class for testing class FeatureLearning
     """
     def test_ga_clf(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='type')
+        _feature_engineer: FeatureEngineer = FeatureEngineer(temp_dir=TEMP_DIR,
+                                                             df=DATA_SET,
+                                                             target_feature='type'
+                                                             )
         _feature_engineer.set_predictors(exclude=None, exclude_original_data=False)
         _ga: GeneticAlgorithm = GeneticAlgorithm(mode='model',
                                                  target=_feature_engineer.get_target(),
@@ -38,8 +42,8 @@ class FeatureLearningTest(unittest.TestCase):
                                                  warm_start_strategy='monotone',
                                                  warm_start_constant_hidden_layers=0,
                                                  warm_start_constant_category='very_small',
-                                                 max_generations=10,
-                                                 pop_size=64,
+                                                 max_generations=1,
+                                                 pop_size=4,
                                                  mutation_rate=0.1,
                                                  mutation_prob=0.15,
                                                  parents_ratio=0.5,
@@ -95,8 +99,8 @@ class FeatureLearningTest(unittest.TestCase):
                                                                     warm_start_strategy='monotone',
                                                                     warm_start_constant_hidden_layers=0,
                                                                     warm_start_constant_category='very_small',
-                                                                    max_generations=10,
-                                                                    pop_size=64,
+                                                                    max_generations=1,
+                                                                    pop_size=4,
                                                                     mutation_rate=0.1,
                                                                     mutation_prob=0.15,
                                                                     parents_ratio=0.5,
@@ -117,7 +121,10 @@ class FeatureLearningTest(unittest.TestCase):
         self.assertTrue(expr=_ga_using_new_features.final_generation[_ga_using_new_features.best_individual_idx]['fitness_score'] >= _ga.final_generation[_ga.best_individual_idx]['fitness_score'])
 
     def test_ga_reg(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice')
+        _feature_engineer: FeatureEngineer = FeatureEngineer(temp_dir=TEMP_DIR,
+                                                             df=DATA_SET,
+                                                             target_feature='AveragePrice'
+                                                             )
         _feature_engineer.set_predictors(exclude=None, exclude_original_data=False)
         _ga: GeneticAlgorithm = GeneticAlgorithm(mode='model',
                                                  target=_feature_engineer.get_target(),
@@ -142,8 +149,8 @@ class FeatureLearningTest(unittest.TestCase):
                                                  warm_start_strategy='monotone',
                                                  warm_start_constant_hidden_layers=0,
                                                  warm_start_constant_category='very_small',
-                                                 max_generations=10,
-                                                 pop_size=64,
+                                                 max_generations=1,
+                                                 pop_size=4,
                                                  mutation_rate=0.1,
                                                  mutation_prob=0.15,
                                                  parents_ratio=0.5,
@@ -199,8 +206,8 @@ class FeatureLearningTest(unittest.TestCase):
                                                                     warm_start_strategy='monotone',
                                                                     warm_start_constant_hidden_layers=0,
                                                                     warm_start_constant_category='very_small',
-                                                                    max_generations=10,
-                                                                    pop_size=64,
+                                                                    max_generations=1,
+                                                                    pop_size=4,
                                                                     mutation_rate=0.1,
                                                                     mutation_prob=0.15,
                                                                     parents_ratio=0.5,
