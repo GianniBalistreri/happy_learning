@@ -6,6 +6,7 @@ from happy_learning.data_miner import DataMiner
 from happy_learning.feature_engineer import FeatureEngineer
 from typing import List
 
+TEMP_DIR: str = 'data'
 DATA_SET: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/avocado.csv')
 
 
@@ -14,9 +15,13 @@ class DataMinerTest(unittest.TestCase):
     Class for testing class DataMiner
     """
     def test_supervised_clf(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='type')
+        _feature_engineer: FeatureEngineer = FeatureEngineer(temp_dir=TEMP_DIR,
+                                                             df=DATA_SET,
+                                                             target_feature='type'
+                                                             )
         _feature_engineer.set_predictors(exclude_original_data=False)
-        DataMiner(df=_feature_engineer.get_data(dask_df=True),
+        DataMiner(temp_dir=TEMP_DIR,
+                  df=_feature_engineer.get_data(dask_df=True),
                   file_path=None,
                   target=_feature_engineer.get_target(),
                   predictors=_feature_engineer.get_predictors(),
@@ -25,7 +30,9 @@ class DataMinerTest(unittest.TestCase):
                   train_critic=True,
                   plot=True,
                   output_path='data',
-                  **dict(max_generations=2)
+                  **dict(max_generations=2,
+                         pop_size=4
+                         )
                   ).supervised(models=['cat', 'xgb'],
                                feature_selector='shapley',
                                top_features=0.5,
@@ -41,23 +48,26 @@ class DataMinerTest(unittest.TestCase):
                                **dict(engineer_categorical=False)
                                )
         _found_results: List[bool] = []
-        for result in ['feature_learning_data.parquet',
-                       'feature_learning.p',
+        for result in ['feature_learning.p',
                        'feature_importance_shapley.html',
                        'feature_tournament_game_size.html',
                        'genetic.p',
                        'model.p'
                        ]:
-            if os.path.isfile('data/{}'.format(result)):
+            if os.path.isfile(f'data/{result}'):
                 _found_results.append(True)
             else:
                 _found_results.append(False)
         self.assertTrue(expr=all(_found_results))
 
     def test_supervised_reg(self):
-        _feature_engineer: FeatureEngineer = FeatureEngineer(df=DATA_SET, target_feature='AveragePrice')
+        _feature_engineer: FeatureEngineer = FeatureEngineer(temp_dir=TEMP_DIR,
+                                                             df=DATA_SET,
+                                                             target_feature='AveragePrice'
+                                                             )
         _feature_engineer.set_predictors(exclude_original_data=False)
-        DataMiner(df=_feature_engineer.get_data(dask_df=True),
+        DataMiner(temp_dir=TEMP_DIR,
+                  df=_feature_engineer.get_data(dask_df=True),
                   file_path=None,
                   target=_feature_engineer.get_target(),
                   predictors=_feature_engineer.get_predictors(),
@@ -66,7 +76,9 @@ class DataMinerTest(unittest.TestCase):
                   train_critic=True,
                   plot=True,
                   output_path='data',
-                  **dict(max_generations=2)
+                  **dict(max_generations=2,
+                         pop_size=4
+                         )
                   ).supervised(models=['cat', 'xgb'],
                                feature_selector='shapley',
                                top_features=0.5,
