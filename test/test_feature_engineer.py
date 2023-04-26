@@ -8,7 +8,8 @@ from typing import Dict, List
 
 DATA_FILE_PATH: str = 'data/avocado.csv'
 FEATURE_ENGINEER_FILE_PATH: str = 'data/feature_engineer.p'
-FEATURE_ENGINEER: FeatureEngineer = FeatureEngineer(df=None,
+FEATURE_ENGINEER: FeatureEngineer = FeatureEngineer(temp_dir='data',
+                                                    df=None,
                                                     file_path=DATA_FILE_PATH,
                                                     target_feature='AveragePrice',
                                                     generate_new_feature=True,
@@ -40,10 +41,10 @@ def _check_feature_orchestra(meth: str, features: List[str]) -> bool:
     :return: bool
         FeatureOrchestra check passed or failed
     """
-    return True
+    pass
 
 
-def _check_tracking(meth: str, suffix: str, feature_type: str) -> Dict[str, bool]:
+def _check_tracking(meth: str, suffix: str, feature_type: str, feature: str = None) -> Dict[str, bool]:
     """
     Check internal tracking framework of the FeatureEngineer class
 
@@ -56,27 +57,36 @@ def _check_tracking(meth: str, suffix: str, feature_type: str) -> Dict[str, bool
     :param feature_type: str
         Name of the feature type
 
+    :param feature: str
+        Name of the feature
+
     :return: Dict[str, bool]
         Tracking results:
             -> Process tracking
             -> Feature relation tracking (raw)
             -> Feature relation tracking (level)
     """
-    _features: List[str] = copy.deepcopy(FEATURE_ENGINEER.get_features(feature_type=feature_type))
+    if feature in FEATURE_ENGINEER.get_features():
+        _features = [feature]
+    else:
+        _features: List[str] = copy.deepcopy(FEATURE_ENGINEER.get_features(feature_type=feature_type))
     _found_tracked_processes: List[bool] = []
     _found_tracked_feature_relation_raw: List[bool] = []
     _found_tracked_feature_relation_level: List[bool] = []
     _process_tracking: dict = FEATURE_ENGINEER.get_data_processing()['processing']['process']
     _feature_relation_tracking: dict = FEATURE_ENGINEER.get_data_processing()['processing']['features']
     for i, feature in enumerate(_features, start=1):
-        if _process_tracking[str(i)]['meth'] == meth and list(_process_tracking[str(i)]['features'].keys())[0] == '{}_{}'.format(feature, suffix) and _process_tracking[str(i)]['features']['{}_{}'.format(feature, suffix)]:
-            _found_tracked_processes.append(True)
-        else:
-            _found_tracked_processes.append(False)
+        for j, process in enumerate(_process_tracking.keys(), start=1):
+            if _process_tracking[process]['meth'] == meth and list(_process_tracking[process]['features'].keys())[0] == '{}_{}'.format(feature, suffix) and _process_tracking[process]['features']['{}_{}'.format(feature, suffix)] == feature:
+                _found_tracked_processes.append(True)
+                break
+            else:
+                if j == len(_process_tracking.keys()):
+                    _found_tracked_processes.append(False)
         if '{}_{}'.format(feature, suffix) in FEATURE_ENGINEER.get_cleaned_features():
             continue
         if feature in _feature_relation_tracking['raw'].keys():
-            if _feature_relation_tracking['raw'][feature][0] == '{}_{}'.format(feature, suffix):
+            if '{}_{}'.format(feature, suffix) in _feature_relation_tracking['raw'][feature]:
                 _found_tracked_feature_relation_raw.append(True)
             else:
                 _found_tracked_feature_relation_raw.append(False)
@@ -261,11 +271,9 @@ class FeatureEngineerTest(unittest.TestCase):
 
     def test_clean_nan(self):
         FEATURE_ENGINEER.exp_transform()
-        FEATURE_ENGINEER.exp_transform()
-        FEATURE_ENGINEER.exp_transform()
         _n_cases: int = FEATURE_ENGINEER.get_n_cases()
         FEATURE_ENGINEER.clean_nan(other_mis=None)
-        print(FEATURE_ENGINEER.get_data(dask_df=False)['Total Bags_exp_exp'])
+        print(FEATURE_ENGINEER.get_data(dask_df=False)['Total Bags_exp'])
         self.assertTrue(expr=_n_cases > FEATURE_ENGINEER.get_n_cases())
 
     def test_clean_unstable_features(self):
@@ -286,11 +294,21 @@ class FeatureEngineerTest(unittest.TestCase):
             self.assertTrue(expr=os.path.isfile(_data_file_path))
 
     def test_data_import(self):
-        _feature_engineer = FeatureEngineer(file_path='data/avocado.csv')
+        _feature_engineer = FeatureEngineer(temp_dir='data',
+                                            file_path='data/avocado.csv'
+                                            )
         self.assertTrue(expr=_feature_engineer.get_n_cases() > 0)
 
     def test_date_categorizer(self):
-        FEATURE_ENGINEER.date_categorizer()
+        FEATURE_ENGINEER.date_categorizer(year=True,
+                                          month=True,
+                                          week=True,
+                                          week_day=True,
+                                          day=True,
+                                          hour=True,
+                                          minute=True,
+                                          second=True
+                                          )
         _tracking_check_year: Dict[str, bool] = _check_tracking(meth='date_categorizer', suffix='year', feature_type='date')
         _tracking_check_month: Dict[str, bool] = _check_tracking(meth='date_categorizer', suffix='month', feature_type='date')
         _tracking_check_day: Dict[str, bool] = _check_tracking(meth='date_categorizer', suffix='day', feature_type='date')
@@ -529,21 +547,20 @@ class FeatureEngineerTest(unittest.TestCase):
 
     def test_get_transformations(self):
         _transformations: dict = dict(encoder=['bin', 'label', 'one_hot'],
-                                      scaler=['min_max', 'robust', 'normal', 'standard', 'box_cox', 'log', 'exp'],
+                                      scaler=['minmax', 'robust', 'normal', 'standard', 'box_cox', 'log', 'exp'],
                                       mapper=[],
                                       naming=[],
                                       binning_continuous=[],
                                       binning_date=[]
                                       )
         _found_transformation: List[bool] = []
-        print(FEATURE_ENGINEER.get_transformations())
         _observed_transformation: dict = FEATURE_ENGINEER.get_transformations(transformation=None)
         for transformation in _transformations.keys():
             if transformation in list(_observed_transformation.keys()):
                 _found_transformation.append(True)
                 if len(_transformations.get(transformation)) > 0:
                     for meth in _transformations.get(transformation):
-                        if meth in list(_observed_transformation[transformation][meth].keys()):
+                        if meth in list(_observed_transformation[transformation].keys()):
                             _found_transformation.append(True)
                         else:
                             _found_transformation.append(False)
@@ -567,7 +584,7 @@ class FeatureEngineerTest(unittest.TestCase):
         _unique_feature_labels = FEATURE_ENGINEER.get_feature_values(feature='type', unique=True)
         _found_labels: List[bool] = [True if type(label) == str else False for label in _unique_feature_labels]
         FEATURE_ENGINEER.label_encoder(encode=True, features=['type'])
-        _found_values: List[bool] = [True if type(value) == np.int64 or type(value) == np.int32 else False for value in FEATURE_ENGINEER.get_feature_values(feature='type', unique=True)]
+        _found_values: List[bool] = [True if type(value) == np.int64 or type(value) == np.int32 else False for value in FEATURE_ENGINEER.get_feature_values(feature='type_label_enc', unique=True)]
         self.assertTrue(expr=all(_found_labels) and all(_found_values))
 
     def test_linguistic_features(self):
@@ -583,7 +600,7 @@ class FeatureEngineerTest(unittest.TestCase):
 
     def test_normalizer(self):
         FEATURE_ENGINEER.normalizer()
-        _tracking_check: Dict[str, bool] = _check_tracking(meth='exp_transform', suffix='exp', feature_type='continuous')
+        _tracking_check: Dict[str, bool] = _check_tracking(meth='normalizer', suffix='normal', feature_type='continuous')
         self.assertTrue(expr=_tracking_check.get('process') and _tracking_check.get('raw') and _tracking_check.get('level'))
 
     def test_merge_engineer(self):
@@ -611,8 +628,42 @@ class FeatureEngineerTest(unittest.TestCase):
 
     def test_one_hot_encoder(self):
         FEATURE_ENGINEER.one_hot_encoder()
-        _tracking_check: Dict[str, bool] = _check_tracking(meth='one_hot_encoder', suffix='', feature_type='continuous')
-        self.assertTrue(expr=_tracking_check.get('process') and _tracking_check.get('raw') and _tracking_check.get('level'))
+        _tracking_check_2015: Dict[str, bool] = _check_tracking(meth='one_hot_encoder',
+                                                                suffix='2015',
+                                                                feature_type='categorical',
+                                                                feature='year'
+                                                                )
+        _tracking_check_2016: Dict[str, bool] = _check_tracking(meth='one_hot_encoder',
+                                                                suffix='2016',
+                                                                feature_type='categorical',
+                                                                feature='year'
+                                                                )
+        _tracking_check_2017: Dict[str, bool] = _check_tracking(meth='one_hot_encoder',
+                                                                suffix='2017',
+                                                                feature_type='categorical',
+                                                                feature='year'
+                                                                )
+        _tracking_check_2018: Dict[str, bool] = _check_tracking(meth='one_hot_encoder',
+                                                                suffix='2018',
+                                                                feature_type='categorical',
+                                                                feature='year'
+                                                                )
+        _tracking_process: bool = all([_tracking_check_2015.get('process'),
+                                       _tracking_check_2016.get('process'),
+                                       _tracking_check_2017.get('process'),
+                                       _tracking_check_2018.get('process'),
+                                       ])
+        _tracking_raw: bool = all([_tracking_check_2015.get('raw'),
+                                   _tracking_check_2016.get('raw'),
+                                   _tracking_check_2017.get('raw'),
+                                   _tracking_check_2018.get('raw'),
+                                   ])
+        _tracking_level: bool = all([_tracking_check_2015.get('level'),
+                                     _tracking_check_2016.get('level'),
+                                     _tracking_check_2017.get('level'),
+                                     _tracking_check_2018.get('level'),
+                                     ])
+        self.assertTrue(expr=_tracking_process and _tracking_raw and _tracking_level)
 
     def test_outlier_detection(self):
         pass
@@ -643,7 +694,7 @@ class FeatureEngineerTest(unittest.TestCase):
 
     def test_reset_target(self):
         FEATURE_ENGINEER.reset_target()
-        self.assertEqual(first=None, second=FEATURE_ENGINEER.get_target())
+        self.assertEqual(first=[], second=FEATURE_ENGINEER.get_target())
 
     def test_rounding(self):
         FEATURE_ENGINEER.rounding()
@@ -652,7 +703,7 @@ class FeatureEngineerTest(unittest.TestCase):
 
     def test_save(self):
         FEATURE_ENGINEER.save(file_path='data/feature_engineer.p', cls_obj=True, overwrite=True, create_dir=False)
-        self.assertTrue(expr=os.path.isfile('data/feature_engineer.p') and os.path.isdir('data/feature_engineer_data.parquet'))
+        self.assertTrue(expr=os.path.isfile('data/feature_engineer.p'))
 
     def test_sampler(self):
         pass

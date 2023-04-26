@@ -300,7 +300,7 @@ class NeuralNetwork:
         Generate Multi-Layer Perceptron (MLP) classifier parameter configuration randomly
 
         :return dict:
-            Configured Multi-Layer Perceptron (MLP) hyper parameter set
+            Configured Multi-Layer Perceptron (MLP) hyperparameter set
         """
         return MLP(input_size=len(self.predictors), output_size=self.output_size, parameters=self.model_param)
 
@@ -743,7 +743,7 @@ class NetworkGenerator(NeuralNetwork):
 
     def _config_hidden_layers(self):
         """
-        Configure hyper parameters of the hidden layers
+        Configure hyperparameters of the hidden layers
         """
         if self.hidden_layer_size_category is None:
             self.hidden_layer_size_category = np.random.choice(a=list(HIDDEN_LAYER_CATEGORY.keys()))
@@ -768,7 +768,7 @@ class NetworkGenerator(NeuralNetwork):
                        hidden_layers: bool = False
                        ):
         """
-        Finalize configuration of hyper parameter settings of the neural network
+        Finalize configuration of hyperparameter settings of the neural network
 
         :param loss: bool
             Configure loss function initially based on the size of the output layer
@@ -902,9 +902,8 @@ class NetworkGenerator(NeuralNetwork):
                         optimizer=np.random.choice(a=list(OPTIMIZER.keys()))
                         )
         else:
-            return dict(embedding=dict(embedding_len=300,
-                                       embedding_model=np.random.choice(a=list(EMBEDDING.keys()))
-                                       )
+            return dict(embedding_len=300,
+                        embedding_model=np.random.choice(a=list(EMBEDDING.keys()))
                         )
 
     def _import_data_torch(self):
@@ -920,7 +919,7 @@ class NetworkGenerator(NeuralNetwork):
                                                    lower=True,
                                                    include_lengths=True,
                                                    batch_first=True,
-                                                   fix_length=300 if self.model_param.get('embedding_len') is None else self.model_param.get('embedding_len')
+                                                   fix_length=300 if self.model_param['embedding_len'] is None else self.model_param['embedding_len']
                                                    )
                 self.embedding_label: Field = Field(sequential=False, is_target=True, unk_token=None)
                 for predictor in self.predictors:
@@ -946,7 +945,7 @@ class NetworkGenerator(NeuralNetwork):
                                                                   )
                 if self.model_param.get('embedding_model') == 'fast_text':
                     self.embedding_text.build_vocab(_train_data,
-                                                    vectors=EMBEDDING[self.model_param.get('embedding_model')](language='de' if self.model_param.get('lang') is None else self.model_param.get('lang'))
+                                                    vectors=EMBEDDING['fast_text'](language='de' if self.model_param.get('lang') is None else self.model_param.get('lang'))
                                                     )
                 self.embedding_label.build_vocab(_train_data)
                 if 0 in _unique_labels:
@@ -1143,9 +1142,9 @@ class NetworkGenerator(NeuralNetwork):
                                        '{}_param'.format(_model)
                                        )()
             self.model_param.update(self._get_param_space(general=True))
-            self._config_params(hidden_layers=True)
             if self.sequential_type == 'text':
-                self._config_params(natural_language=True)
+                self.model_param.update(self._get_param_space(general=False))
+            self._config_params(hidden_layers=True)
         else:
             self.model_param = copy.deepcopy(self.input_param)
         _idx: int = 0 if len(self.model_param_mutated.keys()) == 0 else len(self.model_param_mutated.keys()) + 1
@@ -1300,9 +1299,9 @@ class NetworkGenerator(NeuralNetwork):
                                            '{}_param'.format(NETWORK_TYPE.get(self.model_name))
                                            )()
                 self.model_param.update(self._get_param_space(general=True))
-                self.model_param.update(learning_rate=0.001)
                 if self.sequential_type == 'text':
-                    self._config_params(natural_language=True)
+                    self.model_param.update(self._get_param_space(general=False))
+                self.model_param.update(learning_rate=0.001)
             else:
                 self.model_param = copy.deepcopy(self.input_param)
             if len(self.predictors) > 0:

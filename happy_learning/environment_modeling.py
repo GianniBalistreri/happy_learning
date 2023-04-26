@@ -350,12 +350,14 @@ class EnvironmentModeling:
             _model = ModelGeneratorClf(model_name=_model_name,
                                        clf_params=_model_param.get(_model_name),
                                        models=[_model_name]
-                                       ).generate_model()
+                                       )
+            _model.generate_model()
         else:
             _model = ModelGeneratorReg(model_name=_model_name,
                                        reg_params=_model_param.get(_model_name),
                                        models=[_model_name]
-                                       ).generate_model()
+                                       )
+            _model.generate_model()
         _model.train(x=data_sets.get('x_train').values, y=data_sets.get('y_train').values)
         _pred_train: np.array = _model.predict(x=data_sets.get('x_train').values)
         _model.eval(obs=data_sets.get('y_train').values, pred=_pred_train, eval_metric=None, train_error=True)
@@ -429,12 +431,14 @@ class EnvironmentModeling:
             _model = ModelGeneratorClf(model_name=model_name,
                                        clf_params=param,
                                        models=[model_name]
-                                       ).generate_model()
+                                       )
+            _model.generate_model()
         else:
             _model = ModelGeneratorReg(model_name=model_name,
                                        reg_params=param,
                                        models=[model_name]
-                                       ).generate_model()
+                                       )
+            _model.generate_model()
         _model.train(x=data_sets.get('x_train').values, y=data_sets.get('y_train').values)
         if eval:
             _pred_train: np.array = _model.predict(x=data_sets.get('x_train').values)

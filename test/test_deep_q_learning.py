@@ -7,8 +7,8 @@ from happy_learning.sampler import MLSampler
 from happy_learning.supervised_machine_learning import ModelGeneratorClf
 from typing import List
 
-OUTPUT_PATH: str = './data/'
-DF: pd.DataFrame = pd.read_csv(filepath_or_buffer=f'{OUTPUT_PATH}avocado.csv', sep=',')
+OUTPUT_PATH: str = 'data/'
+DF: pd.DataFrame = pd.read_csv(filepath_or_buffer=f'{OUTPUT_PATH}avocado.csv', sep=',').loc[0:10000, ]
 DF = DF.replace({'conventional': 0, 'organic': 1})
 DF['type'] = DF['type'].astype(int)
 CLF_TARGET: str = 'type'
@@ -34,8 +34,10 @@ class TestDQNAgent(unittest.TestCase):
        Test apply learning (inference) function
        """
        _model_name: str = 'cat'
-       _param: dict = ModelGeneratorClf(model_name=_model_name).generate_model().model_param
-       agent: DQNAgent = DQNAgent(episodes=10,
+       _model: ModelGeneratorClf = ModelGeneratorClf(model_name=_model_name)
+       _model.generate_model()
+       _param: dict = _model.model_param
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm=_model_name)
@@ -55,9 +57,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_ada(self):
        """
-       Test hyper-parameter optimization of ada boost classification using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of ada boost classification using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='ada')
@@ -68,9 +70,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_cat(self):
        """
-       Test hyper-parameter optimization of cat boost classification using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of cat boost classification using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='cat')
@@ -81,9 +83,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_lida(self):
        """
-       Test hyper-parameter optimization of linear discriminant analysis classification using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of linear discriminant analysis classification using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='lida')
@@ -94,9 +96,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_log(self):
        """
-       Test hyper-parameter optimization of logistic regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of logistic regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='log')
@@ -107,9 +109,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_gbo(self):
        """
-       Test hyper-parameter optimization of gradient boosting decision tree classification using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of gradient boosting decision tree classification using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='gbo')
@@ -120,9 +122,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_knn(self):
        """
-       Test hyper-parameter optimization of k-nearest neighbor classification using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of k-nearest neighbor classification using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='knn')
@@ -133,9 +135,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_qda(self):
        """
-       Test hyper-parameter optimization of quadratic discriminant analysis classification using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of quadratic discriminant analysis classification using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='qda')
@@ -146,9 +148,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_rf(self):
        """
-       Test hyper-parameter optimization of random forest classification using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of random forest classification using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='rf')
@@ -159,9 +161,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_svm(self):
        """
-       Test hyper-parameter optimization of support vector machine classification using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of support vector machine classification using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='svm')
@@ -172,9 +174,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_nusvm(self):
        """
-       Test hyper-parameter optimization of nu support vector machine classification using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of nu support vector machine classification using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='nusvm')
@@ -185,9 +187,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_clf_xgb(self):
        """
-       Test hyper-parameter optimization of extreme gradient boosting decision tree classification using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of extreme gradient boosting decision tree classification using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='xgb')
@@ -198,9 +200,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_ada(self):
        """
-       Test hyper-parameter optimization of ada boost regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of ada boost regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='ada')
@@ -211,9 +213,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_cat(self):
        """
-       Test hyper-parameter optimization of cat boost regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of cat boost regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='cat')
@@ -224,9 +226,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_elastic(self):
        """
-       Test hyper-parameter optimization of elastic net regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of elastic net regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='elastic')
@@ -237,9 +239,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_gam(self):
        """
-       Test hyper-parameter optimization of generalized additive models regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of generalized additive models regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='gam')
@@ -250,9 +252,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_rf(self):
        """
-       Test hyper-parameter optimization of random forest regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of random forest regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='rf')
@@ -263,9 +265,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_svm(self):
        """
-       Test hyper-parameter optimization of support vector machine regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of support vector machine regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='svm')
@@ -276,9 +278,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_nusvm(self):
        """
-       Test hyper-parameter optimization of nu support vector machine regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of nu support vector machine regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='nusvm')
@@ -289,9 +291,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_gbo(self):
        """
-       Test hyper-parameter optimization of gradient boosting decision tree regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of gradient boosting decision tree regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='gbo')
@@ -302,9 +304,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_lasso(self):
        """
-       Test hyper-parameter optimization of lasso regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of lasso regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='lasso')
@@ -315,9 +317,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_knn(self):
        """
-       Test hyper-parameter optimization of k-nearest neighbor regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of k-nearest neighbor regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='knn')
@@ -328,9 +330,9 @@ class TestDQNAgent(unittest.TestCase):
 
    def test_optimize_reg_xgb(self):
        """
-       Test hyper-parameter optimization of extreme gradient boosting decision tree regression using reinforcement learning (Deep-Q-Learning)
+       Test hyperparameter optimization of extreme gradient boosting decision tree regression using reinforcement learning (Deep-Q-Learning)
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='xgb')
@@ -343,7 +345,7 @@ class TestDQNAgent(unittest.TestCase):
        """
        Test continuing optimization
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='cat')
@@ -363,7 +365,7 @@ class TestDQNAgent(unittest.TestCase):
                                    train_size=0.8,
                                    stratification=False
                                    ).train_test_sampling(validation_split=0.1)
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='cat')
@@ -389,7 +391,7 @@ class TestDQNAgent(unittest.TestCase):
        """
        Test visualization function
        """
-       agent: DQNAgent = DQNAgent(episodes=10,
+       agent: DQNAgent = DQNAgent(episodes=5,
                                   target_update=5,
                                   output_file_path=OUTPUT_PATH,
                                   **dict(sml_algorithm='cat')

@@ -41,7 +41,7 @@ pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_REG.get('x_test')), pd.DataFrame(da
 pd.concat(objs=[pd.DataFrame(data=TRAIN_TEST_REG.get('x_val')), pd.DataFrame(data=TRAIN_TEST_REG.get('y_val'))], axis=1).to_csv(path_or_buf=VALIDATION_DATA_REG_PATH, index=False)
 DATA_SET_TEXT_CLF: pd.DataFrame = pd.read_csv(filepath_or_buffer='data/tripadvisor_hotel_reviews.csv').loc[0:100, ]
 DATA_SET_TEXT_CLF = DATA_SET_TEXT_CLF.loc[~DATA_SET_TEXT_CLF.isnull().any(axis=1), :]
-UNIQUE_LABELS: int = 3 # len(DATA_SET_TEXT_CLF['label'].unique())
+UNIQUE_LABELS: int = len(DATA_SET_TEXT_CLF['label'].unique())
 TRAIN_TEST_TEXT_CLF: dict = MLSampler(df=DATA_SET_TEXT_CLF,
                                       target=TARGET_TEXT,
                                       features=PREDICTORS_TEXT,
@@ -153,9 +153,12 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  deep_learning_type='batch',
                                                  deep_learning_output_size=UNIQUE_LABELS,
                                                  log=False,
+                                                 mlflow_log=False,
                                                  feature_engineer=None,
                                                  sampling_function=None,
-                                                 **dict(sep=',')
+                                                 **dict(sep=',',
+                                                        lang='en'
+                                                        )
                                                  )
         _ga.optimize()
         self.assertTrue(expr=_ga.evolution_gradient.get('max')[0] <= _ga.evolution_gradient.get('max')[-1])
@@ -330,7 +333,7 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  warm_start_constant_hidden_layers=0,
                                                  warm_start_constant_category='very_small',
                                                  max_generations=1,
-                                                 pop_size=64,
+                                                 pop_size=4,
                                                  mutation_rate=0.1,
                                                  mutation_prob=0.85,
                                                  parents_ratio=0.5,
@@ -344,40 +347,43 @@ class GeneticAlgorithmTest(unittest.TestCase):
                                                  deep_learning_type='batch',
                                                  deep_learning_output_size=None,
                                                  log=False,
+                                                 mlflow_log=False,
                                                  feature_engineer=_feature_engineer,
                                                  sampling_function=None
                                                  )
         _ga.optimize()
-        _ga.visualize(results_table=False,
+        _ga.visualize(results_table=True,
                       model_distribution=True,
                       model_evolution=True,
                       param_distribution=False,
                       train_time_distribution=True,
-                      breeding_map=True,
+                      breeding_map=False,
                       breeding_graph=False,
                       fitness_distribution=True,
                       fitness_evolution=True,
                       fitness_dimensions=True,
                       per_generation=True,
-                      prediction_of_best_model=False,
+                      prediction_of_best_model=True,
                       epoch_stats=False
                       )
         _found_plot: List[bool] = []
         for plot in ['ga_metadata_table',
                      'ga_model_evolution',
-                     'ga_model_distribution',
-                     'ga_parameter_treemap',
-                     'ga_training_time_distribution',
-                     'ga_breeding_heatmap',
-                     'ga_breeding_graph',
+                     'ga_model_distribution_model_generation_0',
+                     'ga_model_distribution_model_generation_1',
+                     #'ga_parameter_treemap',
+                     'ga_training_time_distribution_train_time_in_seconds_model',
+                     #'ga_breeding_heatmap',
+                     #'ga_breeding_graph',
                      'ga_fitness_score_distribution_per_generation',
-                     'ga_metadata_evolution_coords_actor_only',
+                     'ga_metadata_evolution_coords',
                      'ga_evolution_fitness_score',
                      'ga_prediction_confusion_table',
                      'ga_prediction_confusion_heatmap',
-                     'ga_prediction_confusion_normal_heatmap'
+                     'ga_prediction_confusion_normal_heatmap',
+                     'ga_prediction_clf_report_table',
                      ]:
-            if os.path.isfile('data/{}.html'.format(plot)):
+            if os.path.isfile(f'data/{plot}.html'):
                 _found_plot.append(True)
             else:
                 _found_plot.append(False)

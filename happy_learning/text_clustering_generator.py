@@ -17,7 +17,6 @@ from .text_clustering import GibbsSamplingDirichletMultinomialModeling, LatentDi
 from datetime import datetime
 from easyexplore.data_import_export import CLOUD_PROVIDER, DataImporter
 from gensim import corpora
-from simpletransformers.model import ClassificationModel
 from torch.utils.data import TensorDataset, DataLoader
 from typing import List
 
@@ -447,40 +446,6 @@ class ClusteringGenerator(Clustering):
             self.stc = self.self_taught_short_text_clustering()
             self.stc.fit(x=_embedding_tensor)
             self.fitness = self.stc.nmi_score
-        elif self.eval_method == 'trans':
-            _df_train: pd.DataFrame = pd.DataFrame(data=dict(text=np.array(self.x), label=self.cluster_label))
-            _args: dict = dict(do_lower_case=True,
-                               evaluate_during_training=False,
-                               manual_seed=1234,
-                               no_save=True,
-                               no_cache=False,
-                               overwrite_output_dir=True,
-                               silent=True
-                               )
-            _kwargs: dict = dict(cache_dir=self.language_model_path, local_files_only=False if self.language_model_path is None else True)
-            _model_type: str = 'xlm' if self.language_model_path is None else self.language_model_path.split('/')[-2].split('-')[0]
-            _transformer = ClassificationModel(model_type=_model_type,
-                                               model_name='xlm-roberta-large' if self.language_model_path is None else self.language_model_path,
-                                               tokenizer_type=None,
-                                               tokenizer_name=None,
-                                               num_labels=len(list(set(self.cluster_label))),
-                                               weight=None,
-                                               args=_args,
-                                               use_cuda=torch.cuda.is_available(),
-                                               cuda_device=0 if torch.cuda.is_available() else -1,
-                                               onnx_execution_provider=None,
-                                               **_kwargs
-                                               )
-            _transformer.train_model(train_df=_df_train,
-                                     multi_label=False,
-                                     output_dir=None,
-                                     show_running_loss=False,
-                                     eval_df=None,
-                                     verbose=False
-                                     )
-            _predictions, _raw_output = _transformer.predict(to_predict=_df_train['text'].values.tolist())
-            self.fitness = EvalClf(obs=self.cluster_label, pred=_predictions.tolist()).roc_auc_multi(meth='ovr')
-            del _df_train, _predictions, _raw_output
         self.fitness_score = self.fitness
 
     def _import_data(self):

@@ -193,8 +193,11 @@ def _float_adjustments(features: List[str], imp_value: float, convert_to_float32
     :param convert_to_float32: bool
         Convert continuous features types as float64 to float32 for compatibility reasons
     """
+    DATA_PROCESSING['df'][features] = DATA_PROCESSING['df'][features].replace(to_replace=INVALID_VALUES,
+                                                                              value=np.nan,
+                                                                              regex=False
+                                                                              )
     if MissingDataAnalysis(df=DATA_PROCESSING['df']).has_nan():
-        DATA_PROCESSING['df'][features] = DATA_PROCESSING['df'][features].replace(to_replace=INVALID_VALUES, value=np.nan, regex=False)
         DATA_PROCESSING['df'][features] = DATA_PROCESSING['df'][features].fillna(value=imp_value, axis=0)
     if convert_to_float32:
         if len(features) == 1:
@@ -356,6 +359,17 @@ def _load_temp_files(features: List[str]):
         if feature in FEATURE_TYPES.get('date'):
             DATA_PROCESSING['df'][feature] = pd.to_datetime(DATA_PROCESSING['df'][feature])
 
+
+def _name_convention(feature: str):
+    """
+    Rename feature based on naming convention
+
+    :param feature: str
+        Name of the feature
+    """
+    if feature.find('.') >= 0:
+        return feature.split('.')[0]
+    return feature
 
 def _process_handler(action: str,
                      feature: str,
@@ -1037,6 +1051,7 @@ class FeatureEngineer:
                  auto_typing: bool = True,
                  auto_engineering: bool = False,
                  auto_text_mining: bool = True,
+                 name_convention: bool = True,
                  file_path: str = None,
                  sep: str = ',',
                  print_msg: bool = True,
@@ -1106,6 +1121,9 @@ class FeatureEngineer:
 
         :param auto_text_mining: bool
             Classify and interpret text data analytically for generating numerical features from text
+
+        :param name_convention: bool
+            Apply naming convention for features
 
         :param file_path: str
             Path of local file to import as data set
@@ -1224,7 +1242,13 @@ class FeatureEngineer:
                     raise FeatureEngineerException('Neither data object nor file path to data file found')
                 self._data_import(file_path=file_path, sep=sep, **kwargs)
                 for feature in DATA_PROCESSING['df'].columns:
-                    _save_temp_files(feature=feature, new_name=_force_rename_feature(feature=feature, max_length=100))
+                    if name_convention:
+                        _feature: str = _name_convention(feature=feature)
+                        DATA_PROCESSING['df'].rename(columns={feature: _feature})
+                    else:
+                        _feature: str = feature
+                    _save_temp_files(feature=_feature, new_name=_force_rename_feature(feature=_feature, max_length=100))
+                DATA_PROCESSING['n_cases'] = DATA_PROCESSING['df'].shape[0].compute()
                 DATA_PROCESSING['df'] = None
             else:
                 if isinstance(df, pd.DataFrame):
@@ -1234,7 +1258,7 @@ class FeatureEngineer:
                                                                                                                                            len(DATA_PROCESSING['df'].columns)
                                                                                                                                            )
                                                                    )
-                DATA_PROCESSING['n_cases'] = len(DATA_PROCESSING['df'])
+                DATA_PROCESSING['n_cases'] = DATA_PROCESSING['df'].shape[0].compute()
                 global TEMP_INDEXER
                 TEMP_INDEXER['__index__'] = [i for i in range(0, DATA_PROCESSING['n_cases'], 1)]
                 for ignore in IGNORE_FEATURES:
@@ -1242,7 +1266,12 @@ class FeatureEngineer:
                         del DATA_PROCESSING['df'][ignore]
                 DATA_PROCESSING.update({'original_features': DATA_PROCESSING.get('df').columns.tolist()})
                 for feature in DATA_PROCESSING.get('df').columns:
-                    _save_temp_files(feature=feature, new_name=_force_rename_feature(feature=feature, max_length=100))
+                    if name_convention:
+                        _feature: str = _name_convention(feature=feature)
+                        DATA_PROCESSING['df'].rename(columns={feature: _feature})
+                    else:
+                        _feature: str = feature
+                    _save_temp_files(feature=_feature, new_name=_force_rename_feature(feature=_feature, max_length=100))
                 DATA_PROCESSING['df'] = None
                 Log(write=not print_msg, level='info', env='dev').log(msg='Feature files saved in {}'.format(TEMP_DIR))
         else:
@@ -1425,7 +1454,7 @@ class FeatureEngineer:
                                              cloud=CLOUD,
                                              bucket_name=_bucket_name,
                                              **kwargs
-                                             )
+                                             ).file()
         DATA_PROCESSING['processing']['features']['raw'].update({_force_rename_feature(feature=feature, max_length=100): [] for feature in DATA_PROCESSING.get('df').columns})
         Log(write=not DATA_PROCESSING.get('show_msg')).log(
             msg='Data set loaded from file\nCases: {}\nFeatures: {}'.format(len(DATA_PROCESSING['df']),
@@ -2083,9 +2112,9 @@ class FeatureEngineer:
                               with_std=True if kwargs.get('with_std') is None else kwargs.get('with_std')
                               )
         if log_transform:
-            self.log_transform(skewness_test=False)
+            self.log_transform(skewed_only=False)
         if exp_transform:
-            self.exp_transform(skewness_test=False)
+            self.exp_transform(skewed_only=False)
         if disparity:
             self.interaction(addition=True if kwargs.get('addition') is None else kwargs.get('addition'),
                              subtraction=True if kwargs.get('subtraction') is None else kwargs.get('subtraction'),
@@ -2578,7 +2607,7 @@ class FeatureEngineer:
             Complete file path of data set
 
         :param create_dir: bool
-            Create directories if they do not exists
+            Create directories if they do not exist
 
         :param overwrite: bool
             Overwrite file with same name or not
@@ -2588,6 +2617,8 @@ class FeatureEngineer:
             _bucket_name: str = None
         else:
             _bucket_name: str = file_path.split("//")[1].split("/")[0]
+        if file_path.find('.parquet') >= 0:
+            DATA_PROCESSING['df'] = dd.from_pandas(data=DATA_PROCESSING.get('df'), npartitions=4)
         DataExporter(obj=DATA_PROCESSING.get('df'),
                      file_path=file_path,
                      create_dir=create_dir,
@@ -3447,7 +3478,7 @@ class FeatureEngineer:
                 for feature in _df.columns:
                     if str(_df[feature].dtype).find('float') < 0:
                         _df[feature] = _df[feature].astype(float)
-                DATA_PROCESSING['correlation']['matrix'] = _df.corr(method=meth, min_periods=None, split_every=False)
+                DATA_PROCESSING['correlation']['matrix'] = _df.corr(method=meth, min_periods=None)
                 #for score in DATA_PROCESSING['correlation']['matrix']:
                 #    pass
         del _df
@@ -3504,11 +3535,8 @@ class FeatureEngineer:
         :return np.ndarray:
             Feature values
         """
-        _features: List[str] = []
-        for ft in FEATURE_TYPES.keys():
-            for feature in FEATURE_TYPES.get(ft):
-                _features.append(feature)
-        if feature in _features:
+        if feature in ALL_FEATURES:
+            _load_temp_files(features=[feature])
             if unique:
                 return DATA_PROCESSING['df'][feature].unique()
             else:
@@ -3635,7 +3663,7 @@ class FeatureEngineer:
         :return: int
             Total number of features
         """
-        return DATA_PROCESSING['n_features']
+        return len(ALL_FEATURES)
 
     @staticmethod
     def get_n_predictors() -> int:
@@ -4051,6 +4079,7 @@ class FeatureEngineer:
         _poly.fit(X=_data)
         _polynomial_features = _poly.transform(X=_data)
         _name_mapper: dict = dict(original={}, interaction={})
+        _interaction_name_mapper: dict = {}
         _new_feature_names: Dict[str, str] = {}
         for i, name in enumerate(_poly.get_feature_names()):
             if i < len(features):
@@ -4067,19 +4096,22 @@ class FeatureEngineer:
                             _interaction.append(_name_mapper['original'].get(n))
                         if _feature_match == _degree:
                             _feature_name = _feature_name.replace(' ', '__')
-                            _name_mapper['interaction'].update({_feature_name: _interaction})
+                            _interaction_name_mapper.update({_feature_name: _interaction})
                             _interaction = []
                             break
                     _new_feature_names.update({name: _feature_name})
                 else:
                     for n in _name_mapper['original'].keys():
                         if name.find(n) >= 0:
-                            _name_mapper['interaction'].update({name: [_name_mapper['original'].get(n)]})
+                            _interaction_name_mapper.update({name: [_name_mapper['original'].get(n)]})
                             _new_feature_names.update({name: name.replace(n, _name_mapper['original'].get(n))})
                             break
-        for feature, poly_feature in zip(features, _name_mapper['original']):
-            for interaction in _name_mapper['interaction'].keys():
-                _name_mapper['interaction'][interaction.replace(poly_feature, feature)] = _name_mapper['interaction'].pop(interaction)
+        for interaction in _interaction_name_mapper.keys():
+            if interaction.find('x') >= 0 and interaction.find('^') > 0:
+                _poly_name: str = interaction.split('^')[0]
+                _name_mapper['interaction'].update({interaction.replace(_poly_name, _name_mapper['original'][_poly_name]): _interaction_name_mapper[interaction]})
+            else:
+                _name_mapper['interaction'].update({interaction: _interaction_name_mapper[interaction]})
         _df: pd.DataFrame = pd.DataFrame(data=_polynomial_features, columns=_poly.get_feature_names())
         _df = _df.drop(columns=list(_name_mapper['original'].keys()), axis=1)
         _df = _df.rename(columns=_new_feature_names)
@@ -4311,7 +4343,7 @@ class FeatureEngineer:
                     _data: pd.DataFrame = DATA_PROCESSING['df'][feature].replace(_values)
                     _process_handler(action='add',
                                      feature=feature,
-                                     new_feature=feature,
+                                     new_feature=f'{feature}_label_enc',
                                      process='encoder|label',
                                      meth='label_encoder',
                                      param=dict(encode=encode),
@@ -4927,7 +4959,7 @@ class FeatureEngineer:
                     _dummies = _dummies.loc[:, ~_dummies.columns.duplicated()]
                     _new_names: dict = {}
                     for dummy in _dummies.columns:
-                        _new_feature: str = _avoid_overwriting(feature=dummy)
+                        _new_feature: str = _avoid_overwriting(feature=_name_convention(feature=dummy))
                         if dummy != _new_feature:
                             _new_names.update({dummy: _new_feature})
                     if len(_new_names) > 0:

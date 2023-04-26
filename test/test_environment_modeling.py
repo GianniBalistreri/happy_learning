@@ -9,7 +9,9 @@ from typing import List
 
 MODEL_NAME: str = 'cat'
 ENV: EnvironmentModeling = EnvironmentModeling(sml_problem='clf_binary', sml_algorithm=MODEL_NAME)
-PARAM: dict = ModelGeneratorClf(model_name=MODEL_NAME).generate_model().model_param
+MODEL: ModelGeneratorClf = ModelGeneratorClf(model_name=MODEL_NAME)
+MODEL.generate_model()
+PARAM: dict = MODEL.model_param
 DF: pd.DataFrame = pd.read_csv(filepath_or_buffer='./data/avocado.csv', sep=',')
 DF = DF.replace({'conventional': 0, 'organic': 1})
 DF['type'] = DF['type'].astype(int)

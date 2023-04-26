@@ -1593,28 +1593,23 @@ class GeneticAlgorithm:
             _best_model_results = _best_model_results.round(decimals=4)
             if self.target_type == 'reg':
                 _file_paths.append(os.path.join(self.output_file_path, 'evaluation_coords.html'))
+                DataVisualizer(df=_best_model_results,
+                               title='Prediction Evaluation of final inherited ML Model:',
+                               features=['obs', 'abs_diff', 'rel_diff', 'pred'],
+                               color_feature='pred',
+                               plot_type='parcoords',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'evaluation_coords.html'),
+                               ).run()
                 _file_paths.append(os.path.join(self.output_file_path, 'scatter_contour.html'))
-                _charts.update({'Prediction Evaluation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                           features=['obs', 'abs_diff',
-                                                                                                     'rel_diff', 'pred'],
-                                                                                           color_feature='pred',
-                                                                                           plot_type='parcoords',
-                                                                                           file_path=_file_paths[0],
-                                                                                           kwargs=dict(layout={})
-                                                                                           ),
-                                'Prediction vs. Observation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                                features=['obs', 'pred'],
-                                                                                                plot_type='joint',
-                                                                                                file_path=_file_paths[1],
-                                                                                                kwargs=dict(layout={})
-                                                                                                )
-                                })
+                DataVisualizer(df=_best_model_results,
+                               title='Prediction vs. Observation of final inherited ML Model:',
+                               features=['obs', 'pred'],
+                               plot_type='joint',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'scatter_contour.html'),
+                               ).run()
             else:
-                _file_paths.append(os.path.join(self.output_file_path, 'confusion_table.html'))
-                _file_paths.append(os.path.join(self.output_file_path, 'confusion_heatmap.html'))
-                _file_paths.append(os.path.join(self.output_file_path, 'confusion_normal_heatmap.html'))
-                _file_paths.append(os.path.join(self.output_file_path, 'clf_report_table.html'))
-                _file_paths.append(os.path.join(self.output_file_path, 'clf_metrics_table.html'))
                 _eval_clf: EvalClf = EvalClf(obs=self.data_set.get('y_test'),
                                              pred=self.data_set.get('pred'),
                                              labels=self.target_labels
@@ -1629,93 +1624,91 @@ class GeneticAlgorithm:
                 _cf_col_sum = pd.DataFrame()
                 _cf_col_sum[' '] = _confusion_matrix.transpose().sum()
                 _confusion_matrix = pd.concat([_confusion_matrix, _cf_col_sum], axis=1)
-                _charts.update({'Confusion Matrix': dict(data=_confusion_matrix,
-                                                         plot_type='table',
-                                                         file_path=_file_paths[0]
-                                                         )
-                                })
-                _charts.update({'Confusion Matrix Heatmap': dict(data=_confusion_matrix,
-                                                                 features=self.target_labels,
-                                                                 plot_type='heat',
-                                                                 file_path=_file_paths[1],
-                                                                 kwargs=dict(layout={})
-                                                                 )
-                                })
+                _file_paths.append(os.path.join(self.output_file_path, 'confusion_table.html'))
+                DataVisualizer(df=_confusion_matrix,
+                               title='Confusion Matrix:',
+                               features=_confusion_matrix.columns.to_list(),
+                               plot_type='table',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'confusion_table.html'),
+                               ).run()
+                _file_paths.append(os.path.join(self.output_file_path, 'confusion_heatmap.html'))
+                DataVisualizer(df=_confusion_matrix,
+                               title='Confusion Matrix Heatmap:',
+                               features=_confusion_matrix.columns.to_list(),
+                               plot_type='heat',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'confusion_heatmap.html'),
+                               ).run()
                 _confusion_matrix_normalized: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
                                                                                        pred=self.data_set.get('pred')
                                                                                        ).confusion(normalize='pred'),
                                                                           # index=['obs', 'pred'],
                                                                           # columns=['obs', 'pred']
                                                                           )
-                _charts.update({'Confusion Matrix Normalized Heatmap:': dict(data=_confusion_matrix_normalized,
-                                                                             features=self.target_labels,
-                                                                             plot_type='heat',
-                                                                             file_path=_file_paths[2],
-                                                                             kwargs=dict(layout={})
-                                                                             )
-                                })
-                _charts.update({'Classification Report:': dict(data=_best_model_results,
-                                                               plot_type='table',
-                                                               file_path=_file_paths[3],
-                                                               kwargs=dict(layout={})
-                                                               )
-                                })
+                _file_paths.append(os.path.join(self.output_file_path, 'confusion_normal_heatmap.html'))
+                DataVisualizer(df=_confusion_matrix_normalized,
+                               title='Confusion Matrix Normalized Heatmap:',
+                               features=_confusion_matrix_normalized.columns.to_list(),
+                               plot_type='heat',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'confusion_normal_heatmap.html'),
+                               ).run()
+                _file_paths.append(os.path.join(self.output_file_path, 'clf_report_table.html'))
+                DataVisualizer(df=_best_model_results,
+                               title='Classification Report:',
+                               features=_best_model_results.columns.to_list(),
+                               plot_type='table',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'clf_report_table.html'),
+                               ).run()
                 _classification_report: dict = _eval_clf.classification_report()
                 _confusion_metrics: dict = dict(precision=[], recall=[], f1=[])
                 for label in self.target_labels:
                     _confusion_metrics['precision'].append(_classification_report.get(label)['precision'])
                     _confusion_metrics['recall'].append(_classification_report.get(label)['recall'])
                     _confusion_metrics['f1'].append(_classification_report.get(label)['f1-score'])
-                _charts.update({'Classification Metrics': dict(data=pd.DataFrame(data=_confusion_metrics,
-                                                                                 index=self.target_labels,
-                                                                                 columns=list(_confusion_metrics.keys())
-                                                                                 ),
-                                                               plot_type='table',
-                                                               file_path=_file_paths[4],
-                                                               kwargs=dict(layout={})
-                                                               )
-                                })
+                _file_paths.append(os.path.join(self.output_file_path, 'clf_metrics_table.html'))
+                _clf_metrics: pd.DataFrame = pd.DataFrame(data=_confusion_metrics,
+                                                          index=self.target_labels,
+                                                          columns=list(_confusion_metrics.keys())
+                                                          )
+                DataVisualizer(df=_clf_metrics,
+                               title='Classification Metrics:',
+                               features=_clf_metrics.columns.to_list(),
+                               plot_type='table',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                   self.output_file_path, 'clf_metrics_table.html'),
+                               ).run()
                 if self.target_type == 'clf_multi':
                     _file_paths.append(os.path.join(self.output_file_path, 'evaluation_category.html'))
-                    _charts.update({'Prediction Evaluation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                               features=['obs',
-                                                                                                         'abs_diff',
-                                                                                                         'pred'
-                                                                                                         ],
-                                                                                               color_feature='pred',
-                                                                                               plot_type='parcoords',
-                                                                                               file_path=_file_paths[-1],
-                                                                                               kwargs=dict(layout={})
-                                                                                               )
-                                    })
+                    DataVisualizer(df=_best_model_results,
+                                   title='Prediction Evaluation of final inherited ML Model:',
+                                   features=['obs', 'abs_diff', 'pred'],
+                                   color_feature='pred',
+                                   plot_type='parcoords',
+                                   file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                       self.output_file_path, 'evaluation_category.html'),
+                                   ).run()
                 else:
-                    _file_paths.append(os.path.join(self.output_file_path, 'roc_auc_curve.html'))
                     _roc_curve = pd.DataFrame()
                     _roc_curve_values: dict = EvalClf(obs=_best_model_results['obs'],
                                                       pred=_best_model_results['pred']
                                                       ).roc_curve()
                     _roc_curve['roc_curve'] = _roc_curve_values['true_positive_rate'][1]
                     _roc_curve['baseline'] = _roc_curve_values['false_positive_rate'][1]
-                    _charts.update({'ROC-AUC Curve': dict(data=_roc_curve,
-                                                          features=['roc_curve', 'baseline'],
-                                                          time_features=['baseline'],
-                                                          # xaxis_label=['False Positive Rate'],
-                                                          # yaxis_label=['True Positive Rate'],
-                                                          melt=True,
-                                                          plot_type='line',
-                                                          use_auto_extensions=False,
-                                                          file_path=_file_paths[-1],
-                                                          kwargs=dict(layout={})
-                                                          )
-                                    })
-            DataVisualizer(subplots=_charts,
-                           interactive=True,
-                           file_path=self.output_file_path,
-                           render=True if self.output_file_path is None else False,
-                           height=750,
-                           width=750,
-                           unit='px'
-                           ).run()
+                    _file_paths.append(os.path.join(self.output_file_path, 'roc_auc_curve.html'))
+                    DataVisualizer(df=_roc_curve,
+                                   title='ROC-AUC Curve:',
+                                   features=['roc_curve', 'baseline'],
+                                   time_features=['baseline'],
+                                   plot_type='line',
+                                   # xaxis_label=['False Positive Rate'],
+                                   # yaxis_label=['True Positive Rate'],
+                                   use_auto_extensions=False,
+                                   file_path=self.output_file_path if self.output_file_path is None else os.path.join(
+                                       self.output_file_path, 'roc_auc_curve.html'),
+                                   ).run()
             for path in _file_paths:
                 _file_name: str = path.split('/')[-1].replace('.html', '')
                 try:
@@ -1875,7 +1868,7 @@ class GeneticAlgorithm:
                        final_generation: bool = False
                        ):
         """
-        Save evolution meta data generated by genetic algorithm to local hard drive as pickle file
+        Save evolution metadata generated by genetic algorithm to local hard drive as pickle file
 
         :param ga: bool
             Save GeneticAlgorithm class object (required for continuing evolution / optimization)
@@ -1884,10 +1877,10 @@ class GeneticAlgorithm:
             Save evolved model
 
         :param evolution_history: bool
-            Save evolution history meta data
+            Save evolution history metadata
 
         :param generation_history: bool
-            Save generation history meta data
+            Save generation history metadata
 
         :param final_generation: bool
             Save settings of each individual of final generation
@@ -1927,10 +1920,7 @@ class GeneticAlgorithm:
             _file_name: str = 'model{}.p'.format(_file_name_extension)
             if self.cloud is None:
                 if self.deep_learning:
-                    if self.current_generation_meta_data['model_name'][self.best_individual_idx] == 'trans':
-                        torch.save(obj=self.model.model, f=os.path.join(self.output_file_path, _file_name))
-                    else:
-                        torch.save(obj=self.model, f=os.path.join(self.output_file_path, _file_name))
+                    torch.save(obj=self.model, f=os.path.join(self.output_file_path, _file_name))
                 else:
                     DataExporter(obj=self.model,
                                  file_path=os.path.join(self.output_file_path, _file_name),
@@ -1958,23 +1948,24 @@ class GeneticAlgorithm:
                                  ).file()
         # Export GeneticAlgorithm class object:
         if ga:
-            if self.stopping_reason is None:
-                self.feature_engineer = None
-            else:
-                self.df = None
-                self.model = None
-                self.population = []
-                self.feature_engineer = None
-            _file_name_extension: str = '' if self.kwargs.get('ga_file_name_extension') is None else '_{}'.format(self.kwargs.get('ga_file_name_extension'))
-            _file_name: str = 'genetic{}.p'.format(_file_name_extension)
-            DataExporter(obj=self,
-                         file_path=os.path.join(self.output_file_path, _file_name),
-                         create_dir=False,
-                         overwrite=True,
-                         cloud=self.cloud,
-                         bucket_name=self.bucket_name,
-                         region=self.kwargs.get('region')
-                         ).file()
+            if not self.deep_learning:
+                if self.stopping_reason is None:
+                    self.feature_engineer = None
+                else:
+                    self.df = None
+                    self.model = None
+                    self.population = []
+                    self.feature_engineer = None
+                _file_name_extension: str = '' if self.kwargs.get('ga_file_name_extension') is None else '_{}'.format(self.kwargs.get('ga_file_name_extension'))
+                _file_name: str = 'genetic{}.p'.format(_file_name_extension)
+                DataExporter(obj=self,
+                             file_path=os.path.join(self.output_file_path, _file_name),
+                             create_dir=False,
+                             overwrite=True,
+                             cloud=self.cloud,
+                             bucket_name=self.bucket_name,
+                             region=self.kwargs.get('region')
+                             ).file()
 
     def visualize(self,
                   results_table: bool = True,
@@ -2063,32 +2054,30 @@ class GeneticAlgorithm:
             _best_model_results['abs_diff'] = _best_model_results['obs'] - _best_model_results['pred']
         _best_model_results = _best_model_results.round(decimals=4)
         if results_table:
-            _charts.update({'Results of Genetic Algorithm:': dict(data=_evolution_history_data,
-                                                                  plot_type='table',
-                                                                  file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_metadata_table.html'),
-                                                                  kwargs=dict(layout={})
-                                                                  )
-                            })
+            DataVisualizer(df=_evolution_history_data,
+                           title='Results of Genetic Algorithm:',
+                           features=_evolution_history_data.columns.to_list(),
+                           plot_type='table',
+                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_metadata_table.html'),
+                           ).run()
         if model_evolution:
-            _charts.update({'Evolution of used ML Models:': dict(data=_evolution_history_data,
-                                                                 features=['fitness_score', 'generation'],
-                                                                 color_feature='model',
-                                                                 plot_type='scatter',
-                                                                 melt=True,
-                                                                 file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_model_evolution.html'),
-                                                                 kwargs=dict(layout={})
-                                                                 )
-                            })
+            DataVisualizer(df=_evolution_history_data,
+                           title='Evolution of used ML Models:',
+                           features=['fitness_score', 'generation'],
+                           color_feature='model',
+                           plot_type='scatter',
+                           melt=True,
+                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_model_evolution.html'),
+                           ).run()
         if model_distribution:
             if self.models is None or len(self.models) > 1:
-                _charts.update({'Distribution of used ML Models:': dict(data=_evolution_history_data,
-                                                                        features=['model'],
-                                                                        group_by=['generation'] if per_generation else None,
-                                                                        plot_type='pie',
-                                                                        file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_model_distribution.html'),
-                                                                        kwargs=dict(layout={})
-                                                                        )
-                                })
+                DataVisualizer(df=_evolution_history_data,
+                               title='Distribution of used ML Models:',
+                               features=['model'],
+                               group_by=['generation'] if per_generation else None,
+                               plot_type='pie',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_model_distribution.html'),
+                               ).run()
         #if param_distribution:
         #    _charts.update({'Distribution of ML Model parameters:': dict(data=_evolution_history_data,
         #                                                                 features=['model_param'],
@@ -2098,101 +2087,95 @@ class GeneticAlgorithm:
         #                                                                 )
         #                    })
         if train_time_distribution:
-            _charts.update({'Distribution of elapsed Training Time:': dict(data=_evolution_history_data,
-                                                                           features=['train_time_in_seconds'],
-                                                                           group_by=['model'],
-                                                                           plot_type='violin',
-                                                                           melt=True if len(self.models) > 1 else False,
-                                                                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_training_time_distribution.html'),
-                                                                           kwargs=dict(layout={})
-                                                                           )
-                            })
+            DataVisualizer(df=_evolution_history_data,
+                           title='Distribution of elapsed Training Time:',
+                           features=['train_time_in_seconds'],
+                           group_by=['model'],
+                           melt=True,
+                           plot_type='violin',
+                           use_auto_extensions=False,
+                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_training_time_distribution.html'),
+                           ).run()
         if breeding_map:
             _breeding_map: pd.DataFrame = pd.DataFrame(data=dict(gen_0=self.generation_history['population']['gen_0'].get('fitness')), index=[0])
             for g in self.generation_history['population'].keys():
                 if g != 'gen_0':
                     _breeding_map[g] = self.generation_history['population'][g].get('fitness')
-            _charts.update({'Breeding Heat Map:': dict(data=_breeding_map,
-                                                       plot_type='heat',
-                                                       file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_breeding_heatmap.html'),
-                                                       kwargs=dict(layout={})
-                                                       )
-                            })
+            DataVisualizer(df=_breeding_map,
+                           title='Breeding Heat Map:',
+                           features=_breeding_map.columns.to_list(),
+                           plot_type='heat',
+                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_breeding_heatmap.html'),
+                           ).run()
         if breeding_graph:
-            _charts.update({'Breeding Network Graph:': dict(data=_evolution_history_data,
-                                                            features=['generation', 'fitness_score'],
-                                                            graph_features=dict(node='id', edge='parent'),
-                                                            color_feature='model',
-                                                            plot_type='network',
-                                                            file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_breeding_graph.html'),
-                                                            kwargs=dict(layout={})
-                                                            )
-                            })
+            DataVisualizer(df=_evolution_history_data,
+                           title='Breeding Network Graph:',
+                           features=['generation', 'fitness_score'],
+                           graph_features=dict(node='id', edge='parent'),
+                           color_feature='model',
+                           plot_type='network',
+                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_breeding_graph.html'),
+                           ).run()
         if fitness_distribution:
-            _charts.update({'Distribution of Fitness Metric:': dict(data=_evolution_history_data,
-                                                                    features=['fitness_score'],
-                                                                    time_features=['generation'],
-                                                                    plot_type='ridgeline',
-                                                                    file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_fitness_score_distribution_per_generation.html'),
-                                                                    kwargs=dict(layout={})
-                                                                    )
-                            })
+            DataVisualizer(df=_evolution_history_data,
+                           title='Distribution of Fitness Metric:',
+                           features=['fitness_score'],
+                           time_features=['generation'],
+                           plot_type='ridgeline',
+                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_fitness_score_distribution_per_generation.html'),
+                           ).run()
         if fitness_dimensions:
-            _charts.update({'Evolution Meta Data:': dict(data=_evolution_history_data,
-                                                         features=['train_time_in_seconds',
-                                                                   'ml_metric',
-                                                                   'train_test_diff',
-                                                                   'fitness_score',
-                                                                   'parent',
-                                                                   'id',
-                                                                   'generation',
-                                                                   'model'
-                                                                   ],
-                                                         color_feature='model',
-                                                         plot_type='parcoords',
-                                                         file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_metadata_evolution_coords.html'),
-                                                         kwargs=dict(layout={})
-                                                         )
-                            })
+            DataVisualizer(df=_evolution_history_data,
+                           title='Evolution Meta Data:',
+                           features=['train_time_in_seconds',
+                                     'ml_metric',
+                                     'train_test_diff',
+                                     'fitness_score',
+                                     'parent',
+                                     'id',
+                                     'generation',
+                                     'model'
+                                     ],
+                           color_feature='model',
+                           plot_type='parcoords',
+                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_metadata_evolution_coords.html'),
+                           ).run()
         if fitness_evolution:
-            _charts.update({'Fitness Evolution:': dict(data=_evolution_gradient_data,
-                                                       features=['min', 'median', 'mean', 'max'],
-                                                       time_features=['generation'],
-                                                       plot_type='line',
-                                                       melt=True,
-                                                       file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_evolution_fitness_score.html'),
-                                                       kwargs=dict(layout={})
-                                                       )
-                            })
+            DataVisualizer(df=_evolution_gradient_data,
+                           title='Fitness Evolution:',
+                           features=['min', 'median', 'mean', 'max'],
+                           time_features=['generation'],
+                           melt=True,
+                           plot_type='line',
+                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_evolution_fitness_score.html'),
+                           ).run()
         if epoch_stats:
             if self.deep_learning:
                 _epoch_metric_score: pd.DataFrame = pd.DataFrame(data=self.evolution.get('epoch_metric_score'))
                 _epoch_metric_score['epoch'] = [epoch + 1 for epoch in range(0, _epoch_metric_score.shape[0], 1)]
-                _charts.update({'Epoch Evaluation of fittest neural network': dict(data=_epoch_metric_score,
-                                                                                   features=['train', 'val'],
-                                                                                   time_features=['epoch'],
-                                                                                   plot_type='line',
-                                                                                   melt=True,
-                                                                                   file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_epoch_metric_score.html'),
-                                                                                   kwargs=dict(layout={})
-                                                                                   )
-                                })
+                DataVisualizer(df=_epoch_metric_score,
+                               title='Epoch Evaluation of fittest neural network:',
+                               features=['train', 'val'],
+                               time_features=['epoch'],
+                               melt=True,
+                               plot_type='line',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_epoch_metric_score.html'),
+                               ).run()
         if prediction_of_best_model:
             if self.target_type == 'reg':
-                _charts.update({'Prediction Evaluation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                           features=['obs', 'abs_diff', 'rel_diff', 'pred'],
-                                                                                           color_feature='pred',
-                                                                                           plot_type='parcoords',
-                                                                                           file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_evaluation_coords.html'),
-                                                                                           kwargs=dict(layout={})
-                                                                                           ),
-                                'Prediction vs. Observation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                                features=['obs', 'pred'],
-                                                                                                plot_type='joint',
-                                                                                                file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_scatter_contour.html'),
-                                                                                                kwargs=dict(layout={})
-                                                                                                )
-                                })
+                DataVisualizer(df=_best_model_results,
+                               title='Prediction Evaluation of final inherited ML Model:',
+                               features=['obs', 'abs_diff', 'rel_diff', 'pred'],
+                               color_feature='pred',
+                               plot_type='parcoords',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_evaluation_coords.html'),
+                               ).run()
+                DataVisualizer(df=_best_model_results,
+                               title='Prediction vs. Observation of final inherited ML Model:',
+                               features=['obs', 'pred'],
+                               plot_type='joint',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_scatter_contour.html'),
+                               ).run()
             else:
                 _confusion_matrix: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
                                                                             pred=self.data_set.get('pred')
@@ -2206,48 +2189,45 @@ class GeneticAlgorithm:
                 _cf_col_sum = pd.DataFrame()
                 _cf_col_sum[' '] = _confusion_matrix.transpose().sum()
                 _confusion_matrix = pd.concat([_confusion_matrix, _cf_col_sum], axis=1)
-                _charts.update({'Confusion Matrix': dict(data=_confusion_matrix,
-                                                         plot_type='table',
-                                                         file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_confusion_table.html'),
-                                                         kwargs=dict(layout={})
-                                                         )
-                                })
-                _charts.update({'Confusion Matrix Heatmap': dict(data=_best_model_results,
-                                                                 features=['obs', 'pred'],
-                                                                 plot_type='heat',
-                                                                 file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_confusion_heatmap.html'),
-                                                                 kwargs=dict(layout={})
-                                                                 )
-                                })
+                DataVisualizer(df=_confusion_matrix,
+                               title='Confusion Matrix:',
+                               features=_confusion_matrix.columns.to_list(),
+                               plot_type='table',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_confusion_table.html'),
+                               ).run()
+                DataVisualizer(df=_best_model_results,
+                               title='Confusion Matrix Heatmap:',
+                               features=_best_model_results.columns.to_list(),
+                               plot_type='heat',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_confusion_heatmap.html'),
+                               ).run()
                 _confusion_matrix_normalized: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
                                                                                        pred=self.data_set.get('pred')
                                                                                        ).confusion(normalize='pred'),
-                                                                          #index=['obs', 'pred'],
-                                                                          #columns=['obs', 'pred']
+                                                                          index=self.target_labels,
+                                                                          columns=self.target_labels
                                                                           )
-                _charts.update({'Confusion Matrix Normalized Heatmap:': dict(data=_confusion_matrix_normalized,
-                                                                             features=self.target_labels,
-                                                                             plot_type='heat',
-                                                                             file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_confusion_normal_heatmap.html'),
-                                                                             kwargs=dict(layout={})
-                                                                             )
-                                })
-                _charts.update({'Classification Report:': dict(data=_best_model_results,
-                                                               plot_type='table',
-                                                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_clf_report_table.html'),
-                                                               kwargs=dict(layout={})
-                                                               )
-                                })
+                DataVisualizer(df=_confusion_matrix_normalized,
+                               title='Confusion Matrix Normalized Heatmap:',
+                               features=_confusion_matrix_normalized.columns.to_list(),
+                               plot_type='heat',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_confusion_normal_heatmap.html'),
+                               ).run()
+                DataVisualizer(df=_best_model_results,
+                               title='Classification Report:',
+                               features=_best_model_results.columns.to_list(),
+                               plot_type='table',
+                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_clf_report_table.html'),
+                               ).run()
                 if self.target_type == 'clf_multi':
-                    _charts.update({'Prediction Evaluation of final inherited ML Model:': dict(data=_best_model_results,
-                                                                                               features=['obs', 'abs_diff', 'pred'],
-                                                                                               color_feature='pred',
-                                                                                               plot_type='parcoords',
-                                                                                               brushing=True,
-                                                                                               file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_evaluation_category.html'),
-                                                                                               kwargs=dict(layout={})
-                                                                                               )
-                                    })
+                    DataVisualizer(df=_best_model_results,
+                                   title='Prediction Evaluation of final inherited ML Model:',
+                                   features=['obs', 'abs_diff', 'pred'],
+                                   color_feature='pred',
+                                   plot_type='parcoords',
+                                   brushing=True,
+                                   file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_evaluation_category.html'),
+                                   ).run()
                 else:
                     _roc_curve = pd.DataFrame()
                     _roc_curve_values: dict = EvalClf(obs=_best_model_results['obs'],
@@ -2255,24 +2235,14 @@ class GeneticAlgorithm:
                                                       ).roc_curve()
                     _roc_curve['roc_curve'] = _roc_curve_values['true_positive_rate'][1]
                     _roc_curve['baseline'] = _roc_curve_values['false_positive_rate'][1]
-                    _charts.update({'ROC-AUC Curve': dict(data=_roc_curve,
-                                                          features=['roc_curve', 'baseline'],
-                                                          time_features=['baseline'],
-                                                          #xaxis_label=['False Positive Rate'],
-                                                          #yaxis_label=['True Positive Rate'],
-                                                          melt=True,
-                                                          plot_type='line',
-                                                          use_auto_extensions=False,
-                                                          file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_roc_auc_curve.html'),
-                                                          kwargs=dict(layout={})
-                                                          )
-                                    })
-        if len(_charts.keys()) > 0:
-            DataVisualizer(subplots=_charts,
-                           interactive=True,
-                           file_path=self.output_file_path,
-                           render=True if self.output_file_path is None else False,
-                           height=750,
-                           width=750,
-                           unit='px'
-                           ).run()
+                    DataVisualizer(df=_roc_curve,
+                                   title='ROC-AUC Curve:',
+                                   features=['roc_curve', 'baseline'],
+                                   time_features=['baseline'],
+                                   plot_type='line',
+                                   melt=True,
+                                   use_auto_extensions=False,
+                                   # xaxis_label=['False Positive Rate'],
+                                   # yaxis_label=['True Positive Rate'],
+                                   file_path=self.output_file_path if self.output_file_path is None else os.path.join(self.output_file_path, 'ga_prediction_roc_auc_curve.html'),
+                                   ).run()
