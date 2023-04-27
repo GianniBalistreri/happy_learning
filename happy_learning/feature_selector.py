@@ -479,7 +479,7 @@ class FeatureSelector:
 
     def select(self,
                imp_threshold: float = 0.01,
-               redundant_threshold: float = 0.02,
+               redundant_threshold: float = 0.01,
                visualize_game_stats: bool = True,
                plot_type: str = 'bar'
                ) -> dict:
