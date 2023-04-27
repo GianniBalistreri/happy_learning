@@ -29,17 +29,17 @@ class FeatureSelectorTest(unittest.TestCase):
                                                              max_players=-1,
                                                              evolutionary_algorithm='ga',
                                                              use_standard_params=True,
-                                                             aggregate_feature_imp=None,
-                                                             visualize_all_scores=False,
-                                                             visualize_variant_scores=False,
-                                                             visualize_core_feature_scores=False,
                                                              path='data/',
                                                              mlflow_log=True,
                                                              multi_threading=False
                                                              )
         _eval_result: dict = _feature_selector.select(imp_threshold=0.01,
-                                                      redundant_threshold=0.02,
-                                                      visualize_game_stats=True,
+                                                      redundant_threshold=0.01,
+                                                      aggregate_feature_imp=None,
+                                                      visualize_feature_importance=False,
+                                                      visualize_variant_scores=False,
+                                                      visualize_core_feature_scores=False,
+                                                      visualize_game_stats=False,
                                                       plot_type='bar'
                                                       )
         _imp_features: List[str] = _eval_result.get('important')
