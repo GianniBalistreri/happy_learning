@@ -662,12 +662,12 @@ class FeatureSelector:
         else:
             _threshold: float = _model_test_score * (1 - redundant_threshold)
         _features: List[str] = copy.deepcopy(_imp_features)
-        _result: dict = dict(redundant=[], important=[], reduction={})
+        _result: dict = dict(redundant=[], important=[], reduction={}, model_metric=[])
         for i in range(len(_imp_features) - 1, 0, -1):
+            del _features[i]
             if len(_features) == 1:
                 _result['important'] = _features
                 break
-            del _features[i]
             _model_generator.train(x=_train_test_split.get('x_train')[_features].values, y=_train_test_split.get('y_train').values)
             _pred = _model_generator.predict(x=_train_test_split.get('x_test')[_features].values)
             _model_generator.eval(obs=_train_test_split.get('y_test').values, pred=_pred)
@@ -679,6 +679,7 @@ class FeatureSelector:
                     break
                 else:
                     _result['redundant'].append(_imp_features[i])
+                    _result['model_metric'].append(_model_test_score)
                     _result['reduction'].update({_imp_features[i]: _model_test_score - _new_model_test_score})
             else:
                 if _threshold >= _new_model_test_score:
@@ -687,6 +688,7 @@ class FeatureSelector:
                     break
                 else:
                     _result['redundant'].append(_imp_features[i])
+                    _result['model_metric'].append(_model_test_score)
                     _result['reduction'].update({_imp_features[i]: _model_test_score - _new_model_test_score})
         Log(write=False,
             level='info'
@@ -698,5 +700,8 @@ class FeatureSelector:
                     imp_processed_features=_processed_features,
                     redundant=_result['redundant'],
                     important=_result['important'],
-                    reduction=_result['reduction']
+                    reduction=_result['reduction'],
+                    model_metric=_result['model_metric'],
+                    base_metric=_model_test_score,
+                    threshold=_threshold
                     )
