@@ -46,6 +46,8 @@ class FeatureSelector:
                  target: str,
                  force_target_type: str = None,
                  model_name: str = 'cat',
+                 use_standard_params: bool = True,
+                 evolutionary_algorithm: str = 'ga',
                  init_pairs: int = 3,
                  init_games: int = 5,
                  increasing_pair_size_factor: float = 0.5,
@@ -53,12 +55,6 @@ class FeatureSelector:
                  penalty_factor: float = 0.1,
                  max_iter: int = 50,
                  max_players: int = -1,
-                 evolutionary_algorithm: str = 'ga',
-                 use_standard_params: bool = True,
-                 aggregate_feature_imp: Dict[str, dict] = None,
-                 visualize_all_scores: bool = True,
-                 visualize_variant_scores: bool = True,
-                 visualize_core_feature_scores: bool = True,
                  path: str = None,
                  mlflow_log: bool = True,
                  multi_threading: bool = False,
@@ -82,6 +78,14 @@ class FeatureSelector:
         :param model_name: str
             Name of the model
 
+        :param use_standard_params: bool
+            Use standard model hyperparameter or evolve proper hyperparameter using an evolutionary algorithm
+
+        :param evolutionary_algorithm: str
+            Name of the reinforced evolutionary algorithm
+                -> ga: Genetic Algorithm
+                -> si: Swarm Intelligence
+
         :param init_pairs: int
             Number of players in each starting game of the tournament
 
@@ -103,25 +107,6 @@ class FeatureSelector:
         :param max_players: int
             Maximum number of features used for training machine learning model
 
-        :param evolutionary_algorithm: str
-            Name of the reinforced evolutionary algorithm
-                -> ga: Genetic Algorithm
-                -> si: Swarm Intelligence
-
-        :param aggregate_feature_imp: Dict[str, dict]
-            Name of the aggregation method and the feature names to aggregate
-                -> core: Aggregate feature importance score by each core (original) feature
-                -> level: Aggregate feature importance score by the processing level of each feature
-
-        :param visualize_all_scores: bool
-            Whether to visualize all feature importance scores or not
-
-        :param visualize_variant_scores: bool
-            Whether to visualize all variants of feature processing importance scores separately or not
-
-        :param visualize_core_feature_scores: bool
-            Whether to visualize summarized core feature importance scores or not
-
         :param path: str
             Path or directory to export visualization to
 
@@ -139,6 +124,8 @@ class FeatureSelector:
         self.features: List[str] = features
         if self.target in self.features:
             del self.features[self.features.index(self.target)]
+        if len(self.features) < 2:
+            raise FeatureSelectorException(f'Number of features ({len(self.features)}) are too small')
         self.df = self.df[self.features + [self.target]]
         self.n_cases: int = self.df.shape[0]
         self.n_features: int = len(self.features)
@@ -180,10 +167,6 @@ class FeatureSelector:
         self.evolutionary_algorithm: str = evolutionary_algorithm
         self.imp_score: Dict[str, float] = {}
         self.use_standard_params: bool = use_standard_params
-        self.aggregate_feature_imp: Dict[str, dict] = aggregate_feature_imp
-        self.visualize_all_scores: bool = visualize_all_scores
-        self.visualize_variant_scores: bool = visualize_variant_scores
-        self.visualize_core_features_scores: bool = visualize_core_feature_scores
         self.path: str = path
         if self.path is not None:
             self.path = self.path.replace('\\', '/')
@@ -480,6 +463,10 @@ class FeatureSelector:
     def select(self,
                imp_threshold: float = 0.01,
                redundant_threshold: float = 0.01,
+               aggregate_feature_imp: Dict[str, dict] = None,
+               visualize_feature_importance: bool = True,
+               visualize_variant_scores: bool = True,
+               visualize_core_feature_scores: bool = True,
                visualize_game_stats: bool = True,
                plot_type: str = 'bar'
                ) -> dict:
@@ -487,10 +474,24 @@ class FeatureSelector:
         Select most important features based on shapley values
 
         :param imp_threshold: float
-            Threshold of importance score
+            Threshold of importance score to exclude features during initial games of the feature tournament
 
         :param redundant_threshold: float
-            Threshold for defining redundant features in percent
+            Threshold for defining metric reduction to define redundant features
+
+        :param aggregate_feature_imp: Dict[str, dict]
+            Name of the aggregation method and the feature names to aggregate
+                -> core: Aggregate feature importance score by each core (original) feature
+                -> level: Aggregate feature importance score by the processing level of each feature
+
+        :param visualize_feature_importance: bool
+            Whether to visualize feature importance scores or not
+
+        :param visualize_variant_scores: bool
+            Whether to visualize all variants of feature processing importance scores separately or not
+
+        :param visualize_core_feature_scores: bool
+            Whether to visualize summarized core feature importance scores or not
 
         :param visualize_game_stats: bool
             Whether to visualize game statistics or not
@@ -501,7 +502,7 @@ class FeatureSelector:
                 -> bar: Bar Chart
 
         :return dict
-            Redundant features, important features and reduction scores
+            Results of feature tournament like shapley values, redundant features, important features, reduction scores and evaluated metrics
         """
         self._play_tournament()
         _imp_plot: dict = {}
@@ -530,37 +531,28 @@ class FeatureSelector:
         _tournament_df: pd.DataFrame = pd.DataFrame(data=self.shapley_additive_explanation.get('tournament'))
         # _tournament_df['game'] = _tournament_df.index.values
         _file_paths: List[str] = []
-        if self.visualize_all_scores:
-            if visualize_game_stats:
-                _file_paths.append(os.path.join(str(self.path), 'feature_tournament_game_stats.html'))
-                _file_paths.append(os.path.join(str(self.path), 'feature_tournament_game_size.html'))
-                _game_plot: dict = {'Feature Tournament Game Stats (Shapley Scores)': dict(data=_game_df,
-                                                                                           features=list(
-                                                                                               _game_df.columns),
-                                                                                           plot_type='violin',
-                                                                                           melt=True,
-                                                                                           render=True,
-                                                                                           file_path=_file_paths[
-                                                                                               0] if self.path is not None else None
-                                                                                           ),
-                                    'Feature Tournament Stats (Game Size)': dict(data=_tournament_df,
-                                                                                 features=list(_tournament_df.columns),
-                                                                                 plot_type='heat',
-                                                                                 render=True,
-                                                                                 file_path=_file_paths[
-                                                                                     1] if self.path is not None else None
-                                                                                 )
-                                    }
-                DataVisualizer(subplots=_game_plot,
-                               height=500,
-                               width=500
-                               ).run()
-            _file_paths.append(os.path.join(str(self.path), 'feature_importance_shapley.html'))
+        if visualize_game_stats:
+            _file_paths.append(os.path.join(str(self.path), 'feature_tournament_game_stats.html'))
+            DataVisualizer(df=_game_df,
+                           title='Feature Tournament Game Stats (Shapley Scores)',
+                           features=_game_df.columns.tolist(),
+                           melt=True,
+                           plot_type='violin',
+                           file_path=_file_paths[0] if self.path is not None else None
+                           ).run()
+            _file_paths.append(os.path.join(str(self.path), 'feature_tournament_game_size.html'))
+            DataVisualizer(df=_tournament_df,
+                           title='Feature Tournament Stats (Game Size)',
+                           features=_tournament_df.columns.tolist(),
+                           plot_type='heat',
+                           file_path=_file_paths[1] if self.path is not None else None
+                           ).run()
+        _file_paths.append(os.path.join(str(self.path), 'feature_importance_shapley.html'))
+        if visualize_feature_importance:
             _imp_plot: dict = {'Feature Importance (Shapley Scores)': dict(df=_df,
                                                                            plot_type=plot_type,
                                                                            render=True if self.path is None else False,
-                                                                           file_path=_file_paths[
-                                                                               -1] if self.path is not None else None,
+                                                                           file_path=_file_paths[-1] if self.path is not None else None,
                                                                            kwargs=dict(layout={},
                                                                                        y=_df['score'].values,
                                                                                        x=_df.index.values.tolist(),
@@ -571,75 +563,88 @@ class FeatureSelector:
                                                                                        )
                                                                            )
                                }
+            DataVisualizer(subplots=_imp_plot,
+                           height=500,
+                           width=500
+                           ).run()
         if self.mlflow_log:
             self._mlflow_tracking(stats={'Feature Score (Feature Tournament)': _df,
                                          'Game Size (Feature Tournament)': _tournament_df,
                                          'Game Score (Feature Tournament)': _game_df
                                          },
                                   file_paths=_file_paths)
-        if self.aggregate_feature_imp is not None:
+        if aggregate_feature_imp is not None:
             _aggre_score: dict = {}
-            for core_feature in self.aggregate_feature_imp.keys():
+            for core_feature in aggregate_feature_imp.keys():
                 _feature_scores: dict = {}
                 _aggre_score.update({core_feature: 0.0 if self.imp_score.get(core_feature) is None else self.imp_score.get(core_feature)})
                 if self.imp_score.get(core_feature) is not None:
                     _feature_scores.update({core_feature: self.imp_score.get(core_feature)})
-                for proc_feature in self.aggregate_feature_imp[core_feature]:
+                for proc_feature in aggregate_feature_imp[core_feature]:
                     _feature_scores.update({proc_feature: 0.0 if self.imp_score.get(proc_feature) is None else self.imp_score.get(proc_feature)})
                     if self.imp_score.get(proc_feature) is not None:
                         _aggre_score[core_feature] += self.imp_score.get(proc_feature)
-                if len(self.aggregate_feature_imp[core_feature]) < 2:
+                if len(aggregate_feature_imp[core_feature]) < 2:
                     continue
-                _aggre_score[core_feature] = _aggre_score[core_feature] / len(self.aggregate_feature_imp[core_feature])
+                _aggre_score[core_feature] = _aggre_score[core_feature] / len(aggregate_feature_imp[core_feature])
                 _processed_feature_matrix: pd.DataFrame = pd.DataFrame(data=_feature_scores, index=['score']).transpose()
                 _processed_feature_matrix.sort_values(by='score', axis=0, ascending=False, inplace=True)
                 _processed_features.append(_processed_feature_matrix.index.values.tolist()[0])
-                if self.visualize_variant_scores:
-                    _imp_plot.update(
-                        {'Feature Importance (Preprocessing Variants {})'.format(core_feature): dict(data=_processed_feature_matrix,
-                                                                                                     plot_type=plot_type,
-                                                                                                     melt=True,
-                                                                                                     render=True if self.path is None else False,
-                                                                                                     file_path='{}feature_importance_processing_variants.html'.format(self.path) if self.path is not None else None,
-                                                                                                     kwargs=dict(layout={},
-                                                                                                                 y=_processed_feature_matrix['score'].values,
-                                                                                                                 x=_processed_feature_matrix.index.values,
-                                                                                                                 marker=dict(color=_processed_feature_matrix['score'],
-                                                                                                                             colorscale='rdylgn',
-                                                                                                                             autocolorscale=True
-                                                                                                                             )
-                                                                                                                 )
-                                                                                                     )
-                         })
+                if visualize_variant_scores:
+                    _variant_scores = {'Feature Importance (Preprocessing Variants {})'.format(core_feature): dict(
+                            data=_processed_feature_matrix,
+                            plot_type=plot_type,
+                            melt=True,
+                            render=True if self.path is None else False,
+                            file_path='{}feature_importance_processing_variants.html'.format(
+                                self.path) if self.path is not None else None,
+                            kwargs=dict(layout={},
+                                        y=_processed_feature_matrix['score'].values,
+                                        x=_processed_feature_matrix.index.values,
+                                        marker=dict(color=_processed_feature_matrix['score'],
+                                                    colorscale='rdylgn',
+                                                    autocolorscale=True
+                                                    )
+                                        )
+                            )
+                         }
+                    DataVisualizer(subplots=_variant_scores,
+                                   height=500,
+                                   width=500
+                                   ).run()
             _core_imp_matrix: pd.DataFrame = pd.DataFrame(data=_aggre_score, index=['abs_score']).transpose()
             _core_imp_matrix['rel_score'] = _core_imp_matrix['abs_score'] / sum(_core_imp_matrix['abs_score'])
             _core_imp_matrix.sort_values(by='abs_score', axis=0, ascending=False, inplace=True)
             _raw_core_features: List[str] = _core_imp_matrix.loc[_core_imp_matrix['rel_score'] >= _imp_threshold, :].index.values.tolist()
             for core in _raw_core_features:
-                _core_features.extend(self.aggregate_feature_imp[core])
+                _core_features.extend(aggregate_feature_imp[core])
                 _core_features = list(set(_core_features))
-            if self.visualize_core_features_scores:
-                _imp_plot.update({'Feature Importance (Core Feature Aggregation)': dict(data=_core_imp_matrix,
+            if visualize_core_feature_scores:
+                _core_feature_scores_plot: dict = {'Feature Importance (Core Feature Aggregation)': dict(data=_core_imp_matrix,
                                                                                         plot_type=plot_type,
                                                                                         melt=False,
                                                                                         render=True if self.path is None else False,
-                                                                                        file_path='{}feature_importance_core_aggregation.html'.format(self.path) if self.path is not None else None,
+                                                                                        file_path='{}feature_importance_core_aggregation.html'.format(
+                                                                                            self.path) if self.path is not None else None,
                                                                                         kwargs=dict(layout={},
-                                                                                                    y=_core_imp_matrix['abs_score'].values,
-                                                                                                    x=_core_imp_matrix['abs_score'].index.values,
+                                                                                                    y=_core_imp_matrix[
+                                                                                                        'abs_score'].values,
+                                                                                                    x=_core_imp_matrix[
+                                                                                                        'abs_score'].index.values,
                                                                                                     marker=dict(
-                                                                                                        color=_core_imp_matrix['abs_score'],
+                                                                                                        color=
+                                                                                                        _core_imp_matrix[
+                                                                                                            'abs_score'],
                                                                                                         colorscale='rdylgn',
                                                                                                         autocolorscale=True
-                                                                                                        )
+                                                                                                    )
                                                                                                     )
                                                                                         )
-                                  })
-        if self.visualize_all_scores or self.visualize_variant_scores or self.visualize_core_features_scores:
-            DataVisualizer(subplots=_imp_plot,
-                           height=500,
-                           width=500
-                           ).run()
+                                  }
+                DataVisualizer(subplots=_core_feature_scores_plot,
+                               height=500,
+                               width=500
+                               ).run()
         if self.ml_type == 'reg':
             _model_generator: ModelGeneratorReg = ModelGeneratorReg(model_name=self.feature_tournament_ai.get('model_name'),
                                                                     reg_params=self.feature_tournament_ai.get('param')
