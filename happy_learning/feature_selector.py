@@ -661,13 +661,9 @@ class FeatureSelector:
             _threshold: float = _model_test_score * (1 + redundant_threshold)
         else:
             _threshold: float = _model_test_score * (1 - redundant_threshold)
-        print('Metric', _model_test_score)
-        print('Threshold', _threshold)
         _features: List[str] = copy.deepcopy(_imp_features)
-        print(_features)
         _result: dict = dict(redundant=[], important=[], reduction={})
         for i in range(len(_imp_features) - 1, 0, -1):
-            print(_imp_features[i])
             if len(_features) == 1:
                 _result['important'] = _features
                 break
@@ -676,7 +672,6 @@ class FeatureSelector:
             _pred = _model_generator.predict(x=_train_test_split.get('x_test')[_features].values)
             _model_generator.eval(obs=_train_test_split.get('y_test').values, pred=_pred)
             _new_model_test_score: float = _model_generator.fitness['test'].get(self.ml_metric)
-            print('New model score', _new_model_test_score)
             if self.ml_type == 'reg':
                 if _threshold <= _new_model_test_score:
                     _features.append(_imp_features[i])
