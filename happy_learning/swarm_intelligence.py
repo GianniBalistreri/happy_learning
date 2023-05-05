@@ -1521,6 +1521,7 @@ class SwarmIntelligence:
                                plot_type='parcoords',
                                file_path=self.output_file_path if self.output_file_path is None else os.path.join(
                                    self.output_file_path, 'evaluation_coords.html'),
+                               render=False
                                ).run()
                 _file_paths.append(os.path.join(self.output_file_path, 'scatter_contour.html'))
                 DataVisualizer(df=_best_model_results,
@@ -1529,6 +1530,7 @@ class SwarmIntelligence:
                                plot_type='joint',
                                file_path=self.output_file_path if self.output_file_path is None else os.path.join(
                                    self.output_file_path, 'scatter_contour.html'),
+                               render=False
                                ).run()
             else:
                 _eval_clf: EvalClf = EvalClf(obs=self.data_set.get('y_test'),
@@ -1552,6 +1554,7 @@ class SwarmIntelligence:
                                plot_type='table',
                                file_path=self.output_file_path if self.output_file_path is None else os.path.join(
                                    self.output_file_path, 'confusion_table.html'),
+                               render=False
                                ).run()
                 _file_paths.append(os.path.join(self.output_file_path, 'confusion_heatmap.html'))
                 DataVisualizer(df=_confusion_matrix,
@@ -1560,6 +1563,7 @@ class SwarmIntelligence:
                                plot_type='heat',
                                file_path=self.output_file_path if self.output_file_path is None else os.path.join(
                                    self.output_file_path, 'confusion_heatmap.html'),
+                               render=False
                                ).run()
                 _confusion_matrix_normalized: pd.DataFrame = pd.DataFrame(data=EvalClf(obs=self.data_set.get('y_test'),
                                                                                        pred=self.data_set.get('pred')
@@ -1574,6 +1578,7 @@ class SwarmIntelligence:
                                plot_type='heat',
                                file_path=self.output_file_path if self.output_file_path is None else os.path.join(
                                    self.output_file_path, 'confusion_normal_heatmap.html'),
+                               render=False
                                ).run()
                 _file_paths.append(os.path.join(self.output_file_path, 'clf_report_table.html'))
                 DataVisualizer(df=_best_model_results,
@@ -1582,6 +1587,7 @@ class SwarmIntelligence:
                                plot_type='table',
                                file_path=self.output_file_path if self.output_file_path is None else os.path.join(
                                    self.output_file_path, 'clf_report_table.html'),
+                               render=False
                                ).run()
                 _classification_report: dict = _eval_clf.classification_report()
                 _confusion_metrics: dict = dict(precision=[], recall=[], f1=[])
@@ -1600,6 +1606,7 @@ class SwarmIntelligence:
                                plot_type='table',
                                file_path=self.output_file_path if self.output_file_path is None else os.path.join(
                                    self.output_file_path, 'clf_metrics_table.html'),
+                               render=False
                                ).run()
                 if self.target_type == 'clf_multi':
                     _file_paths.append(os.path.join(self.output_file_path, 'evaluation_category.html'))
@@ -1610,6 +1617,7 @@ class SwarmIntelligence:
                                    plot_type='parcoords',
                                    file_path=self.output_file_path if self.output_file_path is None else os.path.join(
                                        self.output_file_path, 'evaluation_category.html'),
+                                   render=False
                                    ).run()
                 else:
                     _roc_curve = pd.DataFrame()
@@ -1629,6 +1637,7 @@ class SwarmIntelligence:
                                    use_auto_extensions=False,
                                    file_path=self.output_file_path if self.output_file_path is None else os.path.join(
                                        self.output_file_path, 'roc_auc_curve.html'),
+                                   render=False
                                    ).run()
             for path in _file_paths:
                 _file_name: str = path.split('/')[-1].replace('.html', '')
