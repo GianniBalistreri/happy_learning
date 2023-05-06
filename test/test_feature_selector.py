@@ -19,7 +19,7 @@ class FeatureSelectorTest(unittest.TestCase):
                                                              target='AveragePrice',
                                                              features=_features,
                                                              force_target_type=None,
-                                                             model_name='cat',
+                                                             model_name='xgb',
                                                              init_pairs=3,
                                                              init_games=5,
                                                              increasing_pair_size_factor=0.5,
@@ -54,20 +54,19 @@ class FeatureSelectorTest(unittest.TestCase):
         _model_reg_all_features: ModelGeneratorReg = ModelGeneratorReg(model_name='xgb')
         _model_reg_all_features.generate_model()
         _model_reg_all_features.train(x=_train_test_split['x_train'], y=_train_test_split['y_train'])
-        _pred_all_features = _model_reg_all_features.predict(x=_train_test_split['y_test'])
+        _pred_all_features = _model_reg_all_features.predict(x=_train_test_split['x_test'])
         _model_reg_all_features.eval(obs=_train_test_split['y_test'], pred=_pred_all_features)
         _model_reg_imp_features: ModelGeneratorReg = ModelGeneratorReg(model_name='xgb',
                                                                        reg_params=_model_reg_all_features.model_param
                                                                        )
         _model_reg_imp_features.generate_model()
         _model_reg_imp_features.train(x=_train_test_split['x_train'][_imp_features],
-                                      y=_train_test_split['y_train'][_imp_features]
+                                      y=_train_test_split['y_train']
                                       )
         _pred_imp_features = _model_reg_imp_features.predict(x=_train_test_split['x_test'][_imp_features])
-        _model_reg_all_features.eval(obs=_train_test_split['y_test'][_imp_features], pred=_pred_imp_features)
-        self.assertAlmostEqual(first=_model_reg_all_features.fitness['test']['rmse_norm'],
-                               second=_model_reg_imp_features.fitness['test']['rmse_norm']
-                               )
+        _model_reg_imp_features.eval(obs=_train_test_split['y_test'], pred=_pred_imp_features)
+        _differences: float = abs(_model_reg_imp_features.fitness['test']['rmse_norm'] - _model_reg_all_features.fitness['test']['rmse_norm'])
+        self.assertTrue(expr=_differences <= 0.1)
 
 
 if __name__ == '__main__':
